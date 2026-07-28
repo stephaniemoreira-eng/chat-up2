@@ -55,6 +55,10 @@ export const FEATURE_FLAGS = {
   INTERNAL_CHAT: 'internal_chat',
   CONVERSATION_UNREAD_COUNTS: 'conversation_unread_counts',
   UNREAD_COUNT_FOR_FILTERS: 'unread_count_for_filters',
+  // Fork flags — backed by `settings` jsonb on the backend (Enterprise::Concerns::Account),
+  // not by config/features.yml. See docs/fork/ADR-0001-extension-strategy.md.
+  SALES_PIPELINE: 'sales_pipeline',
+  SALES_KANBAN: 'sales_kanban',
 };
 
 export const PREMIUM_FEATURES = [

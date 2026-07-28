@@ -9,6 +9,7 @@ RSpec.describe Account, type: :model do
     it { is_expected.to have_many(:sla_policies).dependent(:destroy_async) }
     it { is_expected.to have_many(:applied_slas).dependent(:destroy_async) }
     it { is_expected.to have_many(:custom_roles).dependent(:destroy_async) }
+    it { is_expected.to have_many(:sales_pipelines).dependent(:destroy_async).class_name('Sales::Pipeline') }
   end
 
   describe '#selected_feature_flags=' do
@@ -29,6 +30,41 @@ RSpec.describe Account, type: :model do
 
       expect(account).not_to be_feature_assignment_v2
       expect(account).not_to be_feature_advanced_assignment
+    end
+  end
+
+  # Fork-owned feature flags stored in `settings` jsonb rather than the config/features.yml
+  # bitset columns. See docs/fork/ADR-0001-extension-strategy.md.
+  describe 'fork-owned settings feature flags' do
+    let(:account) { create(:account) }
+
+    it 'enables and disables independently of the bitset flags' do
+      account.enable_features!('inbound_emails', 'api_and_webhooks', 'sales_pipeline')
+      account.reload
+
+      expect(account.feature_enabled?('sales_pipeline')).to be(true)
+      expect(account.feature_enabled?('sales_kanban')).to be(false)
+
+      account.disable_features!('sales_pipeline')
+      account.reload
+
+      expect(account.feature_enabled?('sales_pipeline')).to be(false)
+      expect(account.feature_enabled?('inbound_emails')).to be(true)
+      expect(account.feature_enabled?('api_and_webhooks')).to be(true)
+    end
+
+    it 'stores the flag in settings rather than the bitset columns' do
+      bitsets_before = account.slice(:feature_flags, :feature_flags_ext_1)
+
+      account.enable_features!('sales_pipeline')
+      account.reload
+
+      expect(account.settings['sales_pipeline_enabled']).to be(true)
+      expect(account.slice(:feature_flags, :feature_flags_ext_1)).to eq(bitsets_before)
+    end
+
+    it 'leaves config/features.yml untouched by this fork' do
+      expect(Featurable::FEATURE_LIST.pluck('name')).not_to include('sales_pipeline', 'sales_kanban')
     end
   end
 

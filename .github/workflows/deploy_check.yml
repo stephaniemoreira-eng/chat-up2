@@ -3,8 +3,14 @@
 ## deployment url will be of the form chatwoot-pr-<pr_number>.herokuapp.com
 name: Deploy Check
 
+## FORK NOTE: disabled in this fork.
+## This job polls upstream's Heroku review apps (chatwoot-pr-<N>.herokuapp.com), which do not
+## exist for this repository, so on `pull_request` it always fails and blocks every PR.
+## Kept as a file (rather than deleted) so upstream merges touch it cleanly; trigger is
+## `workflow_dispatch` so it can still be run manually if review apps are ever set up.
+## See docs/fork/UPSTREAM_MERGE_PLAYBOOK.md.
 on:
-  pull_request:
+  workflow_dispatch:
 
 # If two pushes happen within a short time in the same PR, cancel the run of the oldest push
 concurrency:

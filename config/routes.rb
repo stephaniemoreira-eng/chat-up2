@@ -491,6 +491,10 @@ Rails.application.routes.draw do
           end
 
           resources :upload, only: [:create]
+
+          # Fork-owned routes live in config/routes/sales.rb so this file stays a single-line
+          # touchpoint for the fork. See docs/fork/ADR-0001-extension-strategy.md.
+          draw :sales
         end
       end
       # end of account scoped api routes
