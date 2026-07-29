@@ -14,6 +14,7 @@ services:
     depends_on:
       - postgres
       - redis
+      - baileys-api
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
@@ -29,9 +30,9 @@ services:
       - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
-      - BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME=${BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME}
-      - BAILEYS_PROVIDER_DEFAULT_URL=${BAILEYS_PROVIDER_DEFAULT_URL}
-      - BAILEYS_PROVIDER_DEFAULT_API_KEY=${BAILEYS_PROVIDER_DEFAULT_API_KEY}
+      - BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME=${BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME:-Chatwoot Staging}
+      - BAILEYS_PROVIDER_DEFAULT_URL=http://baileys-api:3025
+      - BAILEYS_PROVIDER_DEFAULT_API_KEY=${SERVICE_PASSWORD_64_DEFAULTAPIKEY}
       - BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL=true
       - MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL}
       - RESEND_API_KEY=${RESEND_API_KEY}
@@ -72,6 +73,8 @@ services:
         condition: service_started
       redis:
         condition: service_started
+      baileys-api:
+        condition: service_started
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
@@ -87,9 +90,8 @@ services:
       - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
-      - BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME=${BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME}
-      - BAILEYS_PROVIDER_DEFAULT_URL=${BAILEYS_PROVIDER_DEFAULT_URL}
-      - BAILEYS_PROVIDER_DEFAULT_API_KEY=${BAILEYS_PROVIDER_DEFAULT_API_KEY}
+      - BAILEYS_PROVIDER_DEFAULT_URL=http://baileys-api:3025
+      - BAILEYS_PROVIDER_DEFAULT_API_KEY=${SERVICE_PASSWORD_64_DEFAULTAPIKEY}
       - BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL=true
       - MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL}
       - RESEND_API_KEY=${RESEND_API_KEY}
@@ -140,6 +142,35 @@ services:
       test:
         - CMD-SHELL
         - 'redis-cli -h localhost -p 6379 -a $${REDIS_PASSWORD} ping'
+      interval: 20s
+      timeout: 20s
+      retries: 10
+
+  # Isolated from production's own baileys-api: separate WhatsApp session (pair a different
+  # number here), separate API key (${SERVICE_PASSWORD_64_DEFAULTAPIKEY} is generated per Coolify
+  # service stack, so staging's value is independent of production's).
+  baileys-api:
+    image: 'ghcr.io/fazer-ai/baileys-api:latest'
+    pull_policy: always
+    volumes:
+      - 'storage:/app/storage'
+    depends_on:
+      - redis
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
+      - LOG_LEVEL=${BAILEYS_API_LOG_LEVEL:-info}
+      - BAILEYS_PROVIDER_DEFAULT_API_KEY=${SERVICE_PASSWORD_64_DEFAULTAPIKEY}
+    command:
+      - sh
+      - '-c'
+      - 'bun manage-api-keys create user ${SERVICE_PASSWORD_64_DEFAULTAPIKEY} && bun start'
+    restart: always
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'wget -qO- http://localhost:3025/status'
       interval: 20s
       timeout: 20s
       retries: 10
