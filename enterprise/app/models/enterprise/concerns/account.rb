@@ -43,6 +43,15 @@ module Enterprise::Concerns::Account
     super
   end
 
+  # Featurable#all_features (and enabled_features/disabled_features, which are derived from it)
+  # only walks config/features.yml — the fork's settings-backed flags are deliberately absent
+  # from that file, so without this they'd never reach the frontend's `account.features` payload
+  # (see app/views/api/v1/models/_account.json.jbuilder), even though feature_enabled? itself
+  # already handles them correctly for backend checks.
+  def all_features
+    super.merge(FORK_SETTINGS_FEATURES.index_with { |name| feature_enabled?(name) })
+  end
+
   def enable_features(*names)
     settings_names, bitmask_names = names.map(&:to_s).partition { |name| FORK_SETTINGS_FEATURES.include?(name) }
     settings_names.each { |name| public_send("#{name}_enabled=", true) }

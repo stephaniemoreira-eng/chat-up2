@@ -66,6 +66,20 @@ RSpec.describe Account, type: :model do
     it 'leaves config/features.yml untouched by this fork' do
       expect(Featurable::FEATURE_LIST.pluck('name')).not_to include('sales_pipeline', 'sales_kanban')
     end
+
+    it 'surfaces the flag through enabled_features/all_features, which the frontend payload is built from' do
+      # app/views/api/v1/models/_account.json.jbuilder serializes `enabled_features` as
+      # `account.features` for the frontend's isFeatureEnabledonAccount getter — if a flag isn't
+      # reachable from here, the sidebar/route gating never sees it, even though feature_enabled?
+      # itself works fine for backend checks.
+      account.enable_features!('sales_pipeline')
+      account.reload
+
+      expect(account.all_features['sales_pipeline']).to be(true)
+      expect(account.all_features['sales_kanban']).to be(false)
+      expect(account.enabled_features.keys).to include('sales_pipeline')
+      expect(account.disabled_features.keys).to include('sales_kanban')
+    end
   end
 
   describe '#api_and_webhooks_enabled?' do
