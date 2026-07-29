@@ -23,6 +23,7 @@ class Sales::Pipeline < ApplicationRecord
 
   belongs_to :account
   has_many :stages, -> { order(:position) }, class_name: 'Sales::Stage', foreign_key: :sales_pipeline_id, dependent: :destroy, inverse_of: :pipeline
+  has_many :leads, class_name: 'Sales::Lead', foreign_key: :sales_pipeline_id, dependent: :restrict_with_error, inverse_of: :pipeline
 
   validates :account_id, presence: true
   validates :name, presence: true

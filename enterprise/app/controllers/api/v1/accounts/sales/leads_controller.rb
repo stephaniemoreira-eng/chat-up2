@@ -1,0 +1,65 @@
+class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::BaseController
+  before_action -> { check_authorization(Sales::Lead) }
+  before_action :set_lead, only: [:show, :update, :destroy, :move, :link_conversation, :unlink_conversation]
+
+  def index
+    @leads = filtered_leads.ordered
+  end
+
+  def show; end
+
+  def create
+    @lead = Sales::Leads::CreateService.new(account: Current.account, params: lead_params).perform
+  end
+
+  def update
+    @lead.update!(lead_update_params)
+  end
+
+  def destroy
+    @lead.destroy!
+    head :ok
+  end
+
+  def move
+    stage = @lead.pipeline.stages.find(params.require(:sales_stage_id))
+    @lead = Sales::Leads::MoveStageService.new(lead: @lead, stage: stage, position: params[:position], user: Current.user).perform
+  end
+
+  def link_conversation
+    conversation = Current.account.conversations.find(params.require(:conversation_id))
+    Sales::Leads::LinkConversationService.new(lead: @lead, conversation: conversation).perform
+  end
+
+  def unlink_conversation
+    @lead.lead_conversations.find_by!(conversation_id: params.require(:conversation_id)).destroy!
+    head :ok
+  end
+
+  private
+
+  def filtered_leads
+    leads = Current.account.sales_leads
+    leads = leads.where(sales_pipeline_id: params[:pipeline_id]) if params[:pipeline_id].present?
+    leads = leads.where(sales_stage_id: params[:stage_id]) if params[:stage_id].present?
+    leads = leads.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
+    leads
+  end
+
+  def set_lead
+    @lead = Current.account.sales_leads.find(params[:id])
+  end
+
+  def lead_params
+    params.require(:lead).permit(:contact_id, :pipeline_id, :sales_stage_id, *shared_lead_attributes)
+  end
+
+  def lead_update_params
+    params.require(:lead).permit(*shared_lead_attributes)
+  end
+
+  def shared_lead_attributes
+    [:title, :source, :value, :probability, :expected_close_date, :assignee_id, :notes,
+     { custom_attributes: {}, additional_attributes: {} }]
+  end
+end

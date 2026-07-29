@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_28_000002) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_29_000003) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1546,6 +1546,44 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_000002) do
     t.index ["account_id", "metric", "date"], name: "index_rollup_timeseries"
   end
 
+  create_table "sales_lead_conversations", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "sales_lead_id", null: false
+    t.bigint "conversation_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_sales_lead_conversations_on_account_id"
+    t.index ["conversation_id"], name: "index_sales_lead_conversations_on_conversation_id", unique: true
+    t.index ["sales_lead_id"], name: "index_sales_lead_conversations_on_sales_lead_id"
+  end
+
+  create_table "sales_leads", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "contact_id", null: false
+    t.bigint "sales_pipeline_id", null: false
+    t.bigint "sales_stage_id", null: false
+    t.bigint "assignee_id"
+    t.string "title", null: false
+    t.string "source"
+    t.decimal "value", precision: 14, scale: 2
+    t.integer "probability"
+    t.integer "status", default: 0, null: false
+    t.date "expected_close_date"
+    t.datetime "closed_at"
+    t.datetime "stage_changed_at"
+    t.datetime "last_activity_at"
+    t.decimal "position", precision: 20, scale: 10, null: false
+    t.text "notes"
+    t.jsonb "custom_attributes", default: {}, null: false
+    t.jsonb "additional_attributes", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "sales_pipeline_id", "sales_stage_id", "position"], name: "index_sales_leads_on_account_pipeline_stage_position"
+    t.index ["account_id"], name: "index_sales_leads_on_account_id"
+    t.index ["assignee_id"], name: "index_sales_leads_on_assignee_id"
+    t.index ["contact_id"], name: "index_sales_leads_on_contact_id"
+  end
+
   create_table "sales_pipelines", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.string "name", null: false
@@ -1558,6 +1596,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_000002) do
     t.index ["account_id", "position"], name: "index_sales_pipelines_on_account_id_and_position"
     t.index ["account_id"], name: "index_sales_pipelines_on_account_id"
     t.index ["account_id"], name: "index_sales_pipelines_on_account_id_and_default", unique: true, where: "(is_default = true)"
+  end
+
+  create_table "sales_stage_transitions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "sales_lead_id", null: false
+    t.bigint "from_sales_stage_id"
+    t.bigint "to_sales_stage_id", null: false
+    t.bigint "user_id"
+    t.integer "duration_in_previous_stage_seconds"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_sales_stage_transitions_on_account_id"
+    t.index ["sales_lead_id"], name: "index_sales_stage_transitions_on_sales_lead_id"
+    t.index ["to_sales_stage_id"], name: "index_sales_stage_transitions_on_to_sales_stage_id"
   end
 
   create_table "sales_stages", force: :cascade do |t|

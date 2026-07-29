@@ -89,4 +89,12 @@ module Events::Types
   INTERNAL_CHAT_REACTION_CREATED = 'internal_chat.reaction.created'
   INTERNAL_CHAT_REACTION_DELETED = 'internal_chat.reaction.deleted'
   INTERNAL_CHAT_POLL_VOTED = 'internal_chat.poll.voted'
+
+  ### Fork-owned Events ###
+  # sales (CRM) lead events. See docs/fork/ADR-0002-namespace-sales.md.
+  SALES_LEAD_CREATED = 'sales_lead.created'
+  SALES_LEAD_UPDATED = 'sales_lead.updated'
+  SALES_LEAD_STAGE_CHANGED = 'sales_lead.stage_changed'
+  SALES_LEAD_WON = 'sales_lead.won'
+  SALES_LEAD_LOST = 'sales_lead.lost'
 end

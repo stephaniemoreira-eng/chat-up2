@@ -25,3 +25,11 @@ resources :pipelines, module: :sales, path: 'crm/pipelines' do
     post :reorder, on: :collection
   end
 end
+
+resources :leads, module: :sales, path: 'crm/leads' do
+  member do
+    post :move
+    post :link_conversation
+    delete :unlink_conversation
+  end
+end

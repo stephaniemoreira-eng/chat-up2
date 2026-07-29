@@ -25,6 +25,7 @@ class Sales::Stage < ApplicationRecord
 
   belongs_to :account
   belongs_to :pipeline, class_name: 'Sales::Pipeline', foreign_key: :sales_pipeline_id, inverse_of: :stages
+  has_many :leads, class_name: 'Sales::Lead', foreign_key: :sales_stage_id, dependent: :restrict_with_error, inverse_of: :stage
 
   enum category: { open: 0, won: 1, lost: 2 }
 

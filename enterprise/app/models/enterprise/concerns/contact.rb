@@ -3,6 +3,11 @@ module Enterprise::Concerns::Contact
   included do
     belongs_to :company, optional: true, counter_cache: true
 
+    # Fork-owned CRM module. See docs/fork/ADR-0002-namespace-sales.md and
+    # docs/fork/ADR-0003-lead-domain-model.md. Deliberately not built on Contact#contact_type or
+    # #resolved_contacts — those are upstream's own in-progress CRM (crm_v2 feature flag).
+    has_many :sales_leads, dependent: :destroy_async, class_name: 'Sales::Lead'
+
     after_commit :associate_company_from_email,
                  on: [:create, :update],
                  if: :should_associate_company?
