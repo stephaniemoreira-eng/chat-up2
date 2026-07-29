@@ -1,8 +1,13 @@
 version: '3'
 
+# Staging counterpart to docker-compose.coolify.yaml. Tracks the `:staging` tag, which
+# .github/workflows/publish_staging_docker.yml rebuilds on every push to `main` — so this
+# environment always reflects the latest validated-by-CI code, ahead of a GitHub Release
+# promoting it to `:latest-ee` (what docker-compose.coolify.yaml/production runs).
+
 services:
   rails:
-    image: 'ghcr.io/stephaniemoreira-eng/chat-up2:latest-ee'
+    image: 'ghcr.io/stephaniemoreira-eng/chat-up2:staging'
     pull_policy: always
     volumes:
       - 'storage:/app/storage'
@@ -20,7 +25,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_USERNAME=${SERVICE_USER_POSTGRES}
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
-      - POSTGRES_DATABASE=${POSTGRES_DB:-chatwoot_production}
+      - POSTGRES_DATABASE=${POSTGRES_DB:-chatwoot_staging}
       - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
@@ -56,7 +61,7 @@ services:
       retries: 10
 
   sidekiq:
-    image: 'ghcr.io/stephaniemoreira-eng/chat-up2:latest-ee'
+    image: 'ghcr.io/stephaniemoreira-eng/chat-up2:staging'
     pull_policy: always
     volumes:
       - 'storage:/app/storage'
@@ -78,7 +83,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_USERNAME=${SERVICE_USER_POSTGRES}
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
-      - POSTGRES_DATABASE=${POSTGRES_DB:-chatwoot_production}
+      - POSTGRES_DATABASE=${POSTGRES_DB:-chatwoot_staging}
       - SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}
@@ -109,7 +114,7 @@ services:
     volumes:
       - 'postgres:/var/lib/postgresql/data'
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-chatwoot_production}
+      - POSTGRES_DB=${POSTGRES_DB:-chatwoot_staging}
       - POSTGRES_USER=${SERVICE_USER_POSTGRES}
       - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
     healthcheck:
