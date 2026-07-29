@@ -1,4 +1,5 @@
 json.id resource.id
+json.sales_pipeline_id resource.sales_pipeline_id
 json.name resource.name
 json.position resource.position
 json.color resource.color

@@ -30,6 +30,10 @@ RSpec.describe 'Api::V1::Accounts::Sales::Stages', type: :request do
 
       expect(response).to have_http_status(:success)
       expect(response.parsed_body['payload'].pluck('id')).to eq([first.id, second.id])
+      # Regression: the frontend groups stages by `sales_pipeline_id` (see
+      # dashboard/stores/sales/stages.js#getStagesByPipeline). Omitting it from the serializer
+      # silently empties every Kanban column client-side without any error on either side.
+      expect(response.parsed_body['payload'].pluck('sales_pipeline_id')).to eq([pipeline.id, pipeline.id])
     end
 
     it 'returns not_found when the pipeline belongs to another account' do
@@ -48,6 +52,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::Stages', type: :request do
 
       expect(response).to have_http_status(:success)
       expect(response.parsed_body['payload']['id']).to eq(stage.id)
+      expect(response.parsed_body['payload']['sales_pipeline_id']).to eq(pipeline.id)
     end
   end
 
