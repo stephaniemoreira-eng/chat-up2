@@ -1,4 +1,5 @@
 class Api::V1::Accounts::Sales::StagesController < Api::V1::Accounts::BaseController
+  before_action :ensure_sales_pipeline_enabled!
   before_action -> { check_authorization(Sales::Stage) }
   before_action :set_pipeline
   before_action :set_stage, only: [:show, :update, :destroy]
@@ -28,6 +29,12 @@ class Api::V1::Accounts::Sales::StagesController < Api::V1::Accounts::BaseContro
   end
 
   private
+
+  def ensure_sales_pipeline_enabled!
+    return if Current.account.feature_enabled?('sales_pipeline')
+
+    render json: { error: 'Sales pipelines are not enabled for this account' }, status: :forbidden
+  end
 
   def set_pipeline
     @pipeline = Current.account.sales_pipelines.find(params[:pipeline_id])
