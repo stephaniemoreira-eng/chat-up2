@@ -1,0 +1,40 @@
+{
+  "CRM": {
+    "HEADER": "CRM",
+    "LOADING": "Loading pipeline...",
+    "EMPTY_STATE": {
+      "TITLE": "No leads yet",
+      "SUBTITLE": "Add your first lead to start tracking deals in this pipeline."
+    },
+    "PIPELINE_SWITCHER": {
+      "PLACEHOLDER": "Select pipeline"
+    },
+    "STAGE": {
+      "LEAD_COUNT": "{n} lead | {n} leads"
+    },
+    "LEAD": {
+      "UNNAMED_CONTACT": "Unknown contact",
+      "CREATE": {
+        "ACTION": "Add lead",
+        "TITLE": "Add lead",
+        "FIELDS": {
+          "TITLE": "Title",
+          "TITLE_PLACEHOLDER": "e.g. Website redesign proposal",
+          "CONTACT": "Contact",
+          "CONTACT_SEARCH_PLACEHOLDER": "Search contacts...",
+          "VALUE": "Value"
+        },
+        "ACTIONS": {
+          "SAVE": "Add lead"
+        },
+        "MESSAGES": {
+          "SUCCESS": "Lead created.",
+          "ERROR": "Could not create the lead."
+        }
+      },
+      "MOVE": {
+        "ERROR": "Could not move the lead. Please try again."
+      }
+    }
+  }
+}

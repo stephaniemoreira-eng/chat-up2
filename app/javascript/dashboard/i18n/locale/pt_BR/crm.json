@@ -1,0 +1,40 @@
+{
+  "CRM": {
+    "HEADER": "CRM",
+    "LOADING": "Carregando funil...",
+    "EMPTY_STATE": {
+      "TITLE": "Nenhum negócio ainda",
+      "SUBTITLE": "Adicione seu primeiro negócio para começar a acompanhar oportunidades neste funil."
+    },
+    "PIPELINE_SWITCHER": {
+      "PLACEHOLDER": "Selecionar funil"
+    },
+    "STAGE": {
+      "LEAD_COUNT": "{n} negócio | {n} negócios"
+    },
+    "LEAD": {
+      "UNNAMED_CONTACT": "Contato desconhecido",
+      "CREATE": {
+        "ACTION": "Adicionar negócio",
+        "TITLE": "Adicionar negócio",
+        "FIELDS": {
+          "TITLE": "Título",
+          "TITLE_PLACEHOLDER": "ex.: Proposta de redesign do site",
+          "CONTACT": "Contato",
+          "CONTACT_SEARCH_PLACEHOLDER": "Buscar contatos...",
+          "VALUE": "Valor"
+        },
+        "ACTIONS": {
+          "SAVE": "Adicionar negócio"
+        },
+        "MESSAGES": {
+          "SUCCESS": "Negócio criado.",
+          "ERROR": "Não foi possível criar o negócio."
+        }
+      },
+      "MOVE": {
+        "ERROR": "Não foi possível mover o negócio. Tente novamente."
+      }
+    }
+  }
+}

@@ -65,6 +65,8 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       expect(response).to have_http_status(:success)
       expect(response.parsed_body['payload']['id']).to eq(lead.id)
       expect(response.parsed_body['payload']['sales_pipeline_id']).to eq(pipeline.id)
+      expect(response.parsed_body['payload']['contact_name']).to eq(contact.name)
+      expect(response.parsed_body['payload']['contact_email']).to eq(contact.email)
     end
   end
 

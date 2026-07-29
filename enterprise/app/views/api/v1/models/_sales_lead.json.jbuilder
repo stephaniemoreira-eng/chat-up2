@@ -13,9 +13,12 @@ json.notes resource.notes
 json.custom_attributes resource.custom_attributes
 json.additional_attributes resource.additional_attributes
 json.contact_id resource.contact_id
+json.contact_name resource.name
+json.contact_email resource.email
 json.sales_pipeline_id resource.sales_pipeline_id
 json.sales_stage_id resource.sales_stage_id
 json.assignee_id resource.assignee_id
+json.assignee_name resource.assignee&.name
 json.label_list resource.label_list
 json.created_at resource.created_at.to_i
 json.updated_at resource.updated_at.to_i
