@@ -1,0 +1,161 @@
+name: Run chat-up2 fork spec
+
+# Fork-owned CI. Runs the tests for the code this fork actually adds.
+#
+# Why this file exists: every upstream workflow that runs rspec deletes the fork's code before
+# testing — run_foss_spec.yml does `rm -rf enterprise && rm -rf spec/enterprise`, by design,
+# because it validates the Chatwoot community edition. But this fork's entire codebase (the
+# Sales::/CRM module) lives in enterprise/ and spec/enterprise/, so no upstream workflow has
+# ever exercised a single line of it. Chatwoot keeps their EE spec run in their own internal CI,
+# which does not come with the fork.
+#
+# Scope: the fork's own specs, not all of spec/enterprise (252 files, nearly all upstream EE
+# features that need external credentials — OpenAI, Stripe, Twilio, Cloudflare). Keeping it
+# narrow means a red run always means *our* code broke. Widen SPEC_PATHS when the fork grows
+# beyond the Sales:: namespace.
+#
+# Runners are GitHub-hosted (ubuntu-22.04) rather than the `blacksmith-*` runners the upstream
+# workflows request: those belong to a paid third-party runner fleet registered to Chatwoot's
+# org and never come up for this fork. frontend-fe.yml already uses ubuntu-22.04 as precedent.
+#
+# Per docs/fork/ADR-0001: new fork-owned file, no upstream workflow edited.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Space-separated; consumed by rspec below.
+  SPEC_PATHS: >-
+    spec/enterprise/models/sales
+    spec/enterprise/policies/sales
+    spec/enterprise/services/sales
+    spec/enterprise/controllers/api/v1/accounts/sales
+
+jobs:
+  backend:
+    name: Backend specs (Sales/CRM)
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ''
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --mount type=tmpfs,destination=/var/lib/postgresql/data
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+
+    env:
+      RAILS_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Create database
+        run: bundle exec rake db:create
+
+      - name: Load schema
+        run: bundle exec rake db:schema:load
+
+      - name: Run fork specs
+        run: bundle exec rspec --profile=10 --format progress $SPEC_PATHS
+
+      - name: Upload rails log folder
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: rails-log-folder
+          path: log
+
+  schema-consistency:
+    # Guards against db/schema.rb drifting from the migrations. Worth its own job because the
+    # fork's schema.rb has been hand-edited before (no local Ruby toolchain on the maintainer's
+    # machine to run db:migrate), and a schema.rb that disagrees with the migrations breaks
+    # fresh installs while passing every test on an already-migrated database.
+    name: Migrations match schema.rb
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ''
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --mount type=tmpfs,destination=/var/lib/postgresql/data
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      RAILS_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Migrate from scratch
+        run: bundle exec rake db:create db:migrate
+
+      - name: Assert schema.rb is what the migrations produce
+        run: |
+          if ! git diff --exit-code -- db/schema.rb; then
+            echo "::error::db/schema.rb does not match the schema the migrations produce. Commit the regenerated schema.rb (the diff above is what db:migrate wrote)."
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend specs (Sales/CRM)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fork frontend specs
+        # Positional args are vitest filename filters, so this runs only the fork's own specs.
+        run: >-
+          TZ=UTC pnpm exec vitest --no-watch --no-cache --no-coverage
+          app/javascript/dashboard/api/sales
+          app/javascript/dashboard/stores/sales
