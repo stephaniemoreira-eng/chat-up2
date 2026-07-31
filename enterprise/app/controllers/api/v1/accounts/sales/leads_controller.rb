@@ -1,6 +1,6 @@
 class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::BaseController
   before_action -> { check_authorization(Sales::Lead) }
-  before_action :set_lead, only: [:show, :update, :destroy, :move, :link_conversation, :unlink_conversation]
+  before_action :set_lead, only: [:show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary]
 
   def index
     @leads = filtered_leads.ordered
@@ -34,6 +34,18 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   def unlink_conversation
     @lead.lead_conversations.find_by!(conversation_id: params.require(:conversation_id)).destroy!
     head :ok
+  end
+
+  def timeline
+    @timeline = Sales::Leads::TimelineBuilderService.new(
+      lead: @lead,
+      before: params[:before].present? ? Time.zone.at(params[:before].to_i) : nil,
+      per_page: params[:per_page].presence || Sales::Leads::TimelineBuilderService::DEFAULT_PER_PAGE
+    ).perform
+  end
+
+  def update_summary
+    @lead = Sales::Leads::UpdateSummaryService.new(lead: @lead, summary: params.require(:summary), user: Current.user).perform
   end
 
   private

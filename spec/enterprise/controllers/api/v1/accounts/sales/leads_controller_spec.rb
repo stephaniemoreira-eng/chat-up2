@@ -199,4 +199,34 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       expect(conversation.reload.sales_lead).to be_nil
     end
   end
+
+  describe 'GET /api/v1/accounts/{account.id}/crm/leads/{id}/timeline' do
+    let(:lead) { create(:sales_lead, account: account, contact: contact, pipeline: pipeline, stage: stage) }
+
+    it 'returns the merged timeline entries' do
+      activity = create(:sales_activity, lead: lead, body: 'Resumo atualizado')
+
+      get "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/timeline", headers: agent.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['payload']['entries'].first['id']).to eq(activity.id)
+      expect(response.parsed_body['payload']['entries'].first['type']).to eq('activity')
+    end
+  end
+
+  describe 'PATCH /api/v1/accounts/{account.id}/crm/leads/{id}/update_summary' do
+    let(:lead) { create(:sales_lead, account: account, contact: contact, pipeline: pipeline, stage: stage) }
+
+    it 'updates the lead summary and records an activity' do
+      expect do
+        patch "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/update_summary",
+              params: { summary: 'Cliente pediu proposta' },
+              headers: agent.create_new_auth_token,
+              as: :json
+      end.to change(Sales::Activity, :count).by(1)
+
+      expect(response).to have_http_status(:success)
+      expect(response.parsed_body['payload']['summary']).to eq('Cliente pediu proposta')
+    end
+  end
 end

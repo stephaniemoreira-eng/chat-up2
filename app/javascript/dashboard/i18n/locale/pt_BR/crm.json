@@ -34,6 +34,24 @@
       },
       "MOVE": {
         "ERROR": "Não foi possível mover o negócio. Tente novamente."
+      },
+      "DETAIL": {
+        "SUMMARY": {
+          "LABEL": "Resumo",
+          "PLACEHOLDER": "Escreva um resumo desse negócio...",
+          "SAVE": "Salvar resumo",
+          "SUCCESS": "Resumo salvo.",
+          "ERROR": "Não foi possível salvar o resumo."
+        },
+        "TIMELINE": {
+          "TITLE": "Linha do tempo",
+          "EMPTY": "Nenhuma atividade ainda.",
+          "LOAD_MORE": "Carregar mais",
+          "ERROR": "Não foi possível carregar a linha do tempo.",
+          "STAGE_TRANSITION": "Movido de {from} para {to}",
+          "STAGE_TRANSITION_FIRST": "Movido para {to}",
+          "SUMMARY_UPDATED": "Resumo atualizado"
+        }
       }
     }
   }

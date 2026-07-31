@@ -14,6 +14,7 @@
 #  source                :string
 #  stage_changed_at      :datetime
 #  status                :integer          default("open"), not null
+#  summary               :text
 #  title                 :string           not null
 #  value                 :decimal(14, 2)
 #  created_at            :datetime         not null
@@ -46,6 +47,8 @@ class Sales::Lead < ApplicationRecord
   has_many :conversations, through: :lead_conversations
   has_many :stage_transitions, -> { order(created_at: :desc) }, class_name: 'Sales::StageTransition', foreign_key: :sales_lead_id,
                                                                 dependent: :destroy, inverse_of: :lead
+  has_many :activities, -> { order(created_at: :desc) }, class_name: 'Sales::Activity', foreign_key: :sales_lead_id,
+                                                          dependent: :destroy, inverse_of: :lead
 
   enum status: { open: 0, won: 1, lost: 2 }
 

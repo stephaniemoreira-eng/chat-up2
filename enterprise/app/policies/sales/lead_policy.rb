@@ -30,4 +30,12 @@ class Sales::LeadPolicy < ApplicationPolicy
   def unlink_conversation?
     true
   end
+
+  def timeline?
+    true
+  end
+
+  def update_summary?
+    true
+  end
 end

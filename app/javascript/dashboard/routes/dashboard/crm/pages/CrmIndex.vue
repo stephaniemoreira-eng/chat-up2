@@ -11,6 +11,7 @@ import PipelineSwitcher from 'dashboard/components-next/Sales/PipelineSwitcher.v
 import KanbanBoard from 'dashboard/components-next/Sales/Board/KanbanBoard.vue';
 import BoardEmptyState from 'dashboard/components-next/Sales/Board/BoardEmptyState.vue';
 import LeadCreateDialog from 'dashboard/components-next/Sales/LeadCreateDialog.vue';
+import LeadDetailDialog from 'dashboard/components-next/Sales/LeadDetail/LeadDetailDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -21,6 +22,7 @@ const stagesStore = useSalesStagesStore();
 const leadsStore = useSalesLeadsStore();
 
 const leadCreateDialogRef = ref(null);
+const leadDetailDialogRef = ref(null);
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
 const isFetchingPipelines = computed(
@@ -71,6 +73,10 @@ const onMoveLead = async ({ id, salesStageId }) => {
 
 const onAddLead = stageId => {
   leadCreateDialogRef.value?.open(stageId);
+};
+
+const onClickLead = leadId => {
+  leadDetailDialogRef.value?.open(leadId);
 };
 
 const onCreateLead = async leadAttrs => {
@@ -126,6 +132,7 @@ onMounted(async () => {
         :get-leads-for-stage="getLeadsForStage"
         @move-lead="onMoveLead"
         @add-lead="onAddLead"
+        @click-lead="onClickLead"
       />
     </div>
     <LeadCreateDialog
@@ -133,5 +140,6 @@ onMounted(async () => {
       :is-loading="isCreatingLead"
       @create="onCreateLead"
     />
+    <LeadDetailDialog ref="leadDetailDialogRef" />
   </div>
 </template>

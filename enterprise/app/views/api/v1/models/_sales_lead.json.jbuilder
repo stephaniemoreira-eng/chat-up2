@@ -10,6 +10,7 @@ json.closed_at resource.closed_at&.to_i
 json.stage_changed_at resource.stage_changed_at&.to_i
 json.last_activity_at resource.last_activity_at&.to_i
 json.notes resource.notes
+json.summary resource.summary
 json.custom_attributes resource.custom_attributes
 json.additional_attributes resource.additional_attributes
 json.contact_id resource.contact_id

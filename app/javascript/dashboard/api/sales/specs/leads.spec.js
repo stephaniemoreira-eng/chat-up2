@@ -11,6 +11,8 @@ describe('#SalesLeadsAPI', () => {
     expect(salesLeadsAPI).toHaveProperty('move');
     expect(salesLeadsAPI).toHaveProperty('linkConversation');
     expect(salesLeadsAPI).toHaveProperty('unlinkConversation');
+    expect(salesLeadsAPI).toHaveProperty('timeline');
+    expect(salesLeadsAPI).toHaveProperty('updateSummary');
   });
 
   describe('API calls', () => {
@@ -19,6 +21,7 @@ describe('#SalesLeadsAPI', () => {
       post: vi.fn(() => Promise.resolve()),
       get: vi.fn(() => Promise.resolve()),
       delete: vi.fn(() => Promise.resolve()),
+      patch: vi.fn(() => Promise.resolve()),
     };
 
     beforeEach(() => {
@@ -64,6 +67,28 @@ describe('#SalesLeadsAPI', () => {
       expect(axiosMock.delete).toHaveBeenCalledWith(
         '/api/v1/crm/leads/1/unlink_conversation',
         { data: { conversation_id: 42 } }
+      );
+    });
+
+    it('#timeline requests entries before the given cursor', () => {
+      salesLeadsAPI.timeline(1, { before: 123, perPage: 10 });
+      expect(axiosMock.get).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/timeline?before=123&per_page=10'
+      );
+    });
+
+    it('#timeline omits blank params', () => {
+      salesLeadsAPI.timeline(1);
+      expect(axiosMock.get).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/timeline?'
+      );
+    });
+
+    it('#updateSummary patches the summary text', () => {
+      salesLeadsAPI.updateSummary(1, 'Novo resumo');
+      expect(axiosMock.patch).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/update_summary',
+        { summary: 'Novo resumo' }
       );
     });
   });

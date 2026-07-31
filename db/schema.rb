@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_29_000003) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_31_000002) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1546,6 +1546,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_29_000003) do
     t.index ["account_id", "metric", "date"], name: "index_rollup_timeseries"
   end
 
+  create_table "sales_activities", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "sales_lead_id", null: false
+    t.bigint "user_id"
+    t.integer "activity_type", null: false
+    t.text "body"
+    t.jsonb "additional_attributes", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_sales_activities_on_account_id"
+    t.index ["activity_type"], name: "index_sales_activities_on_activity_type"
+    t.index ["sales_lead_id"], name: "index_sales_activities_on_sales_lead_id"
+  end
+
   create_table "sales_lead_conversations", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.bigint "sales_lead_id", null: false
@@ -1578,6 +1592,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_29_000003) do
     t.jsonb "additional_attributes", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "summary"
     t.index ["account_id", "sales_pipeline_id", "sales_stage_id", "position"], name: "index_sales_leads_on_account_pipeline_stage_position"
     t.index ["account_id"], name: "index_sales_leads_on_account_id"
     t.index ["assignee_id"], name: "index_sales_leads_on_assignee_id"

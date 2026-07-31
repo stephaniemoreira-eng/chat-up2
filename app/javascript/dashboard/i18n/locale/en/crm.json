@@ -34,6 +34,24 @@
       },
       "MOVE": {
         "ERROR": "Could not move the lead. Please try again."
+      },
+      "DETAIL": {
+        "SUMMARY": {
+          "LABEL": "Summary",
+          "PLACEHOLDER": "Write a summary of this deal...",
+          "SAVE": "Save summary",
+          "SUCCESS": "Summary saved.",
+          "ERROR": "Could not save the summary."
+        },
+        "TIMELINE": {
+          "TITLE": "Timeline",
+          "EMPTY": "No activity yet.",
+          "LOAD_MORE": "Load more",
+          "ERROR": "Could not load the timeline.",
+          "STAGE_TRANSITION": "Moved from {from} to {to}",
+          "STAGE_TRANSITION_FIRST": "Moved to {to}",
+          "SUMMARY_UPDATED": "Summary updated"
+        }
       }
     }
   }
