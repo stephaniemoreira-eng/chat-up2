@@ -92,11 +92,23 @@ jobs:
           path: log
 
   schema-consistency:
-    # Guards against db/schema.rb drifting from the migrations. Worth its own job because the
-    # fork's schema.rb has been hand-edited before (no local Ruby toolchain on the maintainer's
-    # machine to run db:migrate), and a schema.rb that disagrees with the migrations breaks
-    # fresh installs while passing every test on an already-migrated database.
-    name: Migrations match schema.rb
+    # Guards against db/schema.rb drifting from the fork's own migrations. Worth its own job
+    # because the fork's schema.rb has been hand-edited (no local Ruby toolchain on the
+    # maintainer's machine to run db:migrate), and a schema.rb that disagrees with the
+    # migrations breaks fresh installs while passing every test on an already-migrated database.
+    #
+    # It does NOT run `db:migrate` from an empty database: this repo cannot be migrated from
+    # zero at all. Upstream's 20231211010807_add_cached_labels_list.rb references
+    # ActsAsTaggableOn::Taggable::Cache, a constant newer versions of acts-as-taggable-on no
+    # longer define, so it raises NameError. That is a pre-existing upstream breakage (schema.rb's
+    # own header warns migrations may stop applying when they depend on external code), and it is
+    # why fresh installs load the schema instead of migrating.
+    #
+    # So: load the committed schema, roll the fork's migrations back down, re-apply them up, and
+    # dump. Any disagreement between the hand-written schema.rb and what the migrations actually
+    # produce — column type, position, index name — shows up as a diff. Bump STEP when the fork
+    # adds migrations.
+    name: Fork migrations match schema.rb
     runs-on: ubuntu-22.04
 
     services:
@@ -126,13 +138,19 @@ jobs:
         with:
           bundler-cache: true
 
-      - name: Migrate from scratch
-        run: bundle exec rake db:create db:migrate
+      - name: Load committed schema
+        run: bundle exec rake db:create db:schema:load
+
+      - name: Roll the fork's migrations down and back up
+        run: |
+          bundle exec rake db:rollback STEP=2
+          bundle exec rake db:migrate
+          bundle exec rake db:schema:dump
 
       - name: Assert schema.rb is what the migrations produce
         run: |
           if ! git diff --exit-code -- db/schema.rb; then
-            echo "::error::db/schema.rb does not match the schema the migrations produce. Commit the regenerated schema.rb (the diff above is what db:migrate wrote)."
+            echo "::error::db/schema.rb does not match what the fork's migrations produce. Commit the regenerated schema.rb — the diff above is what db:schema:dump wrote."
             exit 1
           fi
 
