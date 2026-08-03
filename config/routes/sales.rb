@@ -31,5 +31,7 @@ resources :leads, module: :sales, path: 'crm/leads' do
     post :move
     post :link_conversation
     delete :unlink_conversation
+    get :timeline
+    patch :update_summary
   end
 end

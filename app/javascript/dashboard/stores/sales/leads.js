@@ -66,5 +66,18 @@ export const useSalesLeadsStore = createStore({
     async unlinkConversation({ id, conversationId }) {
       await SalesLeadsAPI.unlinkConversation(id, conversationId);
     },
+
+    async fetchTimeline({ id, before } = {}) {
+      const { data } = await SalesLeadsAPI.timeline(id, { before });
+      return data.payload;
+    },
+
+    async updateSummary({ id, summary }) {
+      const { data } = await SalesLeadsAPI.updateSummary(id, summary);
+      const updated = data.payload || data;
+      const index = this.records.findIndex(lead => lead.id === id);
+      if (index !== -1) this.records[index] = updated;
+      return updated;
+    },
   }),
 });

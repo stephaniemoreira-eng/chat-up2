@@ -8,6 +8,8 @@ vi.mock('dashboard/api/sales/leads', () => ({
     move: vi.fn(),
     linkConversation: vi.fn(),
     unlinkConversation: vi.fn(),
+    timeline: vi.fn(),
+    updateSummary: vi.fn(),
   },
 }));
 
@@ -120,6 +122,36 @@ describe('salesLeads store', () => {
       await store.linkConversation({ id: 1, conversationId: 42 });
 
       expect(SalesLeadsAPI.linkConversation).toHaveBeenCalledWith(1, 42);
+    });
+  });
+
+  describe('#fetchTimeline', () => {
+    it('returns the timeline payload from the API', async () => {
+      SalesLeadsAPI.timeline.mockResolvedValueOnce({
+        data: { payload: { entries: [{ id: 1, type: 'activity' }], next_before: null } },
+      });
+
+      const store = useSalesLeadsStore();
+      const payload = await store.fetchTimeline({ id: 1, before: 123 });
+
+      expect(SalesLeadsAPI.timeline).toHaveBeenCalledWith(1, { before: 123 });
+      expect(payload.entries).toHaveLength(1);
+    });
+  });
+
+  describe('#updateSummary', () => {
+    it('replaces the local record with the updated summary', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.updateSummary.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 10, position: 0, summary: 'Novo resumo' } },
+      });
+
+      await store.updateSummary({ id: 1, summary: 'Novo resumo' });
+
+      expect(SalesLeadsAPI.updateSummary).toHaveBeenCalledWith(1, 'Novo resumo');
+      expect(store.getRecord(1).summary).toBe('Novo resumo');
     });
   });
 });

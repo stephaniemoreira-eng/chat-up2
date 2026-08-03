@@ -41,6 +41,15 @@ class SalesLeadsAPI extends ApiClient {
       data: { conversation_id: conversationId },
     });
   }
+
+  timeline(id, { before, perPage } = {}) {
+    const query = buildParams({ before, per_page: perPage });
+    return axios.get(`${this.url}/${id}/timeline?${query}`);
+  }
+
+  updateSummary(id, summary) {
+    return axios.patch(`${this.url}/${id}/update_summary`, { summary });
+  }
 }
 
 export default new SalesLeadsAPI();
