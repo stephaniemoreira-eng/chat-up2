@@ -34,4 +34,7 @@ resources :leads, module: :sales, path: 'crm/leads' do
     get :timeline
     patch :update_summary
   end
+  collection do
+    get :summary
+  end
 end

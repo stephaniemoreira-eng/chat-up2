@@ -1,0 +1,24 @@
+{
+  "UP_SALES": {
+    "BRANDING": {
+      "TITLE": "Marca da conta",
+      "DESCRIPTION": "Logo e cor exibidos no lugar da marca padrão do Chatwoot, só nesta conta.",
+      "COLOR_LABEL": "Cor principal",
+      "LOGO_LABEL": "URL do logo",
+      "LOGO_PLACEHOLDER": "https://…/logo.svg",
+      "LOGO_PREVIEW_ALT": "Pré-visualização do logo",
+      "SAVE_BUTTON": "Salvar marca",
+      "SUCCESS_MESSAGE": "Marca atualizada com sucesso",
+      "ERROR_MESSAGE": "Não foi possível salvar a marca — tente novamente"
+    },
+    "DASHBOARD": {
+      "TITLE": "Dashboard",
+      "LEADS_COUNT": "Leads cadastrados",
+      "LAST_SEARCH": "Última busca",
+      "LAST_SEARCH_EMPTY": "— (ainda sem busca)",
+      "MEETINGS_SCHEDULED": "Reuniões agendadas no mês",
+      "MEETINGS_PLACEHOLDER": "— (chega na Semana C)",
+      "DEALS_WON": "Negócios fechados"
+    }
+  }
+}

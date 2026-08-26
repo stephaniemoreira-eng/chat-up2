@@ -12,6 +12,9 @@ module Enterprise::Concerns::Account
   included do
     store_accessor :settings, :conversation_required_attributes
     store_accessor :settings, :sales_pipeline_enabled, :sales_kanban_enabled
+    # Marca própria por conta (Up Sales) — logo e cor exibidos no lugar da marca genérica do
+    # Chatwoot. Ver docs/fork/ADR-0004-up-sales-reskin.md.
+    store_accessor :settings, :brand_color, :brand_logo_url
 
     has_many :sla_policies, dependent: :destroy_async
     has_many :applied_slas, dependent: :destroy_async

@@ -42,7 +42,7 @@ const emit = defineEmits([
   'closeMobileSidebar',
 ]);
 
-const { accountScopedRoute, isOnChatwootCloud } = useAccount();
+const { accountScopedRoute, isOnChatwootCloud, currentAccount } = useAccount();
 const store = useStore();
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
@@ -236,6 +236,25 @@ const conversationCustomViews = useMapGetter(
 );
 const getSidebarSectionSort = useMapGetter(
   'sidebarSortPreferences/getSectionSort'
+);
+
+// Marca por conta (Up Sales) — aplica a cor da conta como variável CSS, lida por
+// theme/colors.js (`brand: 'var(--dynamic-account-brand, #2781F6)'`). Sem cor configurada,
+// a variável fica ausente e o CSS cai no azul padrão do Chatwoot sozinho.
+// Ver docs/fork/ADR-0004-up-sales-reskin.md.
+watch(
+  () => currentAccount.value?.settings?.brand_color,
+  brandColor => {
+    if (brandColor) {
+      document.documentElement.style.setProperty(
+        '--dynamic-account-brand',
+        brandColor
+      );
+    } else {
+      document.documentElement.style.removeProperty('--dynamic-account-brand');
+    }
+  },
+  { immediate: true }
 );
 
 onMounted(() => {
@@ -674,6 +693,12 @@ const menuItems = computed(() => {
       ],
     },
     {
+      name: 'Up Sales Dashboard',
+      label: 'Dashboard',
+      icon: 'i-lucide-layout-dashboard',
+      to: accountScopedRoute('up_sales_dashboard_index'),
+    },
+    {
       name: 'CRM',
       label: t('SIDEBAR.CRM'),
       icon: 'i-lucide-handshake',
@@ -792,6 +817,12 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.ACCOUNT_SETTINGS'),
           icon: 'i-lucide-briefcase',
           to: accountScopedRoute('general_settings_index'),
+        },
+        {
+          name: 'Settings Up Sales Branding',
+          label: 'Marca (Up Sales)',
+          icon: 'i-lucide-palette',
+          to: accountScopedRoute('up_sales_branding_index'),
         },
         // {
         //   name: 'Settings Captain',
@@ -1007,7 +1038,13 @@ const menuItems = computed(() => {
         </template>
         <template v-else>
           <div class="grid flex-shrink-0 place-content-center size-6">
-            <Logo class="size-4" />
+            <img
+              v-if="currentAccount?.settings?.brand_logo_url"
+              :src="currentAccount.settings.brand_logo_url"
+              :alt="currentAccount.name"
+              class="size-4 object-contain"
+            />
+            <Logo v-else class="size-4" />
           </div>
           <div class="flex-shrink-0 w-px h-3 bg-n-strong" />
           <SidebarAccountSwitcher

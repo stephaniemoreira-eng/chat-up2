@@ -6,6 +6,17 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @leads = filtered_leads.ordered
   end
 
+  # Indicadores do Dashboard (Up Sales). Ver docs/fork/ADR-0004-up-sales-reskin.md.
+  def summary
+    leads = Current.account.sales_leads
+
+    render json: {
+      leads_count: leads.count,
+      deals_won_count: leads.won.count,
+      last_search_at: leads.where(source: 'busca_prospeccao').maximum(:created_at)
+    }
+  end
+
   def show; end
 
   def create

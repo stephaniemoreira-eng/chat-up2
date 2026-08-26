@@ -16,6 +16,6 @@ module Enterprise::Api::V1::AccountsSettings
   end
 
   def permitted_settings_attributes
-    super + [{ conversation_required_attributes: [] }]
+    super + [{ conversation_required_attributes: [] }, :brand_color, :brand_logo_url]
   end
 end

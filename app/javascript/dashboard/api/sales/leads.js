@@ -50,6 +50,10 @@ class SalesLeadsAPI extends ApiClient {
   updateSummary(id, summary) {
     return axios.patch(`${this.url}/${id}/update_summary`, { summary });
   }
+
+  summary() {
+    return axios.get(`${this.url}/summary`);
+  }
 }
 
 export default new SalesLeadsAPI();

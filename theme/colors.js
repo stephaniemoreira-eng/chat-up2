@@ -226,7 +226,9 @@ export const colors = {
     },
 
     black: '#000000',
-    brand: '#2781F6',
+    // Marca por conta (Up Sales) — cai no azul padrão do Chatwoot se a conta não tiver
+    // brand_color configurado. Ver docs/fork/ADR-0004-up-sales-reskin.md.
+    brand: 'var(--dynamic-account-brand, #2781F6)',
     portal: 'var(--dynamic-portal-color)',
     'portal-soft': 'var(--dynamic-portal-color-soft)',
     'portal-faint': 'var(--dynamic-portal-color-faint)',

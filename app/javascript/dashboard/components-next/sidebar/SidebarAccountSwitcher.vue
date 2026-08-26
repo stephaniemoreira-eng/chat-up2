@@ -61,7 +61,13 @@ const emitNewAccount = () => {
         :title="currentAccount.name"
         @click="toggle"
       >
-        <Logo class="size-7" />
+        <img
+          v-if="currentAccount.settings?.brand_logo_url"
+          :src="currentAccount.settings.brand_logo_url"
+          :alt="currentAccount.name"
+          class="size-7 object-contain"
+        />
+        <Logo v-else class="size-7" />
       </button>
       <!-- Expanded view: Account name trigger -->
       <button

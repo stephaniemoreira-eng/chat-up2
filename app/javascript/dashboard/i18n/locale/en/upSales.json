@@ -1,0 +1,24 @@
+{
+  "UP_SALES": {
+    "BRANDING": {
+      "TITLE": "Account branding",
+      "DESCRIPTION": "Logo and color shown instead of the default Chatwoot branding, only in this account.",
+      "COLOR_LABEL": "Primary color",
+      "LOGO_LABEL": "Logo URL",
+      "LOGO_PLACEHOLDER": "https://…/logo.svg",
+      "LOGO_PREVIEW_ALT": "Logo preview",
+      "SAVE_BUTTON": "Save branding",
+      "SUCCESS_MESSAGE": "Branding updated successfully",
+      "ERROR_MESSAGE": "Could not save branding — please try again"
+    },
+    "DASHBOARD": {
+      "TITLE": "Dashboard",
+      "LEADS_COUNT": "Leads",
+      "LAST_SEARCH": "Last search",
+      "LAST_SEARCH_EMPTY": "— (no search yet)",
+      "MEETINGS_SCHEDULED": "Meetings scheduled this month",
+      "MEETINGS_PLACEHOLDER": "— (coming in Week C)",
+      "DEALS_WON": "Deals won"
+    }
+  }
+}
