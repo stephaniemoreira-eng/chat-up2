@@ -21,16 +21,16 @@ const displayContactName = computed(
 
 const formattedValue = computed(() => {
   if (props.value === null || props.value === '') return '';
-  return Number(props.value).toLocaleString(undefined, {
+  return Number(props.value).toLocaleString('pt-BR', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'BRL',
   });
 });
 </script>
 
 <template>
   <div
-    class="flex flex-col gap-2 p-3 rounded-lg cursor-grab bg-n-solid-1 border border-n-weak hover:border-n-slate-6 active:cursor-grabbing"
+    class="flex flex-col gap-2 p-3 rounded-lg cursor-grab bg-n-solid-1 border border-n-weak border-l-2 border-l-transparent hover:border-n-slate-6 hover:border-l-n-brand transition-colors active:cursor-grabbing"
     :data-lead-id="id"
     @click="$emit('click', id)"
   >
