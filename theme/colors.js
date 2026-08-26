@@ -227,8 +227,11 @@ export const colors = {
 
     black: '#000000',
     // Marca por conta (Up Sales) — cai no azul padrão do Chatwoot se a conta não tiver
-    // brand_color configurado. Ver docs/fork/ADR-0004-up-sales-reskin.md.
-    brand: 'var(--dynamic-account-brand, #2781F6)',
+    // brand_color configurado. A variável guarda um triplet "R G B" (não hex), porque o
+    // modificador de opacidade do Tailwind (ex.: hover:bg-n-brand/90, já usado em código nativo)
+    // só funciona com o padrão rgb(var(...) / <alpha-value>) — ver Sidebar.vue onde a
+    // variável é setada. Ver docs/fork/ADR-0004-up-sales-reskin.md.
+    brand: 'rgb(var(--dynamic-account-brand, 39 129 246) / <alpha-value>)',
     portal: 'var(--dynamic-portal-color)',
     'portal-soft': 'var(--dynamic-portal-color-soft)',
     'portal-faint': 'var(--dynamic-portal-color-faint)',

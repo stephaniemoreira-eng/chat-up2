@@ -239,16 +239,29 @@ const getSidebarSectionSort = useMapGetter(
 );
 
 // Marca por conta (Up Sales) — aplica a cor da conta como variável CSS, lida por
-// theme/colors.js (`brand: 'var(--dynamic-account-brand, #2781F6)'`). Sem cor configurada,
-// a variável fica ausente e o CSS cai no azul padrão do Chatwoot sozinho.
-// Ver docs/fork/ADR-0004-up-sales-reskin.md.
+// theme/colors.js (`brand: 'rgb(var(--dynamic-account-brand, ...) / <alpha-value>)'`).
+// A variável precisa guardar um triplet "R G B" (não hex) para que os modificadores de
+// opacidade do Tailwind (ex.: bg-n-brand/90) continuem funcionando. Sem cor configurada, ou
+// com um valor que não é um hex válido, a variável fica ausente e o CSS cai no azul padrão
+// do Chatwoot sozinho. Ver docs/fork/ADR-0004-up-sales-reskin.md.
+const hexToRgbTriple = hex => {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return null;
+  const value = match[1];
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `${r} ${g} ${b}`;
+};
+
 watch(
   () => currentAccount.value?.settings?.brand_color,
   brandColor => {
-    if (brandColor) {
+    const rgbTriple = brandColor ? hexToRgbTriple(brandColor) : null;
+    if (rgbTriple) {
       document.documentElement.style.setProperty(
         '--dynamic-account-brand',
-        brandColor
+        rgbTriple
       );
     } else {
       document.documentElement.style.removeProperty('--dynamic-account-brand');
