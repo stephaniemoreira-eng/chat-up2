@@ -34,7 +34,7 @@ as defined by the routes in the `admin/` namespace
     <ul class="my-4">
       <%= render partial: "nav_item", locals: { icon: 'icon-grid-line', url: super_admin_root_url, label: 'Dashboard' } %>
       <% Administrate::Namespace.new(namespace).resources.each do |resource| %>
-        <% next if ["account_users", "access_tokens", "installation_configs", "dashboard", "devise/sessions", "app_configs", "instance_statuses", "settings", "push_diagnostics"].include?  resource.resource %>
+        <% next if ["account_users", "access_tokens", "installation_configs", "dashboard", "devise/sessions", "app_configs", "instance_statuses", "settings", "push_diagnostics", "up_sales_agent_configs"].include?  resource.resource %>
         <% next if resource.resource == "platform_banners" && !ChatwootApp.chatwoot_cloud? %>
         <%= render partial: "nav_item", locals: {
             icon: sidebar_icons[resource.resource.to_sym],
@@ -44,6 +44,8 @@ as defined by the routes in the `admin/` namespace
         %>
 
       <% end %>
+      <%# Up Sales — configuração de agente por tenant (fork-owned). Ver ADR-0004-up-sales-reskin.md. %>
+      <%= render partial: "nav_item", locals: { icon: 'icon-robot-line', url: super_admin_up_sales_agent_configs_url, label: 'Up Sales — Agentes' } %>
       <%= render 'settings_menu', open: settings_open? %>
     </ul>
   </div>

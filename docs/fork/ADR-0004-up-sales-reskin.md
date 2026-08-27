@@ -84,6 +84,37 @@ Admin de configuração de agente, Follow-up (importação + transferência), Ca
 Agenda integrada — ver `C:\Users\Stephanie\.claude\plans\swirling-twirling-nest.md` pro plano
 semana a semana.
 
+## Super Admin de configuração de agente — decisão de local: painel nativo, não a SPA Vue
+
+Diferente das outras peças do Up Sales (que vivem na SPA Vue, `up-sales/`), esta tela mora no
+painel Super Admin **nativo** do Chatwoot (`/super_admin`, Rails/ERB via Administrate) — decisão
+explícita da Stéphanie em 2026-08-27, confinada a este fork (não é proposta de mudança upstream).
+
+**Por que ali e não na SPA:** o Super Admin nativo já opera entre contas por natureza (usuário
+`SuperAdmin`, STI sobre `User`) — sem precisar inventar um mecanismo novo de autorização
+cross-account dentro da SPA (que hoje é inerentemente por-conta). O custo é técnico: mais um ponto
+de toque em `config/routes.rb` (dentro do `namespace :super_admin`) e em
+`app/views/super_admin/application/_navigation.html.erb` — ambos já somados à lista auditável do
+ADR-0001, seção 5.
+
+**Restrição real da API do up2-agents (verificada em 2026-08-27):** não existe chave de API que
+funcione entre tenants — toda chave (`secv4_...`) nasce presa a um tenant específico, com papel
+fixo `TENANT_ADMIN`. Não há como o `chat-up2` listar tenants nem criar essa chave sozinho; alguém
+precisa logar como admin daquele tenant no painel `up2-agents` e criar a chave manualmente uma vez,
+colando-a nesta tela depois. Por isso a tela guarda, por conta: `agents_tenant_id`/
+`agents_tenant_slug` (texto simples) e a API key (`encrypts` — mesmo padrão dos tokens de canal
+nativos como `Channel::FacebookPage#page_access_token`).
+
+Também não existe "tipo" de agente na API do up2-agents (nem tag nem template) — a diferenciação
+entre Prospecção/SDR, Follow-up e Secretária é só por nome, guardado do lado do `chat-up2`
+(`UpSales::AgentSlot::LABELS`). O prompt de cada agente continua sendo escrito depois, direto no
+painel `up2-agents` — esta tela só ativa/desativa o "slot" (cria o agente vazio ou liga/desliga
+`enabled` no já existente).
+
+**Arquivos novos:** `enterprise/app/{models,services,controllers}/up_sales/*`,
+`enterprise/app/views/super_admin/up_sales_agent_configs/*`, migrations
+`create_up_sales_agent_{tenants,slots}`.
+
 ## Estratégia de atualização do fork — já decidida, não é um item em aberto
 
 Pergunta levantada pela Stéphanie em 2026-08-27: manter compatibilidade com atualizações do

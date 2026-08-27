@@ -39,6 +39,10 @@ module Enterprise::Concerns::Account
     has_many :sales_prospecting_searches, dependent: :destroy_async, class_name: 'Sales::ProspectingSearch'
     has_many :sales_prospecting_results, dependent: :destroy_async, class_name: 'Sales::ProspectingResult'
 
+    # Super Admin de configuração de agente (up2-agents). Ver ADR-0004-up-sales-reskin.md.
+    has_one :up_sales_agent_tenant, dependent: :destroy_async, class_name: 'UpSales::AgentTenant'
+    has_many :up_sales_agent_slots, dependent: :destroy_async, class_name: 'UpSales::AgentSlot'
+
     has_one :saml_settings, dependent: :destroy_async, class_name: 'AccountSamlSettings'
   end
 

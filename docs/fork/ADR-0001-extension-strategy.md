@@ -125,7 +125,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 
 | Arquivo | Edição |
 |---|---|
-| `config/routes.rb` | 1 linha (`draw :sales`) |
+| `config/routes.rb` | 1 linha (`draw :sales`) + resources `up_sales_agent_config(s)` dentro de `namespace :super_admin` (ADR-0004, Super Admin de agente) |
 | `config/features.yml` | **nenhuma** — permanece byte-idêntico ao upstream (seção 4) |
 | `app/models/concerns/featurable.rb` | **nenhuma** |
 | `db/schema.rb` | regenerado (nunca editado à mão) |
@@ -140,6 +140,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `app/javascript/dashboard/components-next/sidebar/Sidebar.vue` | 1 bloco demarcado |
 | `app/javascript/dashboard/composables/useUISettings.js` | 1 entrada |
 | `app/javascript/dashboard/routes/dashboard/conversation/ContactPanel.vue` | 1 branch |
+| `app/views/super_admin/application/_navigation.html.erb` | 1 bloco demarcado (link "Up Sales — Agentes", ADR-0004) |
 
 Regra operacional: **um conflito de merge fora desta lista significa que uma fase vazou
 acoplamento.** Corrigir antes de seguir, em vez de aceitar o conflito. Ver

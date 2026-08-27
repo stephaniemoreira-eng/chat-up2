@@ -1,0 +1,33 @@
+<% content_for(:title) { 'Up Sales — Agentes por conta' } %>
+
+<header class="main-content__header" role="banner">
+  <h1 class="main-content__page-title" id="page-title">
+    <%= content_for(:title) %>
+  </h1>
+</header>
+
+<section class="main-content__body">
+  <table class="w-full text-left">
+    <thead>
+      <tr class="border-b border-slate-100">
+        <th class="py-2">Conta</th>
+        <th class="py-2">Tenant up2-agents</th>
+        <th class="py-2">Agentes ativos</th>
+        <th class="py-2"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @accounts.each do |account| %>
+        <% agent_tenant = account.up_sales_agent_tenant %>
+        <tr class="border-b border-slate-50">
+          <td class="py-2"><%= account.name %> (#<%= account.id %>)</td>
+          <td class="py-2"><%= agent_tenant&.agents_tenant_slug || agent_tenant&.agents_tenant_id || '—' %></td>
+          <td class="py-2"><%= account.up_sales_agent_slots.where(enabled: true).count %>/3</td>
+          <td class="py-2">
+            <%= link_to 'Configurar', super_admin_account_up_sales_agent_config_path(account) %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</section>

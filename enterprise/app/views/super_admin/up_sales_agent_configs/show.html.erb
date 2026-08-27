@@ -1,0 +1,73 @@
+<% content_for(:title) { "Up Sales — Agentes — #{@account.name}" } %>
+
+<header class="main-content__header" role="banner">
+  <h1 class="main-content__page-title" id="page-title">
+    <%= content_for(:title) %>
+  </h1>
+</header>
+
+<section class="main-content__body">
+  <p class="mb-4">
+    <%= link_to '← Todas as contas', super_admin_up_sales_agent_configs_path %>
+  </p>
+
+  <%= form_with url: super_admin_account_up_sales_agent_config_path(@account), method: :patch, local: true do |form| %>
+    <fieldset class="mb-8">
+      <legend class="font-bold mb-2">Conexão com o up2-agents</legend>
+
+      <%= fields_for :agent_tenant, @agent_tenant do |tenant_form| %>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :agents_tenant_id, 'Tenant ID' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.text_field :agents_tenant_id, class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full" %>
+          </div>
+        </div>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :agents_tenant_slug, 'Tenant slug (opcional, só exibição)' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.text_field :agents_tenant_slug, class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full" %>
+          </div>
+        </div>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :api_key, 'API key (secv4_...)' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.password_field :api_key,
+                value: '',
+                placeholder: @agent_tenant.persisted? ? 'Preenchida — só digite aqui para trocar' : '',
+                class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full"
+            %>
+            <p class="pt-2 text-xs italic text-slate-400">
+              Criada manualmente no painel up2-agents, logado como admin daquele tenant (não existe
+              chave de plataforma entre tenants). Deixe em branco pra manter a atual.
+            </p>
+          </div>
+        </div>
+      <% end %>
+    </fieldset>
+
+    <fieldset class="mb-8">
+      <legend class="font-bold mb-2">Agentes ativos (seleção múltipla)</legend>
+      <% UpSales::AgentSlot::AGENT_TYPES.each do |type| %>
+        <div class="flex items-center mb-2">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="enabled[<%= type %>]" value="1" <%= 'checked' if @slots[type].enabled? %> />
+            <%= UpSales::AgentSlot::LABELS.fetch(type) %>
+          </label>
+          <% if @slots[type].up2_agents_agent_id.present? %>
+            <span class="text-xs text-slate-400 ml-2">(agent id: <%= @slots[type].up2_agents_agent_id %>)</span>
+          <% end %>
+        </div>
+      <% end %>
+    </fieldset>
+
+    <div class="form-actions">
+      <%= form.submit 'Salvar' %>
+    </div>
+  <% end %>
+</section>

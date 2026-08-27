@@ -775,7 +775,11 @@ Rails.application.routes.draw do
       resources :accounts, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         post :seed, on: :member
         post :reset_cache, on: :member
+        # Up Sales — configuração de agente por tenant (fork-owned). Ver ADR-0004-up-sales-reskin.md.
+        resource :up_sales_agent_config, only: [:show, :update], controller: 'up_sales_agent_configs'
       end
+      # Up Sales — listagem das contas (fork-owned). Ver ADR-0004-up-sales-reskin.md.
+      resources :up_sales_agent_configs, only: [:index]
       resources :users, only: [:index, :new, :create, :show, :edit, :update, :destroy] do
         delete :avatar, on: :member, action: :destroy_avatar
       end

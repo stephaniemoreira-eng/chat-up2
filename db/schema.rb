@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_27_100002) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_27_110002) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1786,6 +1786,26 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_27_100002) do
     t.string "icon_color", default: ""
     t.index ["account_id"], name: "index_teams_on_account_id"
     t.index ["name", "account_id"], name: "index_teams_on_name_and_account_id", unique: true
+  end
+
+  create_table "up_sales_agent_slots", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "agent_type", null: false
+    t.boolean "enabled", default: false, null: false
+    t.string "up2_agents_agent_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "agent_type"], name: "index_up_sales_agent_slots_on_account_and_type", unique: true
+  end
+
+  create_table "up_sales_agent_tenants", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "agents_tenant_id", null: false
+    t.string "agents_tenant_slug"
+    t.string "api_key", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_up_sales_agent_tenants_on_account_id", unique: true
   end
 
   create_table "user_sessions", force: :cascade do |t|
