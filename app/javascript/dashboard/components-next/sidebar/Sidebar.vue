@@ -407,6 +407,12 @@ const menuItems = computed(() => {
       to: accountScopedRoute('up_sales_prospecting_index'),
     },
     {
+      name: 'Up Sales Follow-up',
+      label: t('SIDEBAR.FOLLOW_UP'),
+      icon: 'i-lucide-repeat',
+      to: accountScopedRoute('up_sales_follow_up_index'),
+    },
+    {
       name: 'Inbox',
       label: t('SIDEBAR.INBOX'),
       icon: 'i-lucide-inbox',

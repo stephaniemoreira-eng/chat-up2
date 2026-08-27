@@ -15,6 +15,9 @@ module Enterprise::Concerns::Account
     # Marca própria por conta (Up Sales) — logo e cor exibidos no lugar da marca genérica do
     # Chatwoot. Ver docs/fork/ADR-0004-up-sales-reskin.md.
     store_accessor :settings, :brand_color, :brand_logo_url
+    # Follow-up (Up Sales) — qual Kanban e qual Team (nativo) recebem os leads importados via
+    # CSV. Ver docs/fork/ADR-0004-up-sales-reskin.md.
+    store_accessor :settings, :follow_up_pipeline_id, :follow_up_team_id, :follow_up_label
 
     has_many :sla_policies, dependent: :destroy_async
     has_many :applied_slas, dependent: :destroy_async

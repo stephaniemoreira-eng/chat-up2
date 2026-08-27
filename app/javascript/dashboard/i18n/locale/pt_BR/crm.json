@@ -9,6 +9,34 @@
     "PIPELINE_SWITCHER": {
       "PLACEHOLDER": "Selecionar funil"
     },
+    "FOLLOW_UP": {
+      "TITLE": "Follow-up",
+      "CONFIG": {
+        "TITLE": "Configuração",
+        "PIPELINE_LABEL": "Kanban de Follow-up",
+        "TEAM_LABEL": "Time de vendedores",
+        "TEAM_PLACEHOLDER": "Selecionar time",
+        "LABEL_FIELD_LABEL": "Label usada na importação",
+        "LABEL_FIELD_PLACEHOLDER": "ex.: follow-up",
+        "SAVE": "Salvar",
+        "SUCCESS": "Configuração salva.",
+        "ERROR": "Não foi possível salvar a configuração."
+      },
+      "IMPORT": {
+        "TITLE": "Importar leads",
+        "DESCRIPTION": "Importa contatos via CSV (recurso nativo do Chatwoot). Inclua uma coluna \"labels\" com a label configurada acima — só contatos com essa label entram no Follow-up.",
+        "ACTION": "Importar CSV",
+        "SUCCESS": "Importação iniciada. Pode levar alguns minutos.",
+        "ERROR": "Não foi possível importar o arquivo."
+      },
+      "SYNC": {
+        "TITLE": "Distribuição",
+        "DESCRIPTION": "Roda automaticamente a cada 15 minutos. Use o botão para forçar agora — por exemplo, logo após uma importação.",
+        "ACTION": "Distribuir agora",
+        "RESULT": "{created} lead(s) criado(s), {assigned} atribuído(s) a vendedores.",
+        "ERROR": "Não foi possível distribuir os leads agora."
+      }
+    },
     "STAGE": {
       "LEAD_COUNT": "{n} negócio | {n} negócios",
       "CREATE": {

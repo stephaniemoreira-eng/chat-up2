@@ -80,3 +80,11 @@ remove_orphan_conversations_job:
   cron: '0 */12 * * *'
   class: 'Internal::RemoveOrphanConversationsJob'
   queue: housekeeping
+
+# executed every 15 minutes
+# Up Sales Follow-up: promotes newly-labeled contacts to leads and distributes them to the
+# vendedor team round-robin. See docs/fork/ADR-0004-up-sales-reskin.md.
+sales_follow_up_sync_job:
+  cron: '*/15 * * * *'
+  class: 'Sales::FollowUp::SyncJob'
+  queue: scheduled_jobs

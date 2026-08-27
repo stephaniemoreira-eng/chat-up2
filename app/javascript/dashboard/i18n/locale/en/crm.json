@@ -9,6 +9,34 @@
     "PIPELINE_SWITCHER": {
       "PLACEHOLDER": "Select pipeline"
     },
+    "FOLLOW_UP": {
+      "TITLE": "Follow-up",
+      "CONFIG": {
+        "TITLE": "Configuration",
+        "PIPELINE_LABEL": "Follow-up pipeline",
+        "TEAM_LABEL": "Sales team",
+        "TEAM_PLACEHOLDER": "Select team",
+        "LABEL_FIELD_LABEL": "Label used on import",
+        "LABEL_FIELD_PLACEHOLDER": "e.g. follow-up",
+        "SAVE": "Save",
+        "SUCCESS": "Configuration saved.",
+        "ERROR": "Could not save the configuration."
+      },
+      "IMPORT": {
+        "TITLE": "Import leads",
+        "DESCRIPTION": "Imports contacts via CSV (Chatwoot's native feature). Include a \"labels\" column with the label configured above -- only contacts with that label enter Follow-up.",
+        "ACTION": "Import CSV",
+        "SUCCESS": "Import started. It may take a few minutes.",
+        "ERROR": "Could not import the file."
+      },
+      "SYNC": {
+        "TITLE": "Distribution",
+        "DESCRIPTION": "Runs automatically every 15 minutes. Use the button to force it now -- for example, right after an import.",
+        "ACTION": "Distribute now",
+        "RESULT": "{created} lead(s) created, {assigned} assigned to sales reps.",
+        "ERROR": "Could not distribute leads right now."
+      }
+    },
     "STAGE": {
       "LEAD_COUNT": "{n} lead | {n} leads",
       "CREATE": {

@@ -115,6 +115,35 @@ painel `up2-agents` — esta tela só ativa/desativa o "slot" (cria o agente vaz
 `enterprise/app/views/super_admin/up_sales_agent_configs/*`, migrations
 `create_up_sales_agent_{tenants,slots}`.
 
+## Follow-up — Kanban dedicado, Teams nativo como pool de vendedores, sem tabela nova
+
+Decisão da Stéphanie em 2026-08-27: leads de Follow-up entram num **Kanban separado** (não uma
+coluna a mais num funil existente), e o pool de "vendedores" elegíveis pro rodízio é o recurso
+**Teams nativo do Chatwoot** (não uma lista própria configurada em tela nova) — o admin cria/edita
+o time direto na tela nativa de Times, sem código novo pra isso.
+
+**Como funciona:** a importação de CSV é 100% nativa (`POST /api/v1/accounts/:id/contacts/import`,
+já aplica a label certa durante a própria importação, contanto que a label já exista na conta) —
+não construímos importador novo. Uma tela nova (`up-sales/follow-up`) deixa escolher qual Kanban,
+qual Team e qual label usar (guardado em `Account#settings`, mesmo padrão `store_accessor` de
+sempre — sem tabela nova), e dispara `Sales::FollowUp::SyncService`: promove contato com a label a
+`Sales::Lead` nesse Kanban, e distribui entre os membros do Team por **rodízio balanceado** (quem
+tem menos leads no momento recebe o próximo — sem cursor persistido, se recalcula sozinho se
+alguém entra/sai do time). Roda automaticamente a cada 15 min (`Sales::FollowUp::SyncJob`, cron) e
+sob demanda (botão "Distribuir agora").
+
+**Por que não reaproveitar o motor de round-robin nativo do Chatwoot** (`AutoAssignment::
+InboxRoundRobinService`): verificado que ele é acoplado de propósito a `Inbox`/`InboxMember`,
+com o cursor guardado no Redis por `inbox_id`, e a resolução final exige que o vencedor seja
+literalmente membro daquela inbox — não dá pra apontar pra um pool arbitrário de usuários sem
+reescrever a peça toda. Mais barato e mais simples construir um motor de rodízio próprio (sem
+Redis, sem cursor — só contagem ao vivo) do que adaptar o nativo.
+
+**Arquivos novos:** `enterprise/app/services/sales/follow_up/sync_service.rb`,
+`enterprise/app/jobs/sales/follow_up/sync_job.rb`,
+`enterprise/app/controllers/api/v1/accounts/sales/follow_up_controller.rb`,
+`app/javascript/dashboard/routes/dashboard/up-sales/follow-up/Index.vue`.
+
 ## Estratégia de atualização do fork — já decidida, não é um item em aberto
 
 Pergunta levantada pela Stéphanie em 2026-08-27: manter compatibilidade com atualizações do

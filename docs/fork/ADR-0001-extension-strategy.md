@@ -141,6 +141,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `app/javascript/dashboard/composables/useUISettings.js` | 1 entrada |
 | `app/javascript/dashboard/routes/dashboard/conversation/ContactPanel.vue` | 1 branch |
 | `app/views/super_admin/application/_navigation.html.erb` | 1 bloco demarcado (link "Up Sales — Agentes", ADR-0004) |
+| `config/schedule.yml` | append de 1 entrada (`sales_follow_up_sync_job`, ADR-0004, Follow-up) |
 
 Regra operacional: **um conflito de merge fora desta lista significa que uma fase vazou
 acoplamento.** Corrigir antes de seguir, em vez de aceitar o conflito. Ver

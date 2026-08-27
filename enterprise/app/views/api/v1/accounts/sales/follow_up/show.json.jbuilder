@@ -1,0 +1,3 @@
+json.follow_up_pipeline_id Current.account.follow_up_pipeline_id
+json.follow_up_team_id Current.account.follow_up_team_id
+json.follow_up_label Current.account.follow_up_label
