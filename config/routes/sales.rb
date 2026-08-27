@@ -42,6 +42,6 @@ end
 post 'crm/prospecting/search', to: 'sales/prospecting#search'
 post 'crm/prospecting/create_leads', to: 'sales/prospecting#create_leads'
 
-resource :follow_up, module: :sales, path: 'crm/follow_up', only: [:show, :update] do
+resource :follow_up, module: :sales, path: 'crm/follow_up', controller: 'follow_up', only: [:show, :update] do
   post :sync, on: :collection
 end
