@@ -10,7 +10,37 @@
       "PLACEHOLDER": "Selecionar funil"
     },
     "STAGE": {
-      "LEAD_COUNT": "{n} negócio | {n} negócios"
+      "LEAD_COUNT": "{n} negócio | {n} negócios",
+      "CREATE": {
+        "ACTION": "Nova coluna",
+        "TITLE": "Nova coluna"
+      },
+      "EDIT": {
+        "TITLE": "Editar coluna",
+        "DELETE": "Excluir coluna",
+        "CONFIRM_DELETE": "Clique de novo para confirmar"
+      },
+      "FIELDS": {
+        "NAME": "Nome",
+        "NAME_PLACEHOLDER": "ex.: Qualificado",
+        "COLOR": "Cor",
+        "SAVE": "Salvar"
+      },
+      "MESSAGES": {
+        "ERROR": "Não foi possível salvar a coluna.",
+        "DELETE_ERROR": "Não foi possível excluir a coluna."
+      }
+    },
+    "PIPELINE": {
+      "CREATE": {
+        "ACTION": "Novo Kanban",
+        "TITLE": "Novo Kanban",
+        "ERROR": "Não foi possível criar o Kanban.",
+        "FIELDS": {
+          "NAME": "Nome",
+          "NAME_PLACEHOLDER": "ex.: Funil Enterprise"
+        }
+      }
     },
     "LEAD": {
       "UNNAMED_CONTACT": "Contato desconhecido",

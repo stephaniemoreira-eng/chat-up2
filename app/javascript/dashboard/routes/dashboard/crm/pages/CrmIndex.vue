@@ -12,6 +12,9 @@ import KanbanBoard from 'dashboard/components-next/Sales/Board/KanbanBoard.vue';
 import BoardEmptyState from 'dashboard/components-next/Sales/Board/BoardEmptyState.vue';
 import LeadCreateDialog from 'dashboard/components-next/Sales/LeadCreateDialog.vue';
 import LeadDetailDialog from 'dashboard/components-next/Sales/LeadDetail/LeadDetailDialog.vue';
+import StageDialog from 'dashboard/components-next/Sales/StageDialog.vue';
+import PipelineCreateDialog from 'dashboard/components-next/Sales/PipelineCreateDialog.vue';
+import Button from 'dashboard/components-next/button/Button.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -23,6 +26,8 @@ const leadsStore = useSalesLeadsStore();
 
 const leadCreateDialogRef = ref(null);
 const leadDetailDialogRef = ref(null);
+const stageDialogRef = ref(null);
+const pipelineCreateDialogRef = ref(null);
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
 const isFetchingPipelines = computed(
@@ -33,6 +38,14 @@ const isFetchingBoard = computed(
     stagesStore.getUIFlags.fetchingList || leadsStore.getUIFlags.fetchingList
 );
 const isCreatingLead = computed(() => leadsStore.getUIFlags.creatingItem);
+const isSavingStage = computed(
+  () =>
+    stagesStore.getUIFlags.creatingItem || stagesStore.getUIFlags.updatingItem
+);
+const isDeletingStage = computed(() => stagesStore.getUIFlags.deletingItem);
+const isCreatingPipeline = computed(
+  () => pipelinesStore.getUIFlags.creatingItem
+);
 
 const activePipelineId = computed(() => {
   if (route.params.pipelineId) return Number(route.params.pipelineId);
@@ -92,6 +105,59 @@ const onCreateLead = async leadAttrs => {
   }
 };
 
+const onAddStage = () => {
+  stageDialogRef.value?.open();
+};
+
+const onEditStage = stage => {
+  stageDialogRef.value?.open(stage);
+};
+
+const onSaveStage = async ({ id, name, color }) => {
+  try {
+    if (id) {
+      await stagesStore.update({
+        pipelineId: activePipelineId.value,
+        id,
+        name,
+        color,
+      });
+    } else {
+      await stagesStore.create({
+        pipelineId: activePipelineId.value,
+        name,
+        color,
+      });
+    }
+    stageDialogRef.value?.onSuccess();
+  } catch {
+    useAlert(t('CRM.STAGE.MESSAGES.ERROR'));
+  }
+};
+
+const onDeleteStage = async id => {
+  try {
+    await stagesStore.delete({ pipelineId: activePipelineId.value, id });
+    stageDialogRef.value?.onSuccess();
+  } catch {
+    useAlert(t('CRM.STAGE.MESSAGES.DELETE_ERROR'));
+  }
+};
+
+const onAddPipeline = () => {
+  pipelineCreateDialogRef.value?.open();
+};
+
+const onCreatePipeline = async ({ name }) => {
+  try {
+    const pipeline = await pipelinesStore.create({ name });
+    pipelineCreateDialogRef.value?.onSuccess();
+    onSelectPipeline(pipeline.id);
+  } catch {
+    useAlert(t('CRM.PIPELINE.CREATE.ERROR'));
+  }
+};
+
 watch(activePipelineId, pipelineId => loadBoard(pipelineId));
 
 onMounted(async () => {
@@ -108,12 +174,22 @@ onMounted(async () => {
       <span class="text-lg font-medium text-n-slate-12">{{
         t('CRM.HEADER')
       }}</span>
-      <PipelineSwitcher
-        v-if="pipelines.length > 1"
-        :pipelines="pipelines"
-        :model-value="activePipelineId"
-        @update:model-value="onSelectPipeline"
-      />
+      <div class="flex items-center gap-2">
+        <PipelineSwitcher
+          v-if="pipelines.length > 0"
+          :pipelines="pipelines"
+          :model-value="activePipelineId"
+          @update:model-value="onSelectPipeline"
+        />
+        <Button
+          icon="i-lucide-plus"
+          color="slate"
+          variant="ghost"
+          size="sm"
+          :label="t('CRM.PIPELINE.CREATE.ACTION')"
+          @click="onAddPipeline"
+        />
+      </div>
     </div>
     <div
       v-if="isFetchingPipelines"
@@ -133,6 +209,8 @@ onMounted(async () => {
         @move-lead="onMoveLead"
         @add-lead="onAddLead"
         @click-lead="onClickLead"
+        @edit-stage="onEditStage"
+        @add-stage="onAddStage"
       />
     </div>
     <LeadCreateDialog
@@ -141,5 +219,17 @@ onMounted(async () => {
       @create="onCreateLead"
     />
     <LeadDetailDialog ref="leadDetailDialogRef" />
+    <StageDialog
+      ref="stageDialogRef"
+      :is-loading="isSavingStage"
+      :is-deleting="isDeletingStage"
+      @save="onSaveStage"
+      @delete="onDeleteStage"
+    />
+    <PipelineCreateDialog
+      ref="pipelineCreateDialogRef"
+      :is-loading="isCreatingPipeline"
+      @create="onCreatePipeline"
+    />
   </div>
 </template>

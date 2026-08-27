@@ -9,7 +9,7 @@ const props = defineProps({
   leads: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['moveLead', 'clickLead', 'addLead']);
+const emit = defineEmits(['moveLead', 'clickLead', 'addLead', 'editStage']);
 
 const localLeads = computed({
   get: () => props.leads,
@@ -45,13 +45,22 @@ const onDragEnd = event => {
           {{ leads.length }}
         </span>
       </div>
-      <Button
-        icon="i-lucide-plus"
-        color="slate"
-        variant="ghost"
-        size="sm"
-        @click="emit('addLead', stage.id)"
-      />
+      <div class="flex items-center gap-1 shrink-0">
+        <Button
+          icon="i-lucide-pencil"
+          color="slate"
+          variant="ghost"
+          size="sm"
+          @click="emit('editStage', stage)"
+        />
+        <Button
+          icon="i-lucide-plus"
+          color="slate"
+          variant="ghost"
+          size="sm"
+          @click="emit('addLead', stage.id)"
+        />
+      </div>
     </div>
     <Draggable
       :list="localLeads"

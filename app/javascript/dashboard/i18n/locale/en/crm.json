@@ -10,7 +10,37 @@
       "PLACEHOLDER": "Select pipeline"
     },
     "STAGE": {
-      "LEAD_COUNT": "{n} lead | {n} leads"
+      "LEAD_COUNT": "{n} lead | {n} leads",
+      "CREATE": {
+        "ACTION": "New column",
+        "TITLE": "New column"
+      },
+      "EDIT": {
+        "TITLE": "Edit column",
+        "DELETE": "Delete column",
+        "CONFIRM_DELETE": "Click again to confirm"
+      },
+      "FIELDS": {
+        "NAME": "Name",
+        "NAME_PLACEHOLDER": "e.g. Qualified",
+        "COLOR": "Color",
+        "SAVE": "Save"
+      },
+      "MESSAGES": {
+        "ERROR": "Could not save the column.",
+        "DELETE_ERROR": "Could not delete the column."
+      }
+    },
+    "PIPELINE": {
+      "CREATE": {
+        "ACTION": "New pipeline",
+        "TITLE": "New pipeline",
+        "ERROR": "Could not create the pipeline.",
+        "FIELDS": {
+          "NAME": "Name",
+          "NAME_PLACEHOLDER": "e.g. Enterprise pipeline"
+        }
+      }
     },
     "LEAD": {
       "UNNAMED_CONTACT": "Unknown contact",
