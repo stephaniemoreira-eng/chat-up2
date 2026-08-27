@@ -109,6 +109,12 @@
           "NAME": "Nome",
           "NAME_PLACEHOLDER": "ex.: Funil Enterprise"
         }
+      },
+      "DELETE": {
+        "ACTION": "Excluir Kanban",
+        "CONFIRM": "Clique de novo para confirmar",
+        "SUCCESS": "Kanban excluído.",
+        "ERROR": "Não foi possível excluir o Kanban. Mova ou exclua os negócios dentro dele antes de tentar de novo."
       }
     },
     "LEAD": {

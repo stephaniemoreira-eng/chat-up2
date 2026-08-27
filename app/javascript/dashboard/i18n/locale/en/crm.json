@@ -109,6 +109,12 @@
           "NAME": "Name",
           "NAME_PLACEHOLDER": "e.g. Enterprise pipeline"
         }
+      },
+      "DELETE": {
+        "ACTION": "Delete pipeline",
+        "CONFIRM": "Click again to confirm",
+        "SUCCESS": "Pipeline deleted.",
+        "ERROR": "Could not delete the pipeline. Move or delete the deals inside it first."
       }
     },
     "LEAD": {

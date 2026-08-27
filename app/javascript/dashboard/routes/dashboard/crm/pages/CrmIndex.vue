@@ -46,6 +46,10 @@ const isDeletingStage = computed(() => stagesStore.getUIFlags.deletingItem);
 const isCreatingPipeline = computed(
   () => pipelinesStore.getUIFlags.creatingItem
 );
+const isDeletingPipeline = computed(
+  () => pipelinesStore.getUIFlags.deletingItem
+);
+const confirmingDeletePipeline = ref(false);
 
 const activePipelineId = computed(() => {
   if (route.params.pipelineId) return Number(route.params.pipelineId);
@@ -158,7 +162,31 @@ const onCreatePipeline = async ({ name }) => {
   }
 };
 
-watch(activePipelineId, pipelineId => loadBoard(pipelineId));
+const onDeletePipeline = async () => {
+  if (!confirmingDeletePipeline.value) {
+    confirmingDeletePipeline.value = true;
+    return;
+  }
+
+  const deletedId = activePipelineId.value;
+  try {
+    await pipelinesStore.delete(deletedId);
+    useAlert(t('CRM.PIPELINE.DELETE.SUCCESS'));
+    const remainingPipeline = pipelines.value.find(
+      pipeline => pipeline.id !== deletedId
+    );
+    if (remainingPipeline) onSelectPipeline(remainingPipeline.id);
+  } catch {
+    useAlert(t('CRM.PIPELINE.DELETE.ERROR'));
+  } finally {
+    confirmingDeletePipeline.value = false;
+  }
+};
+
+watch(activePipelineId, pipelineId => {
+  confirmingDeletePipeline.value = false;
+  loadBoard(pipelineId);
+});
 
 onMounted(async () => {
   await pipelinesStore.get();
@@ -180,6 +208,20 @@ onMounted(async () => {
           :pipelines="pipelines"
           :model-value="activePipelineId"
           @update:model-value="onSelectPipeline"
+        />
+        <Button
+          v-if="activePipelineId"
+          icon="i-lucide-trash-2"
+          color="ruby"
+          variant="ghost"
+          size="sm"
+          :label="
+            confirmingDeletePipeline
+              ? t('CRM.PIPELINE.DELETE.CONFIRM')
+              : t('CRM.PIPELINE.DELETE.ACTION')
+          "
+          :is-loading="isDeletingPipeline"
+          @click="onDeletePipeline"
         />
         <Button
           icon="i-lucide-plus"
