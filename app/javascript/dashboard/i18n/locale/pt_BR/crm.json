@@ -31,6 +31,22 @@
         "DELETE_ERROR": "Não foi possível excluir a coluna."
       }
     },
+    "PROSPECTING": {
+      "TITLE": "Busca e prospecção",
+      "SEARCH": {
+        "LABEL": "Buscar",
+        "PLACEHOLDER": "ex.: clínicas de estética em Santos, SP",
+        "ACTION": "Buscar",
+        "EMPTY": "Nenhum resultado para essa busca.",
+        "ERROR": "Não foi possível buscar agora. Tente de novo."
+      },
+      "CREATE": {
+        "ACTION": "Adicionar {n} lead | Adicionar {n} leads",
+        "STAGE_PLACEHOLDER": "Coluna (opcional)",
+        "SUCCESS": "{n} lead adicionado | {n} leads adicionados",
+        "ERROR": "Não foi possível adicionar os leads selecionados."
+      }
+    },
     "PIPELINE": {
       "CREATE": {
         "ACTION": "Novo Kanban",

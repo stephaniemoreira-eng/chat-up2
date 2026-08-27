@@ -38,3 +38,6 @@ resources :leads, module: :sales, path: 'crm/leads' do
     get :summary
   end
 end
+
+post 'crm/prospecting/search', to: 'sales/prospecting#search'
+post 'crm/prospecting/create_leads', to: 'sales/prospecting#create_leads'

@@ -2,6 +2,7 @@ import { frontendURL } from '../../../helper/URLHelper';
 import SettingsWrapper from '../settings/SettingsWrapper.vue';
 import BrandingIndex from './branding/Index.vue';
 import DashboardIndex from './dashboard/Index.vue';
+import ProspectingIndex from './prospecting/Index.vue';
 
 // Rotas aditivas do Up Sales — reskin dentro do chat-up2. Ver
 // docs/fork/ADR-0004-up-sales-reskin.md. Cada nova tela (Dashboard, Busca, Super Admin,
@@ -11,6 +12,12 @@ export const routes = [
     path: frontendURL('accounts/:accountId/up-sales/dashboard'),
     name: 'up_sales_dashboard_index',
     component: DashboardIndex,
+    meta: { permissions: ['administrator', 'agent'] },
+  },
+  {
+    path: frontendURL('accounts/:accountId/up-sales/prospecting'),
+    name: 'up_sales_prospecting_index',
+    component: ProspectingIndex,
     meta: { permissions: ['administrator', 'agent'] },
   },
   {

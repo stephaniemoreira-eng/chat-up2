@@ -31,6 +31,22 @@
         "DELETE_ERROR": "Could not delete the column."
       }
     },
+    "PROSPECTING": {
+      "TITLE": "Search & prospecting",
+      "SEARCH": {
+        "LABEL": "Search",
+        "PLACEHOLDER": "e.g. aesthetic clinics in Santos, SP",
+        "ACTION": "Search",
+        "EMPTY": "No results for this search.",
+        "ERROR": "Could not search right now. Please try again."
+      },
+      "CREATE": {
+        "ACTION": "Add {n} lead | Add {n} leads",
+        "STAGE_PLACEHOLDER": "Column (optional)",
+        "SUCCESS": "{n} lead added | {n} leads added",
+        "ERROR": "Could not add the selected leads."
+      }
+    },
     "PIPELINE": {
       "CREATE": {
         "ACTION": "New pipeline",

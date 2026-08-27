@@ -401,6 +401,12 @@ const menuItems = computed(() => {
       activeOn: ['crm_pipeline_index', 'crm_pipeline_show'],
     },
     {
+      name: 'Up Sales Prospecting',
+      label: t('SIDEBAR.PROSPECTING'),
+      icon: 'i-lucide-search',
+      to: accountScopedRoute('up_sales_prospecting_index'),
+    },
+    {
       name: 'Inbox',
       label: t('SIDEBAR.INBOX'),
       icon: 'i-lucide-inbox',
