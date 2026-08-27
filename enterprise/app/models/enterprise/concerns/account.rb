@@ -36,6 +36,8 @@ module Enterprise::Concerns::Account
     # Fork-owned CRM module. See docs/fork/ADR-0002-namespace-sales.md.
     has_many :sales_pipelines, dependent: :destroy_async, class_name: 'Sales::Pipeline'
     has_many :sales_leads, dependent: :destroy_async, class_name: 'Sales::Lead'
+    has_many :sales_prospecting_searches, dependent: :destroy_async, class_name: 'Sales::ProspectingSearch'
+    has_many :sales_prospecting_results, dependent: :destroy_async, class_name: 'Sales::ProspectingResult'
 
     has_one :saml_settings, dependent: :destroy_async, class_name: 'AccountSamlSettings'
   end

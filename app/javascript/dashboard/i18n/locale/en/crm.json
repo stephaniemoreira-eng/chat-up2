@@ -33,15 +33,37 @@
     },
     "PROSPECTING": {
       "TITLE": "Search & prospecting",
+      "FORM": {
+        "BUSINESS_TYPE_LABEL": "Desired segment",
+        "BUSINESS_TYPE_PLACEHOLDER": "e.g. coffee shop, dental clinic, gym",
+        "NEIGHBORHOOD_LABEL": "Neighborhood or region",
+        "NEIGHBORHOOD_PLACEHOLDER": "e.g. Downtown",
+        "CITY_LABEL": "City",
+        "CITY_PLACEHOLDER": "e.g. Sao Paulo",
+        "STATE_LABEL": "State",
+        "STATE_PLACEHOLDER": "Select state",
+        "DESIRED_COUNT_LABEL": "Desired amount",
+        "DESIRED_COUNT_HELP": "In the MVP, initial limit of 60 per campaign.",
+        "MIN_RATING_LABEL": "Minimum Google rating",
+        "MIN_RATING_PLACEHOLDER": "e.g. 4.0",
+        "MIN_REVIEWS_LABEL": "Minimum reviews",
+        "MIN_REVIEWS_PLACEHOLDER": "e.g. 10",
+        "REQUIRE_PHONE_LABEL": "Require phone?",
+        "REQUIRE_WEBSITE_LABEL": "Require website?",
+        "EXCLUDE_KEYWORDS_LABEL": "What shouldn't show up?",
+        "EXCLUDE_KEYWORDS_PLACEHOLDER": "e.g. bakeries, restaurants, large franchises",
+        "NOTES_LABEL": "Notes",
+        "NOTES_PLACEHOLDER": "e.g. prioritize independent coffee shops",
+        "YES": "Yes",
+        "NO": "No",
+        "SUBMIT": "Search leads"
+      },
       "SEARCH": {
-        "TYPE_LABEL": "What are you looking for",
-        "TYPE_PLACEHOLDER": "e.g. aesthetic clinics",
-        "LOCATION_LABEL": "Where",
-        "LOCATION_PLACEHOLDER": "e.g. Santos, SP",
-        "QUERY_TEMPLATE": "{type} in {location}",
-        "ACTION": "Search",
         "EMPTY": "No results for this search.",
         "ERROR": "Could not search right now. Please try again."
+      },
+      "RESULT": {
+        "RATING": "★ {rating} ({count})"
       },
       "CREATE": {
         "ACTION": "Add {n} lead | Add {n} leads",

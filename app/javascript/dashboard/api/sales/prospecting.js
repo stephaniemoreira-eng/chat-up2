@@ -6,15 +6,15 @@ class SalesProspectingAPI extends ApiClient {
     super('crm/prospecting', { accountScoped: true });
   }
 
-  search(query) {
-    return axios.post(`${this.url}/search`, { query });
+  search(filters) {
+    return axios.post(`${this.url}/search`, filters);
   }
 
-  createLeads({ pipelineId, salesStageId, results }) {
+  createLeads({ pipelineId, salesStageId, resultIds }) {
     return axios.post(`${this.url}/create_leads`, {
       pipeline_id: pipelineId,
       sales_stage_id: salesStageId,
-      results,
+      result_ids: resultIds,
     });
   }
 }

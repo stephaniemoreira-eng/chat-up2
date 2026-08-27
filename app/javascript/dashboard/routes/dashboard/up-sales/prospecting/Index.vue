@@ -10,13 +10,55 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
 
+const BRAZILIAN_STATES = [
+  'AC',
+  'AL',
+  'AP',
+  'AM',
+  'BA',
+  'CE',
+  'DF',
+  'ES',
+  'GO',
+  'MA',
+  'MT',
+  'MS',
+  'MG',
+  'PA',
+  'PB',
+  'PR',
+  'PE',
+  'PI',
+  'RJ',
+  'RN',
+  'RS',
+  'RO',
+  'RR',
+  'SC',
+  'SP',
+  'SE',
+  'TO',
+];
+
+const MAX_DESIRED_COUNT = 60;
+
 const { t } = useI18n();
 
 const pipelinesStore = useSalesPipelinesStore();
 const stagesStore = useSalesStagesStore();
 
 const businessType = ref('');
-const location = ref('');
+const neighborhood = ref('');
+const city = ref('');
+const state = ref(null);
+const desiredCount = ref(20);
+const minRating = ref('');
+const minReviews = ref('');
+const requirePhone = ref('yes');
+const requireWebsite = ref('no');
+const excludeKeywords = ref('');
+const notes = ref('');
+
 const isSearching = ref(false);
 const isSaving = ref(false);
 const results = ref([]);
@@ -25,6 +67,12 @@ const hasSearched = ref(false);
 
 const pipelineId = ref(null);
 const stageId = ref(null);
+
+const stateOptions = BRAZILIAN_STATES.map(uf => ({ value: uf, label: uf }));
+const yesNoOptions = computed(() => [
+  { value: 'yes', label: t('CRM.PROSPECTING.FORM.YES') },
+  { value: 'no', label: t('CRM.PROSPECTING.FORM.NO') },
+]);
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
 const pipelineOptions = computed(() =>
@@ -43,21 +91,15 @@ const stageOptions = computed(() =>
 const selectedCount = computed(() => selectedIds.value.size);
 const canAddLeads = computed(() => selectedCount.value > 0 && pipelineId.value);
 const canSearch = computed(
-  () => businessType.value.trim() && location.value.trim()
-);
-const searchQuery = computed(() =>
-  t('CRM.PROSPECTING.SEARCH.QUERY_TEMPLATE', {
-    type: businessType.value.trim(),
-    location: location.value.trim(),
-  })
+  () => businessType.value.trim() && city.value.trim() && state.value
 );
 
-const toggleResult = placeId => {
+const toggleResult = resultId => {
   const next = new Set(selectedIds.value);
-  if (next.has(placeId)) {
-    next.delete(placeId);
+  if (next.has(resultId)) {
+    next.delete(resultId);
   } else {
-    next.add(placeId);
+    next.add(resultId);
   }
   selectedIds.value = next;
 };
@@ -75,7 +117,19 @@ const onSearch = async () => {
   hasSearched.value = true;
   selectedIds.value = new Set();
   try {
-    const { data } = await ProspectingAPI.search(searchQuery.value);
+    const { data } = await ProspectingAPI.search({
+      business_type: businessType.value.trim(),
+      neighborhood: neighborhood.value.trim() || undefined,
+      city: city.value.trim(),
+      state: state.value,
+      desired_count: desiredCount.value,
+      min_rating: minRating.value || undefined,
+      min_reviews: minReviews.value || undefined,
+      require_phone: requirePhone.value === 'yes',
+      require_website: requireWebsite.value === 'yes',
+      exclude_keywords: excludeKeywords.value.trim() || undefined,
+      notes: notes.value.trim() || undefined,
+    });
     results.value = data.payload || [];
   } catch {
     useAlert(t('CRM.PROSPECTING.SEARCH.ERROR'));
@@ -86,22 +140,16 @@ const onSearch = async () => {
 };
 
 const onAddLeads = async () => {
-  const selectedResults = results.value.filter(result =>
-    selectedIds.value.has(result.place_id)
-  );
-
   isSaving.value = true;
   try {
     await ProspectingAPI.createLeads({
       pipelineId: pipelineId.value,
       salesStageId: stageId.value,
-      results: selectedResults,
+      resultIds: Array.from(selectedIds.value),
     });
-    useAlert(
-      t('CRM.PROSPECTING.CREATE.SUCCESS', { n: selectedResults.length })
-    );
+    useAlert(t('CRM.PROSPECTING.CREATE.SUCCESS', { n: selectedCount.value }));
     results.value = results.value.filter(
-      result => !selectedIds.value.has(result.place_id)
+      result => !selectedIds.value.has(result.id)
     );
     selectedIds.value = new Set();
   } catch {
@@ -125,25 +173,122 @@ onMounted(async () => {
       {{ t('CRM.PROSPECTING.TITLE') }}
     </h1>
 
-    <form
-      class="flex items-end gap-3 flex-wrap max-w-3xl"
-      @submit.prevent="onSearch"
-    >
+    <form class="flex flex-col gap-4 max-w-3xl" @submit.prevent="onSearch">
       <Input
         v-model="businessType"
-        class="flex-1 min-w-[220px]"
-        :label="t('CRM.PROSPECTING.SEARCH.TYPE_LABEL')"
-        :placeholder="t('CRM.PROSPECTING.SEARCH.TYPE_PLACEHOLDER')"
+        :label="t('CRM.PROSPECTING.FORM.BUSINESS_TYPE_LABEL')"
+        :placeholder="t('CRM.PROSPECTING.FORM.BUSINESS_TYPE_PLACEHOLDER')"
       />
-      <Input
-        v-model="location"
-        class="flex-1 min-w-[220px]"
-        :label="t('CRM.PROSPECTING.SEARCH.LOCATION_LABEL')"
-        :placeholder="t('CRM.PROSPECTING.SEARCH.LOCATION_PLACEHOLDER')"
-      />
+
+      <div class="grid grid-cols-2 gap-4">
+        <Input
+          v-model="neighborhood"
+          :label="t('CRM.PROSPECTING.FORM.NEIGHBORHOOD_LABEL')"
+          :placeholder="t('CRM.PROSPECTING.FORM.NEIGHBORHOOD_PLACEHOLDER')"
+        />
+        <Input
+          v-model="city"
+          :label="t('CRM.PROSPECTING.FORM.CITY_LABEL')"
+          :placeholder="t('CRM.PROSPECTING.FORM.CITY_PLACEHOLDER')"
+        />
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ t('CRM.PROSPECTING.FORM.STATE_LABEL') }}
+          </label>
+          <ComboBox
+            :model-value="state"
+            :options="stateOptions"
+            :placeholder="t('CRM.PROSPECTING.FORM.STATE_PLACEHOLDER')"
+            @update:model-value="value => (state = value)"
+          />
+        </div>
+        <div class="flex flex-col gap-1">
+          <Input
+            v-model.number="desiredCount"
+            type="number"
+            min="1"
+            :max="MAX_DESIRED_COUNT"
+            :label="t('CRM.PROSPECTING.FORM.DESIRED_COUNT_LABEL')"
+          />
+          <span class="text-xs text-n-slate-11">
+            {{ t('CRM.PROSPECTING.FORM.DESIRED_COUNT_HELP') }}
+          </span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <Input
+          v-model="minRating"
+          type="number"
+          step="0.1"
+          min="0"
+          max="5"
+          :label="t('CRM.PROSPECTING.FORM.MIN_RATING_LABEL')"
+          :placeholder="t('CRM.PROSPECTING.FORM.MIN_RATING_PLACEHOLDER')"
+        />
+        <Input
+          v-model="minReviews"
+          type="number"
+          min="0"
+          :label="t('CRM.PROSPECTING.FORM.MIN_REVIEWS_LABEL')"
+          :placeholder="t('CRM.PROSPECTING.FORM.MIN_REVIEWS_PLACEHOLDER')"
+        />
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ t('CRM.PROSPECTING.FORM.REQUIRE_PHONE_LABEL') }}
+          </label>
+          <ComboBox
+            :model-value="requirePhone"
+            :options="yesNoOptions"
+            @update:model-value="value => (requirePhone = value)"
+          />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ t('CRM.PROSPECTING.FORM.REQUIRE_WEBSITE_LABEL') }}
+          </label>
+          <ComboBox
+            :model-value="requireWebsite"
+            :options="yesNoOptions"
+            @update:model-value="value => (requireWebsite = value)"
+          />
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-n-slate-12">
+          {{ t('CRM.PROSPECTING.FORM.EXCLUDE_KEYWORDS_LABEL') }}
+        </label>
+        <textarea
+          v-model="excludeKeywords"
+          rows="2"
+          class="w-full rounded-lg border border-n-weak bg-n-solid-1 p-2 text-sm text-n-slate-12 outline-none focus:border-n-brand"
+          :placeholder="t('CRM.PROSPECTING.FORM.EXCLUDE_KEYWORDS_PLACEHOLDER')"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-n-slate-12">
+          {{ t('CRM.PROSPECTING.FORM.NOTES_LABEL') }}
+        </label>
+        <textarea
+          v-model="notes"
+          rows="2"
+          class="w-full rounded-lg border border-n-weak bg-n-solid-1 p-2 text-sm text-n-slate-12 outline-none focus:border-n-brand"
+          :placeholder="t('CRM.PROSPECTING.FORM.NOTES_PLACEHOLDER')"
+        />
+      </div>
+
       <Button
         type="submit"
-        :label="t('CRM.PROSPECTING.SEARCH.ACTION')"
+        class="self-end"
+        :label="t('CRM.PROSPECTING.FORM.SUBMIT')"
         :is-loading="isSearching"
         :disabled="!canSearch"
       />
@@ -181,14 +326,14 @@ onMounted(async () => {
         <div class="flex flex-col gap-2">
           <label
             v-for="result in results"
-            :key="result.place_id"
+            :key="result.id"
             class="flex items-start gap-3 p-3 rounded-lg border border-n-weak bg-n-solid-1 cursor-pointer"
           >
             <input
               type="checkbox"
               class="mt-1"
-              :checked="selectedIds.has(result.place_id)"
-              @change="toggleResult(result.place_id)"
+              :checked="selectedIds.has(result.id)"
+              @change="toggleResult(result.id)"
             />
             <div class="flex flex-col min-w-0">
               <span class="text-sm font-medium text-n-slate-12">
@@ -197,6 +342,14 @@ onMounted(async () => {
               <span class="text-xs text-n-slate-11">{{ result.address }}</span>
               <span v-if="result.phone_number" class="text-xs text-n-slate-11">
                 {{ result.phone_number }}
+              </span>
+              <span v-if="result.rating" class="text-xs text-n-slate-11">
+                {{
+                  t('CRM.PROSPECTING.RESULT.RATING', {
+                    rating: result.rating,
+                    count: result.user_ratings_total || 0,
+                  })
+                }}
               </span>
             </div>
           </label>

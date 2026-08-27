@@ -33,15 +33,37 @@
     },
     "PROSPECTING": {
       "TITLE": "Busca e prospecção",
+      "FORM": {
+        "BUSINESS_TYPE_LABEL": "Segmento desejado",
+        "BUSINESS_TYPE_PLACEHOLDER": "ex.: cafeteria, clínica odontológica, academia",
+        "NEIGHBORHOOD_LABEL": "Bairro ou região",
+        "NEIGHBORHOOD_PLACEHOLDER": "ex.: Santana",
+        "CITY_LABEL": "Cidade",
+        "CITY_PLACEHOLDER": "ex.: São Paulo",
+        "STATE_LABEL": "Estado",
+        "STATE_PLACEHOLDER": "Selecionar estado",
+        "DESIRED_COUNT_LABEL": "Quantidade desejada",
+        "DESIRED_COUNT_HELP": "No MVP, limite inicial de 60 por campanha.",
+        "MIN_RATING_LABEL": "Nota mínima no Google",
+        "MIN_RATING_PLACEHOLDER": "ex.: 4.0",
+        "MIN_REVIEWS_LABEL": "Avaliações mínimas",
+        "MIN_REVIEWS_PLACEHOLDER": "ex.: 10",
+        "REQUIRE_PHONE_LABEL": "Exigir telefone?",
+        "REQUIRE_WEBSITE_LABEL": "Exigir site?",
+        "EXCLUDE_KEYWORDS_LABEL": "O que não deve aparecer?",
+        "EXCLUDE_KEYWORDS_PLACEHOLDER": "ex.: padarias, restaurantes, grandes franquias",
+        "NOTES_LABEL": "Observações",
+        "NOTES_PLACEHOLDER": "ex.: priorizar cafeterias independentes",
+        "YES": "Sim",
+        "NO": "Não",
+        "SUBMIT": "Buscar leads"
+      },
       "SEARCH": {
-        "TYPE_LABEL": "O que você busca",
-        "TYPE_PLACEHOLDER": "ex.: clínicas de estética",
-        "LOCATION_LABEL": "Onde",
-        "LOCATION_PLACEHOLDER": "ex.: Santos, SP",
-        "QUERY_TEMPLATE": "{type} em {location}",
-        "ACTION": "Buscar",
         "EMPTY": "Nenhum resultado para essa busca.",
         "ERROR": "Não foi possível buscar agora. Tente de novo."
+      },
+      "RESULT": {
+        "RATING": "★ {rating} ({count})"
       },
       "CREATE": {
         "ACTION": "Adicionar {n} lead | Adicionar {n} leads",
