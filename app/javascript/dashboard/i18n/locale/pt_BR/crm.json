@@ -34,8 +34,11 @@
     "PROSPECTING": {
       "TITLE": "Busca e prospecção",
       "SEARCH": {
-        "LABEL": "Buscar",
-        "PLACEHOLDER": "ex.: clínicas de estética em Santos, SP",
+        "TYPE_LABEL": "O que você busca",
+        "TYPE_PLACEHOLDER": "ex.: clínicas de estética",
+        "LOCATION_LABEL": "Onde",
+        "LOCATION_PLACEHOLDER": "ex.: Santos, SP",
+        "QUERY_TEMPLATE": "{type} em {location}",
         "ACTION": "Buscar",
         "EMPTY": "Nenhum resultado para essa busca.",
         "ERROR": "Não foi possível buscar agora. Tente de novo."

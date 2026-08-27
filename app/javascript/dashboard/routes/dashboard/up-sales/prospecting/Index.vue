@@ -15,7 +15,8 @@ const { t } = useI18n();
 const pipelinesStore = useSalesPipelinesStore();
 const stagesStore = useSalesStagesStore();
 
-const query = ref('');
+const businessType = ref('');
+const location = ref('');
 const isSearching = ref(false);
 const isSaving = ref(false);
 const results = ref([]);
@@ -27,7 +28,10 @@ const stageId = ref(null);
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
 const pipelineOptions = computed(() =>
-  pipelines.value.map(pipeline => ({ value: pipeline.id, label: pipeline.name }))
+  pipelines.value.map(pipeline => ({
+    value: pipeline.id,
+    label: pipeline.name,
+  }))
 );
 const stages = computed(() =>
   pipelineId.value ? stagesStore.getStagesByPipeline(pipelineId.value) : []
@@ -37,8 +41,15 @@ const stageOptions = computed(() =>
 );
 
 const selectedCount = computed(() => selectedIds.value.size);
-const canAddLeads = computed(
-  () => selectedCount.value > 0 && pipelineId.value
+const canAddLeads = computed(() => selectedCount.value > 0 && pipelineId.value);
+const canSearch = computed(
+  () => businessType.value.trim() && location.value.trim()
+);
+const searchQuery = computed(() =>
+  t('CRM.PROSPECTING.SEARCH.QUERY_TEMPLATE', {
+    type: businessType.value.trim(),
+    location: location.value.trim(),
+  })
 );
 
 const toggleResult = placeId => {
@@ -58,13 +69,13 @@ const onSelectPipeline = id => {
 };
 
 const onSearch = async () => {
-  if (!query.value.trim()) return;
+  if (!canSearch.value) return;
 
   isSearching.value = true;
   hasSearched.value = true;
   selectedIds.value = new Set();
   try {
-    const { data } = await ProspectingAPI.search(query.value.trim());
+    const { data } = await ProspectingAPI.search(searchQuery.value);
     results.value = data.payload || [];
   } catch {
     useAlert(t('CRM.PROSPECTING.SEARCH.ERROR'));
@@ -86,7 +97,9 @@ const onAddLeads = async () => {
       salesStageId: stageId.value,
       results: selectedResults,
     });
-    useAlert(t('CRM.PROSPECTING.CREATE.SUCCESS', { n: selectedResults.length }));
+    useAlert(
+      t('CRM.PROSPECTING.CREATE.SUCCESS', { n: selectedResults.length })
+    );
     results.value = results.value.filter(
       result => !selectedIds.value.has(result.place_id)
     );
@@ -112,21 +125,29 @@ onMounted(async () => {
       {{ t('CRM.PROSPECTING.TITLE') }}
     </h1>
 
-    <div class="flex items-end gap-3 max-w-2xl">
+    <form
+      class="flex items-end gap-3 flex-wrap max-w-3xl"
+      @submit.prevent="onSearch"
+    >
       <Input
-        v-model="query"
-        class="flex-1"
-        :label="t('CRM.PROSPECTING.SEARCH.LABEL')"
-        :placeholder="t('CRM.PROSPECTING.SEARCH.PLACEHOLDER')"
-        @keyup.enter="onSearch"
+        v-model="businessType"
+        class="flex-1 min-w-[220px]"
+        :label="t('CRM.PROSPECTING.SEARCH.TYPE_LABEL')"
+        :placeholder="t('CRM.PROSPECTING.SEARCH.TYPE_PLACEHOLDER')"
+      />
+      <Input
+        v-model="location"
+        class="flex-1 min-w-[220px]"
+        :label="t('CRM.PROSPECTING.SEARCH.LOCATION_LABEL')"
+        :placeholder="t('CRM.PROSPECTING.SEARCH.LOCATION_PLACEHOLDER')"
       />
       <Button
+        type="submit"
         :label="t('CRM.PROSPECTING.SEARCH.ACTION')"
         :is-loading="isSearching"
-        :disabled="!query.trim()"
-        @click="onSearch"
+        :disabled="!canSearch"
       />
-    </div>
+    </form>
 
     <div v-if="hasSearched && !isSearching" class="flex flex-col gap-4">
       <div v-if="results.length === 0" class="text-sm text-n-slate-11">
@@ -150,9 +171,7 @@ onMounted(async () => {
             @update:model-value="value => (stageId = value)"
           />
           <Button
-            :label="
-              t('CRM.PROSPECTING.CREATE.ACTION', { n: selectedCount })
-            "
+            :label="t('CRM.PROSPECTING.CREATE.ACTION', { n: selectedCount })"
             :disabled="!canAddLeads"
             :is-loading="isSaving"
             @click="onAddLeads"

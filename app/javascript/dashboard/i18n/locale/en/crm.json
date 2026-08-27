@@ -34,8 +34,11 @@
     "PROSPECTING": {
       "TITLE": "Search & prospecting",
       "SEARCH": {
-        "LABEL": "Search",
-        "PLACEHOLDER": "e.g. aesthetic clinics in Santos, SP",
+        "TYPE_LABEL": "What are you looking for",
+        "TYPE_PLACEHOLDER": "e.g. aesthetic clinics",
+        "LOCATION_LABEL": "Where",
+        "LOCATION_PLACEHOLDER": "e.g. Santos, SP",
+        "QUERY_TEMPLATE": "{type} in {location}",
         "ACTION": "Search",
         "EMPTY": "No results for this search.",
         "ERROR": "Could not search right now. Please try again."
