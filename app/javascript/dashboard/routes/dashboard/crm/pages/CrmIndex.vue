@@ -15,6 +15,7 @@ import LeadDetailDialog from 'dashboard/components-next/Sales/LeadDetail/LeadDet
 import StageDialog from 'dashboard/components-next/Sales/StageDialog.vue';
 import PipelineCreateDialog from 'dashboard/components-next/Sales/PipelineCreateDialog.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -28,6 +29,7 @@ const leadCreateDialogRef = ref(null);
 const leadDetailDialogRef = ref(null);
 const stageDialogRef = ref(null);
 const pipelineCreateDialogRef = ref(null);
+const deletePipelineDialogRef = ref(null);
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
 const isFetchingPipelines = computed(
@@ -49,7 +51,14 @@ const isCreatingPipeline = computed(
 const isDeletingPipeline = computed(
   () => pipelinesStore.getUIFlags.deletingItem
 );
-const confirmingDeletePipeline = ref(false);
+
+const deleteStep = ref('select');
+const pipelineToDeleteId = ref(null);
+const pipelineToDeleteName = computed(
+  () =>
+    pipelines.value.find(pipeline => pipeline.id === pipelineToDeleteId.value)
+      ?.name || ''
+);
 
 const activePipelineId = computed(() => {
   if (route.params.pipelineId) return Number(route.params.pipelineId);
@@ -162,31 +171,41 @@ const onCreatePipeline = async ({ name }) => {
   }
 };
 
-const onDeletePipeline = async () => {
-  if (!confirmingDeletePipeline.value) {
-    confirmingDeletePipeline.value = true;
+const onOpenDeletePipeline = () => {
+  deleteStep.value = 'select';
+  pipelineToDeleteId.value = activePipelineId.value;
+  deletePipelineDialogRef.value?.open();
+};
+
+const onResetDeletePipelineDialog = () => {
+  deleteStep.value = 'select';
+  pipelineToDeleteId.value = null;
+};
+
+const onConfirmDeletePipelineDialog = async () => {
+  if (deleteStep.value === 'select') {
+    if (!pipelineToDeleteId.value) return;
+    deleteStep.value = 'confirm';
     return;
   }
 
-  const deletedId = activePipelineId.value;
+  const deletedId = pipelineToDeleteId.value;
   try {
     await pipelinesStore.delete(deletedId);
     useAlert(t('CRM.PIPELINE.DELETE.SUCCESS'));
-    const remainingPipeline = pipelines.value.find(
-      pipeline => pipeline.id !== deletedId
-    );
-    if (remainingPipeline) onSelectPipeline(remainingPipeline.id);
+    deletePipelineDialogRef.value?.close();
+    if (deletedId === activePipelineId.value) {
+      const remainingPipeline = pipelines.value.find(
+        pipeline => pipeline.id !== deletedId
+      );
+      if (remainingPipeline) onSelectPipeline(remainingPipeline.id);
+    }
   } catch {
     useAlert(t('CRM.PIPELINE.DELETE.ERROR'));
-  } finally {
-    confirmingDeletePipeline.value = false;
   }
 };
 
-watch(activePipelineId, pipelineId => {
-  confirmingDeletePipeline.value = false;
-  loadBoard(pipelineId);
-});
+watch(activePipelineId, pipelineId => loadBoard(pipelineId));
 
 onMounted(async () => {
   await pipelinesStore.get();
@@ -210,18 +229,13 @@ onMounted(async () => {
           @update:model-value="onSelectPipeline"
         />
         <Button
-          v-if="activePipelineId"
+          v-if="pipelines.length > 0"
           icon="i-lucide-trash-2"
           color="ruby"
           variant="ghost"
           size="sm"
-          :label="
-            confirmingDeletePipeline
-              ? t('CRM.PIPELINE.DELETE.CONFIRM')
-              : t('CRM.PIPELINE.DELETE.ACTION')
-          "
-          :is-loading="isDeletingPipeline"
-          @click="onDeletePipeline"
+          :label="t('CRM.PIPELINE.DELETE.ACTION')"
+          @click="onOpenDeletePipeline"
         />
         <Button
           icon="i-lucide-plus"
@@ -273,5 +287,46 @@ onMounted(async () => {
       :is-loading="isCreatingPipeline"
       @create="onCreatePipeline"
     />
+    <Dialog
+      ref="deletePipelineDialogRef"
+      :type="deleteStep === 'confirm' ? 'alert' : 'edit'"
+      :title="
+        deleteStep === 'select'
+          ? t('CRM.PIPELINE.DELETE.SELECT_TITLE')
+          : t('CRM.PIPELINE.DELETE.CONFIRM_TITLE')
+      "
+      :description="
+        deleteStep === 'confirm'
+          ? t('CRM.PIPELINE.DELETE.CONFIRM_DESCRIPTION', {
+              name: pipelineToDeleteName,
+            })
+          : t('CRM.PIPELINE.DELETE.SELECT_DESCRIPTION')
+      "
+      :confirm-button-label="
+        deleteStep === 'select'
+          ? t('CRM.PIPELINE.DELETE.CONTINUE')
+          : t('CRM.PIPELINE.DELETE.ACTION')
+      "
+      :disable-confirm-button="deleteStep === 'select' && !pipelineToDeleteId"
+      :is-loading="isDeletingPipeline"
+      @confirm="onConfirmDeletePipelineDialog"
+      @close="onResetDeletePipelineDialog"
+    >
+      <div v-if="deleteStep === 'select'" class="flex flex-col gap-2">
+        <label
+          v-for="pipeline in pipelines"
+          :key="pipeline.id"
+          class="flex items-center gap-2 p-2 rounded-lg border border-n-weak cursor-pointer hover:bg-n-slate-3"
+        >
+          <input
+            v-model="pipelineToDeleteId"
+            type="radio"
+            name="pipeline-to-delete"
+            :value="pipeline.id"
+          />
+          <span class="text-sm text-n-slate-12">{{ pipeline.name }}</span>
+        </label>
+      </div>
+    </Dialog>
   </div>
 </template>

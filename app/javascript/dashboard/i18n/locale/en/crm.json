@@ -112,7 +112,11 @@
       },
       "DELETE": {
         "ACTION": "Delete pipeline",
-        "CONFIRM": "Click again to confirm",
+        "SELECT_TITLE": "Delete pipeline",
+        "SELECT_DESCRIPTION": "Select which pipeline you want to delete.",
+        "CONTINUE": "Continue",
+        "CONFIRM_TITLE": "Confirm deletion",
+        "CONFIRM_DESCRIPTION": "Are you sure you want to delete the pipeline \"{name}\"? This action cannot be undone. A pipeline still holding deals can't be deleted.",
         "SUCCESS": "Pipeline deleted.",
         "ERROR": "Could not delete the pipeline. Move or delete the deals inside it first."
       }

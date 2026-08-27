@@ -112,7 +112,11 @@
       },
       "DELETE": {
         "ACTION": "Excluir Kanban",
-        "CONFIRM": "Clique de novo para confirmar",
+        "SELECT_TITLE": "Excluir Kanban",
+        "SELECT_DESCRIPTION": "Selecione qual Kanban deseja excluir.",
+        "CONTINUE": "Continuar",
+        "CONFIRM_TITLE": "Confirmar exclusão",
+        "CONFIRM_DESCRIPTION": "Tem certeza que deseja excluir o Kanban \"{name}\"? Essa ação não pode ser desfeita. Não é possível excluir um Kanban que ainda tenha negócios dentro.",
         "SUCCESS": "Kanban excluído.",
         "ERROR": "Não foi possível excluir o Kanban. Mova ou exclua os negócios dentro dele antes de tentar de novo."
       }
