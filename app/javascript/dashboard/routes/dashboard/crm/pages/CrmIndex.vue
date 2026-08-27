@@ -167,9 +167,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 min-w-0">
+  <div class="flex flex-col h-full w-full min-h-0 min-w-0">
     <div
-      class="flex items-center justify-between gap-4 p-4 border-b border-n-weak"
+      class="flex items-center justify-between gap-4 p-4 border-b border-n-weak w-full shrink-0"
     >
       <span class="text-lg font-medium text-n-slate-12">{{
         t('CRM.HEADER')
