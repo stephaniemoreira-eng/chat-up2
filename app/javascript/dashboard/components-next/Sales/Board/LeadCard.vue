@@ -9,6 +9,7 @@ const props = defineProps({
   value: { type: [String, Number], default: null },
   contactName: { type: String, default: '' },
   assigneeName: { type: String, default: '' },
+  stageColor: { type: String, default: '' },
 });
 
 defineEmits(['click']);
@@ -30,7 +31,8 @@ const formattedValue = computed(() => {
 
 <template>
   <div
-    class="flex flex-col gap-2 p-3 rounded-lg cursor-grab bg-n-solid-1 border border-n-weak border-l-2 border-l-transparent hover:border-n-slate-6 hover:border-l-n-brand transition-colors active:cursor-grabbing"
+    class="flex flex-col gap-2 p-3 rounded-lg cursor-grab bg-n-solid-1 border border-n-weak border-l-2 hover:border-n-slate-6 transition-colors active:cursor-grabbing"
+    :style="{ borderLeftColor: stageColor || 'transparent' }"
     :data-lead-id="id"
     @click="$emit('click', id)"
   >

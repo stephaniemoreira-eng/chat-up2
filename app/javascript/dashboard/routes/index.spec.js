@@ -71,7 +71,7 @@ describe('#validateAuthenticateRoutePermission', () => {
 
         await validateAuthenticateRoutePermission(to, next);
 
-        expect(next).toHaveBeenCalledWith('/app/accounts/1/dashboard');
+        expect(next).toHaveBeenCalledWith('/app/accounts/1/up-sales/dashboard');
       });
     });
 

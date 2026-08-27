@@ -24,7 +24,7 @@ describe('#defaultRedirectPage', () => {
 
   it('should return dashboard route for users with conversation permissions', () => {
     const permissions = ['conversation_manage', 'agent'];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
   });
 
   it('should return contacts route for users with contact permissions', () => {
@@ -46,12 +46,12 @@ describe('#defaultRedirectPage', () => {
 
   it('should return dashboard route as default for users with custom roles', () => {
     const permissions = ['custom_role'];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
   });
 
   it('should return dashboard route for users with administrator role', () => {
     const permissions = ['administrator'];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
   });
 
   it('should return dashboard route for users with multiple permissions', () => {
@@ -62,7 +62,7 @@ describe('#defaultRedirectPage', () => {
       'agent',
       'administrator',
     ];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
   });
 });
 
@@ -125,7 +125,7 @@ describe('#validateLoggedInRoutes', () => {
               },
               { accounts: [{ id: 1, role: 'agent', status: 'active' }] }
             )
-          ).toEqual(`accounts/1/dashboard`);
+          ).toEqual(`accounts/1/up-sales/dashboard`);
         });
       });
       describe('when route is suspended route', () => {
@@ -135,7 +135,7 @@ describe('#validateLoggedInRoutes', () => {
               { name: 'account_suspended', params: { accountId: 1 } },
               { accounts: [{ id: 1, role: 'agent', status: 'active' }] }
             )
-          ).toEqual(`accounts/1/dashboard`);
+          ).toEqual(`accounts/1/up-sales/dashboard`);
         });
       });
     });

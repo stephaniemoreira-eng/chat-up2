@@ -10,7 +10,7 @@ describe('#URL Helpers', () => {
             accounts: [{ id: 7500, name: 'Test Account 7500' }],
           },
         })
-      ).toBe('/app/accounts/7500/dashboard');
+      ).toBe('/app/accounts/7500/up-sales/dashboard');
     });
 
     it('should return correct conversation URL if account id and conversationId is present', () => {
@@ -36,7 +36,7 @@ describe('#URL Helpers', () => {
             accounts: [{ id: '7501', name: 'Test Account 7501' }],
           },
         })
-      ).toBe('/app/accounts/7501/dashboard');
+      ).toBe('/app/accounts/7501/up-sales/dashboard');
       expect(getLoginRedirectURL('7500', null)).toBe('/app/');
     });
   });

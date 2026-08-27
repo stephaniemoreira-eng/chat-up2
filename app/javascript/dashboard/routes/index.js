@@ -44,7 +44,7 @@ export const validateAuthenticateRoutePermission = async (to, next) => {
   if (to.name === 'no_accounts' || !to.name) {
     const target = needsOnboarding
       ? onboardingPath(userAccount?.onboarding_step)
-      : 'dashboard';
+      : 'up-sales/dashboard';
     return next(frontendURL(`accounts/${routeAccountId}/${target}`));
   }
 
@@ -56,7 +56,7 @@ export const validateAuthenticateRoutePermission = async (to, next) => {
     );
   }
   if (!needsOnboarding && isOnOnboardingView(to)) {
-    return next(frontendURL(`accounts/${routeAccountId}/dashboard`));
+    return next(frontendURL(`accounts/${routeAccountId}/up-sales/dashboard`));
   }
 
   const nextRoute = validateLoggedInRoutes(to, store.getters.getCurrentUser);
