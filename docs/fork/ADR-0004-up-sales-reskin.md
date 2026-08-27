@@ -83,3 +83,54 @@ já dominado nesta sessão.
 Admin de configuração de agente, Follow-up (importação + transferência), Calculadora comercial,
 Agenda integrada — ver `C:\Users\Stephanie\.claude\plans\swirling-twirling-nest.md` pro plano
 semana a semana.
+
+## Estratégia de atualização do fork — já decidida, não é um item em aberto
+
+Pergunta levantada pela Stéphanie em 2026-08-27: manter compatibilidade com atualizações do
+Chatwoot (sem quebrar nem perder configuração do fork) vs. parar de puxar atualizações e seguir só
+com o projeto próprio, permanentemente divergente.
+
+**Isso já está decidido e documentado — a primeira opção, desde o ADR-0001.** Resumo:
+
+- Merge com o upstream é **manual e deliberado**, nunca automático (`docs/fork/UPSTREAM_MERGE_PLAYBOOK.md`,
+  seção "Executar o merge" — um branch `merge/fazer-ai-<data>` por vez, inspecionado antes de
+  aplicar).
+- A estratégia aditiva do ADR-0001 (lista fechada de arquivos nativos tocados, seção 5) existe
+  **exatamente pra isso**: manter uma superfície de conflito pequena e conhecida, pra que puxar uma
+  versão nova do Chatwoot não quebre nem apague nada do fork. O playbook trata qualquer conflito
+  fora dessa lista como bug de acoplamento a corrigir, não como conflito a resolver na mão.
+- `db/schema.rb`, `config/features.yml` e outros arquivos sensíveis têm procedimento de merge
+  próprio documentado (seção 3 do playbook) pra garantir que nossas tabelas/flags sobrevivem.
+
+Não precisa de nova decisão — só reforçar, se um dia isso for questionado de novo, que **o caminho
+escolhido é continuar puxando atualizações do Chatwoot** (via `fazer-ai/chatwoot`, não direto do
+`chatwoot/chatwoot` — ver playbook seção "Este é um fork de dois níveis"), nunca automaticamente,
+sempre com o checklist de verificação pós-merge do playbook.
+
+## Branding total (marca UP2 substituindo o Chatwoot por completo) — registrado em 2026-08-27, não decidido
+
+Pergunta levantada pela Stéphanie na mesma conversa: ir além da marca dinâmica por conta
+(`brand_color`/`brand_logo_url`, já construída) e fazer o Chatwoot **assumir a marca da UP2/Up
+Sales por completo** — "mesmo que isso seja espelhamento" (ou seja, mascarar a identidade visual
+do Chatwoot, não necessariamente reescrever nada por baixo).
+
+**O que já existe (escopo atual, por conta, dinâmico):** cor de marca e logo no Sidebar da SPA do
+dashboard (`Account#settings`, ver corpo desta ADR acima).
+
+**O que NÃO existe ainda** (identidade "Chatwoot" ainda aparece, fixa, fora da SPA por-conta):
+- Painel Super Admin nativo (`/super_admin`) — texto fixo "Chatwoot Admin Dashboard" e logo
+  (`app/views/super_admin/application/_navigation.html.erb`).
+- Tela de login/signup, PWA manifest, favicon, `<title>` padrão, e-mails transacionais
+  (convite, redefinição de senha, notificação) — todos nativos, ainda não auditados nem tocados
+  por nenhuma ADR deste fork.
+- Rodapé/links de central de ajuda e termos que apontam pra domínios do Chatwoot.
+
+**Por que isso é uma decisão à parte, não só "mais uma tela":** cada arquivo nativo tocado pra
+mascarar a marca (manifest, views de e-mail, layout do super_admin, etc.) é mais um item na lista
+fechada do ADR-0001 — aumenta a superfície de conflito de merge com o upstream (ver seção acima).
+Não é proibitivo, mas é meio, não fim: precisa entrar na lista auditada e ser mantido a cada merge,
+como qualquer outro ponto de toque.
+
+**Status: registrado, não decidido, não priorizado.** Fica para uma conversa futura decidir o
+alcance (só o essencial — título, favicon, e-mails — ou also o painel Super Admin inteiro) e abrir
+uma ADR própria (ADR-0006 ou o próximo número livre) quando for priorizado.
