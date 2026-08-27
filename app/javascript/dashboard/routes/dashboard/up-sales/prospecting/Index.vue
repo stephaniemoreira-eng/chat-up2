@@ -180,7 +180,7 @@ onMounted(async () => {
         :placeholder="t('CRM.PROSPECTING.FORM.BUSINESS_TYPE_PLACEHOLDER')"
       />
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-3 gap-3">
         <Input
           v-model="neighborhood"
           :label="t('CRM.PROSPECTING.FORM.NEIGHBORHOOD_LABEL')"
@@ -191,9 +191,6 @@ onMounted(async () => {
           :label="t('CRM.PROSPECTING.FORM.CITY_LABEL')"
           :placeholder="t('CRM.PROSPECTING.FORM.CITY_PLACEHOLDER')"
         />
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-n-slate-12">
             {{ t('CRM.PROSPECTING.FORM.STATE_LABEL') }}
@@ -205,6 +202,9 @@ onMounted(async () => {
             @update:model-value="value => (state = value)"
           />
         </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 items-start">
         <div class="flex flex-col gap-1">
           <Input
             v-model.number="desiredCount"
@@ -217,9 +217,6 @@ onMounted(async () => {
             {{ t('CRM.PROSPECTING.FORM.DESIRED_COUNT_HELP') }}
           </span>
         </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
         <Input
           v-model="minRating"
           type="number"
@@ -238,7 +235,7 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-3">
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-n-slate-12">
             {{ t('CRM.PROSPECTING.FORM.REQUIRE_PHONE_LABEL') }}
@@ -261,28 +258,31 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-n-slate-12">
-          {{ t('CRM.PROSPECTING.FORM.EXCLUDE_KEYWORDS_LABEL') }}
-        </label>
-        <textarea
-          v-model="excludeKeywords"
-          rows="2"
-          class="w-full rounded-lg border border-n-weak bg-n-solid-1 p-2 text-sm text-n-slate-12 outline-none focus:border-n-brand"
-          :placeholder="t('CRM.PROSPECTING.FORM.EXCLUDE_KEYWORDS_PLACEHOLDER')"
-        />
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-n-slate-12">
-          {{ t('CRM.PROSPECTING.FORM.NOTES_LABEL') }}
-        </label>
-        <textarea
-          v-model="notes"
-          rows="2"
-          class="w-full rounded-lg border border-n-weak bg-n-solid-1 p-2 text-sm text-n-slate-12 outline-none focus:border-n-brand"
-          :placeholder="t('CRM.PROSPECTING.FORM.NOTES_PLACEHOLDER')"
-        />
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ t('CRM.PROSPECTING.FORM.EXCLUDE_KEYWORDS_LABEL') }}
+          </label>
+          <textarea
+            v-model="excludeKeywords"
+            rows="2"
+            class="w-full rounded-lg border border-n-weak bg-n-solid-1 p-2 text-sm text-n-slate-12 outline-none focus:border-n-brand"
+            :placeholder="
+              t('CRM.PROSPECTING.FORM.EXCLUDE_KEYWORDS_PLACEHOLDER')
+            "
+          />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ t('CRM.PROSPECTING.FORM.NOTES_LABEL') }}
+          </label>
+          <textarea
+            v-model="notes"
+            rows="2"
+            class="w-full rounded-lg border border-n-weak bg-n-solid-1 p-2 text-sm text-n-slate-12 outline-none focus:border-n-brand"
+            :placeholder="t('CRM.PROSPECTING.FORM.NOTES_PLACEHOLDER')"
+          />
+        </div>
       </div>
 
       <Button
