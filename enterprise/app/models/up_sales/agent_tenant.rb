@@ -2,13 +2,14 @@
 #
 # Table name: up_sales_agent_tenants
 #
-#  id                 :bigint           not null, primary key
-#  agents_tenant_id   :string           not null
-#  agents_tenant_slug :string
-#  api_key            :string           not null
-#  created_at         :datetime         not null
-#  updated_at         :datetime         not null
-#  account_id         :bigint           not null
+#  id                                :bigint           not null, primary key
+#  agents_tenant_id                 :string           not null
+#  agents_tenant_slug               :string
+#  api_key                          :string           not null
+#  calendar_integration_instance_id :string
+#  created_at                       :datetime         not null
+#  updated_at                       :datetime         not null
+#  account_id                       :bigint           not null
 #
 # Indexes
 #

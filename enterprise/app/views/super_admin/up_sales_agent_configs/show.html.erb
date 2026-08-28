@@ -48,6 +48,18 @@
             </p>
           </div>
         </div>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :calendar_integration_instance_id, 'Calendar integration instance ID' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.text_field :calendar_integration_instance_id, class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full" %>
+            <p class="pt-2 text-xs italic text-slate-400">
+              O id da integração GOOGLE_CALENDAR desse tenant no painel up2-agents (aba
+              Integrações → Calendar). Necessário pro botão "Agendar" na tela de Conversas.
+            </p>
+          </div>
+        </div>
       <% end %>
     </fieldset>
 

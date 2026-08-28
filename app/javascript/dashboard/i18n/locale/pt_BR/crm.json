@@ -9,6 +9,20 @@
     "PIPELINE_SWITCHER": {
       "PLACEHOLDER": "Selecionar funil"
     },
+    "SCHEDULE": {
+      "ACTION": "Agendar",
+      "TITLE": "Agendar reunião",
+      "DESCRIPTION": "Cria o evento direto na agenda Google conectada desta conta.",
+      "FIELDS": {
+        "SUMMARY": "Título",
+        "SUMMARY_PLACEHOLDER": "ex.: Reunião com cliente",
+        "START": "Início",
+        "END": "Fim",
+        "DESCRIPTION": "Descrição (opcional)"
+      },
+      "SUCCESS": "Reunião agendada.",
+      "ERROR": "Não foi possível agendar. Verifique se o calendário está conectado para esta conta."
+    },
     "FOLLOW_UP": {
       "TITLE": "Follow-up",
       "CONFIG": {

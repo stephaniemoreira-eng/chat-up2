@@ -57,7 +57,9 @@ class SuperAdmin::UpSalesAgentConfigsController < SuperAdmin::EnterpriseBaseCont
   end
 
   def agent_tenant_params
-    permitted = params.require(:agent_tenant).permit(:agents_tenant_id, :agents_tenant_slug, :api_key).to_h
+    permitted = params.require(:agent_tenant)
+                       .permit(:agents_tenant_id, :agents_tenant_slug, :api_key, :calendar_integration_instance_id)
+                       .to_h
     permitted[:api_key] = nil if permitted[:api_key].blank?
     permitted.compact
   end

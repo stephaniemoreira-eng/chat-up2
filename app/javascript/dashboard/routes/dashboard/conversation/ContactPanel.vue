@@ -1,5 +1,6 @@
 <script setup>
 import { computed, watch, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   useMapGetter,
   useFunctionGetter,
@@ -7,7 +8,9 @@ import {
 } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useUISettings } from 'dashboard/composables/useUISettings';
+import { useAlert } from 'dashboard/composables';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
+import UpSalesCalendarEventsAPI from 'dashboard/api/upSales/calendarEvents';
 
 import AccordionItem from 'dashboard/components/Accordion/AccordionItem.vue';
 import ContactConversations from './ContactConversations.vue';
@@ -26,6 +29,8 @@ import ShopifyOrdersList from 'dashboard/components/widgets/conversation/Shopify
 import SidebarActionsHeader from 'dashboard/components-next/SidebarActionsHeader.vue';
 import LinearIssuesList from 'dashboard/components/widgets/conversation/linear/IssuesList.vue';
 import LinearSetupCTA from 'dashboard/components/widgets/conversation/linear/LinearSetupCTA.vue';
+import Button from 'dashboard/components-next/button/Button.vue';
+import ScheduleEventDialog from 'dashboard/components-next/Sales/ScheduleEventDialog.vue';
 
 const props = defineProps({
   conversationId: {
@@ -76,6 +81,7 @@ const isLinearConnected = computed(
   () => linearIntegration.value?.enabled || false
 );
 
+const { t } = useI18n();
 const store = useStore();
 const currentChat = useMapGetter('getSelectedChat');
 const conversationId = computed(() => props.conversationId);
@@ -139,6 +145,26 @@ const closeContactPanel = () => {
   });
 };
 
+const scheduleDialogRef = ref(null);
+const isScheduling = ref(false);
+
+const openScheduleDialog = () => {
+  scheduleDialogRef.value?.open();
+};
+
+const onScheduleEvent = async event => {
+  isScheduling.value = true;
+  try {
+    await UpSalesCalendarEventsAPI.create(event);
+    scheduleDialogRef.value?.onSuccess();
+    useAlert(t('CRM.SCHEDULE.SUCCESS'));
+  } catch (error) {
+    useAlert(error?.response?.data?.error || t('CRM.SCHEDULE.ERROR'));
+  } finally {
+    isScheduling.value = false;
+  }
+};
+
 onMounted(() => {
   conversationSidebarItems.value = conversationSidebarItemsOrder.value;
   getContactDetails();
@@ -157,6 +183,17 @@ onMounted(() => {
     />
     <GroupContactInfo v-if="isGroupConversation" :contact="contact" />
     <ContactInfo v-else :contact="contact" :channel-type="channelType" />
+    <div class="px-4 pb-2">
+      <Button
+        icon="i-lucide-calendar-plus"
+        color="slate"
+        variant="faded"
+        size="sm"
+        class="w-full"
+        :label="t('CRM.SCHEDULE.ACTION')"
+        @click="openScheduleDialog"
+      />
+    </div>
     <div class="px-2 pb-8 list-group">
       <Draggable
         :list="conversationSidebarItems"
@@ -351,6 +388,11 @@ onMounted(() => {
         </template>
       </Draggable>
     </div>
+    <ScheduleEventDialog
+      ref="scheduleDialogRef"
+      :is-loading="isScheduling"
+      @save="onScheduleEvent"
+    />
   </div>
 </template>
 

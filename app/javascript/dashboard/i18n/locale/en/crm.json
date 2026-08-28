@@ -9,6 +9,20 @@
     "PIPELINE_SWITCHER": {
       "PLACEHOLDER": "Select pipeline"
     },
+    "SCHEDULE": {
+      "ACTION": "Schedule",
+      "TITLE": "Schedule a meeting",
+      "DESCRIPTION": "Creates the event directly on this account's connected Google Calendar.",
+      "FIELDS": {
+        "SUMMARY": "Title",
+        "SUMMARY_PLACEHOLDER": "e.g. Meeting with client",
+        "START": "Start",
+        "END": "End",
+        "DESCRIPTION": "Description (optional)"
+      },
+      "SUCCESS": "Meeting scheduled.",
+      "ERROR": "Could not schedule it. Check whether a calendar is connected for this account."
+    },
     "FOLLOW_UP": {
       "TITLE": "Follow-up",
       "CONFIG": {

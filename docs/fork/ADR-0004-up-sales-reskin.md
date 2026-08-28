@@ -144,6 +144,37 @@ Redis, sem cursor — só contagem ao vivo) do que adaptar o nativo.
 `enterprise/app/controllers/api/v1/accounts/sales/follow_up_controller.rb`,
 `app/javascript/dashboard/routes/dashboard/up-sales/follow-up/Index.vue`.
 
+## Agenda integrada — botão "Agendar" na tela de Conversas, rota nova no up2-agents
+
+A API do up2-agents (repositório separado, `up2-agents`) não tinha nenhuma rota REST pra criar
+evento no Google Calendar por fora de uma conversa do agente — só existia o tool
+`calendar_create_event`, rodando dentro do LangGraph, amarrado a contato/lembretes/guardrails
+daquela conversa. Construída uma rota nova lá, `POST /v1/integrations/instances/:id/calendar/
+events`, que cria um evento "puro" (sem o carimbo de dono/contato do agente, sem convidados fixos/
+Meet, sem lembretes) — reaproveitando as mesmas funções do toolpack do agente (lista de calendários
+permitidos, fuso, formatação de horário, agora exportadas) pra nunca divergir do que o próprio
+agente pode tocar. Commit no `up2-agents`: `fe06725`.
+
+Do lado do `chat-up2`: botão "Agendar" na tela de Conversas (`ContactPanel.vue`, um dos pontos de
+toque já auditados no ADR-0001), abrindo um diálogo (título, início, fim, descrição) que chama essa
+rota nova via a mesma chave de API por conta já guardada em `UpSales::AgentTenant` (Super Admin de
+configuração de agente). Adicionado um campo novo nessa mesma tela do Super Admin —
+`calendar_integration_instance_id` — apontando pra qual integração GOOGLE_CALENDAR daquele tenant
+usar.
+
+**Limitação conhecida, aceita para o MVP:** o evento criado por aqui não tem o carimbo de contato
+que o agente de IA usa pra isolar "cada cliente só vê os próprios agendamentos" — então, se o
+cliente perguntar pro agente sobre esse compromisso depois, o agente não vai enxergá-lo (ele só
+lista eventos com o carimbo dele mesmo). Igual a um evento criado à mão direto no Google Calendar
+pelo time — já um caso previsto no código do agente. Cruzar o `contactDbId` do up2-agents com o
+contato do Chatwoot é trabalho futuro, não bloqueia esta entrega.
+
+**Arquivos novos (chat-up2):**
+`enterprise/app/services/up_sales/agents/create_calendar_event_service.rb`,
+`enterprise/app/controllers/api/v1/accounts/up_sales/calendar_events_controller.rb`,
+`app/javascript/dashboard/components-next/Sales/ScheduleEventDialog.vue`, migration
+`add_calendar_integration_instance_id_to_up_sales_agent_tenants`.
+
 ## Estratégia de atualização do fork — já decidida, não é um item em aberto
 
 Pergunta levantada pela Stéphanie em 2026-08-27: manter compatibilidade com atualizações do

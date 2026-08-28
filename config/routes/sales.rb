@@ -45,3 +45,7 @@ post 'crm/prospecting/create_leads', to: 'sales/prospecting#create_leads'
 resource :follow_up, module: :sales, path: 'crm/follow_up', controller: 'follow_up', only: [:show, :update] do
   post :sync, on: :collection
 end
+
+# Não é uma rota do módulo Sales:: (CRM) -- fica neste arquivo só para não abrir um segundo
+# `draw` em config/routes.rb (ver ADR-0001). Ver docs/fork/ADR-0004-up-sales-reskin.md.
+post 'up_sales/calendar_events', to: 'up_sales/calendar_events#create'
