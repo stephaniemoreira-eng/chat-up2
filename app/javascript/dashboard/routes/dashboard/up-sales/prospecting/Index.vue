@@ -141,17 +141,44 @@ const onSearch = async () => {
 
 const onAddLeads = async () => {
   isSaving.value = true;
+  const requestedCount = selectedCount.value;
   try {
-    await ProspectingAPI.createLeads({
+    const { data } = await ProspectingAPI.createLeads({
       pipelineId: pipelineId.value,
       salesStageId: stageId.value,
       resultIds: Array.from(selectedIds.value),
     });
-    useAlert(t('CRM.PROSPECTING.CREATE.SUCCESS', { n: selectedCount.value }));
-    results.value = results.value.filter(
-      result => !selectedIds.value.has(result.id)
+    // The backend skips (and logs) any result that fails to become a valid Contact/Lead instead
+    // of failing the whole request, so a 200 here does NOT guarantee every selected lead was
+    // created. Match by place_id (the lead's additional_attributes carries it) so only the
+    // results that actually succeeded disappear from the list -- the rest stay selected.
+    const createdPlaceIds = new Set(
+      (data.payload || []).map(lead => lead.additional_attributes?.place_id)
     );
-    selectedIds.value = new Set();
+    const createdCount = createdPlaceIds.size;
+
+    if (createdCount === 0) {
+      useAlert(t('CRM.PROSPECTING.CREATE.ERROR'));
+    } else if (createdCount < requestedCount) {
+      useAlert(
+        t('CRM.PROSPECTING.CREATE.PARTIAL_SUCCESS', {
+          created: createdCount,
+          total: requestedCount,
+        })
+      );
+    } else {
+      useAlert(t('CRM.PROSPECTING.CREATE.SUCCESS', { n: createdCount }));
+    }
+
+    selectedIds.value = new Set(
+      Array.from(selectedIds.value).filter(
+        id =>
+          !createdPlaceIds.has(results.value.find(r => r.id === id)?.place_id)
+      )
+    );
+    results.value = results.value.filter(
+      result => !createdPlaceIds.has(result.place_id)
+    );
   } catch {
     useAlert(t('CRM.PROSPECTING.CREATE.ERROR'));
   } finally {

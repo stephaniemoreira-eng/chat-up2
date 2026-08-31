@@ -71,12 +71,23 @@ class Sales::Prospecting::GooglePlacesSearchService
         place_id: place['id'],
         name: place.dig('displayName', 'text'),
         address: place['formattedAddress'],
-        phone_number: place['nationalPhoneNumber'] || place['internationalPhoneNumber'],
+        phone_number: normalized_phone_number(place['internationalPhoneNumber']),
         website: place['websiteUri'],
         rating: place['rating'],
         user_ratings_total: place['userRatingCount']
       }
     end
+  end
+
+  # Google returns internationalPhoneNumber as e.g. "+55 13 3222-1234" -- Contact#phone_number
+  # requires strict E.164 (no spaces/punctuation). nationalPhoneNumber has no country code at all,
+  # so it can't be turned into a valid E.164 number without guessing a country -- drop the phone
+  # rather than build one that's silently wrong or that fails Contact validation later.
+  def normalized_phone_number(raw)
+    return nil if raw.blank?
+
+    digits = raw.gsub(/[^\d+]/, '')
+    digits if digits.match?(/\A\+[1-9]\d{1,14}\z/)
   end
 
   def api_key

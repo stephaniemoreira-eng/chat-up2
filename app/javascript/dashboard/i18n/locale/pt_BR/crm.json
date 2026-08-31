@@ -111,6 +111,7 @@
         "ACTION": "Adicionar {n} lead | Adicionar {n} leads",
         "STAGE_PLACEHOLDER": "Coluna (opcional)",
         "SUCCESS": "{n} lead adicionado | {n} leads adicionados",
+        "PARTIAL_SUCCESS": "{created} de {total} leads adicionados. Os demais falharam (dado inválido) e continuam selecionados.",
         "ERROR": "Não foi possível adicionar os leads selecionados."
       }
     },
