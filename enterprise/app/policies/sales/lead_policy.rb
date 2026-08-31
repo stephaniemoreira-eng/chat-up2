@@ -38,4 +38,20 @@ class Sales::LeadPolicy < ApplicationPolicy
   def update_summary?
     true
   end
+
+  def search?
+    true
+  end
+
+  def create_leads?
+    true
+  end
+
+  def sync?
+    true
+  end
+
+  def summary?
+    true
+  end
 end

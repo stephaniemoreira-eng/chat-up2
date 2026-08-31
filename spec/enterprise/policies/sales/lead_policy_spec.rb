@@ -16,7 +16,8 @@ RSpec.describe 'Sales::LeadPolicy', type: :policy do
   let(:agent_account_user) { create(:account_user, user: agent, account: account, role: :agent) }
   let(:agent_context) { { user: agent, account: account, account_user: agent_account_user } }
 
-  permissions :index?, :show?, :create?, :update?, :move?, :link_conversation?, :unlink_conversation?, :timeline?, :update_summary? do
+  permissions :index?, :show?, :create?, :update?, :move?, :link_conversation?, :unlink_conversation?, :timeline?, :update_summary?,
+              :search?, :create_leads?, :sync?, :summary? do
     it 'permits administrators and agents' do
       expect(lead_policy).to permit(administrator_context, lead)
       expect(lead_policy).to permit(agent_context, lead)
