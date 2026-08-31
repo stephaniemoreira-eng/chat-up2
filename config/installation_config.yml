@@ -516,6 +516,16 @@
   type: boolean
 ## ------ End of Configs added for Google OAuth ------ ##
 
+## ------ Fork-owned: Google Places API for Up Sales prospecting ------ ##
+## See docs/fork/ADR-0004-up-sales-reskin.md.
+- name: GOOGLE_PLACES_API_KEY
+  display_title: 'Google Places API Key'
+  value:
+  locked: false
+  description: 'Used by Up Sales > Busca e prospecção to search businesses via the Google Places API (New).'
+  type: secret
+## ------ End of fork-owned Google Places config ------ ##
+
 ## ------ Configs added for SAML SSO ------ ##
 - name: ENABLE_SAML_SSO_LOGIN
   display_title: 'Enable SAML SSO login'
