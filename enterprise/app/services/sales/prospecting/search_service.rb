@@ -98,13 +98,20 @@ class Sales::Prospecting::SearchService
       search.results.create!(
         account: account,
         place_id: result[:place_id],
-        name: result[:name],
-        address: result[:address],
-        phone_number: result[:phone_number],
-        website: result[:website],
+        name: truncate255(result[:name]),
+        address: truncate255(result[:address]),
+        phone_number: truncate255(result[:phone_number]),
+        website: truncate255(result[:website]),
         rating: result[:rating],
         user_ratings_total: result[:user_ratings_total]
       )
     end
+  end
+
+  # Google Places occasionally returns a website/name/address longer than the 255-char limit
+  # ApplicationRecord enforces on every string column (see app/models/application_record.rb) --
+  # truncate rather than let one long field abort persistence for the whole batch of results.
+  def truncate255(value)
+    value.presence&.truncate(255)
   end
 end
