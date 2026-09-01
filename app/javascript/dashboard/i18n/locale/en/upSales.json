@@ -23,12 +23,12 @@
     "AGENDA": {
       "TITLE": "Agenda",
       "LOADING": "Loading agenda…",
-      "EMPTY": "No upcoming events.",
       "ERROR": "Could not load the agenda right now.",
-      "NO_TITLE": "(untitled)",
-      "STARTING_SOON": "Starting soon",
-      "JOIN_MEET": "Join the call",
-      "OPEN_IN_CALENDAR": "Open in Google Calendar"
+      "TODAY": "Today",
+      "VIEW_MONTH": "Month",
+      "VIEW_WEEK": "Week",
+      "VIEW_DAY": "Day",
+      "MORE_COUNT": "+{n} more"
     }
   }
 }

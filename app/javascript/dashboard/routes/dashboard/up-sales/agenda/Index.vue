@@ -1,143 +1,191 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import CalendarEventsAPI from 'dashboard/api/upSales/calendarEvents';
+import Button from 'dashboard/components-next/button/Button.vue';
+import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import MonthView from './MonthView.vue';
+import TimeGridView from './TimeGridView.vue';
+import {
+  addDays,
+  addMonths,
+  isAllDayValue,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from './dateHelpers';
 
 const { t } = useI18n();
 
+const VIEW_OPTIONS = [
+  { value: 'month', label: t('UP_SALES.AGENDA.VIEW_MONTH') },
+  { value: 'week', label: t('UP_SALES.AGENDA.VIEW_WEEK') },
+  { value: 'day', label: t('UP_SALES.AGENDA.VIEW_DAY') },
+];
+
+const viewMode = ref('month');
+const referenceDate = ref(new Date());
+const events = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref('');
-const events = ref([]);
 
-const SOON_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2h — matches an operator's "starting soon" instinct
+const range = computed(() => {
+  if (viewMode.value === 'day') {
+    const start = startOfDay(referenceDate.value);
+    return { start, end: addDays(start, 1) };
+  }
+  if (viewMode.value === 'week') {
+    const start = startOfWeek(referenceDate.value);
+    return { start, end: addDays(start, 7) };
+  }
+  const monthStart = startOfMonth(referenceDate.value);
+  const monthEnd = new Date(
+    referenceDate.value.getFullYear(),
+    referenceDate.value.getMonth() + 1,
+    0
+  );
+  const start = startOfWeek(monthStart);
+  const end = addDays(startOfWeek(monthEnd), 7);
+  return { start, end };
+});
 
-const now = ref(new Date());
-
-const eventsWithMeta = computed(() =>
-  events.value.map(event => {
-    const startsAt = event.start ? new Date(event.start) : null;
-    const msUntilStart = startsAt
-      ? startsAt.getTime() - now.value.getTime()
-      : null;
-    return {
-      ...event,
-      startsAt,
-      isSoon:
-        msUntilStart !== null &&
-        msUntilStart >= 0 &&
-        msUntilStart <= SOON_THRESHOLD_MS,
-      isPast: msUntilStart !== null && msUntilStart < 0,
-    };
-  })
+const weekOrDayColumns = computed(() =>
+  viewMode.value === 'day'
+    ? [startOfDay(referenceDate.value)]
+    : Array.from({ length: 7 }, (_, i) => addDays(range.value.start, i))
 );
 
-const upcomingEvents = computed(() =>
-  eventsWithMeta.value.filter(event => !event.isPast)
-);
-
-const formatDateTime = date => {
-  if (!date) return '';
-  return date.toLocaleString('pt-BR', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+const title = computed(() => {
+  if (viewMode.value === 'day') {
+    return referenceDate.value.toLocaleDateString('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+  if (viewMode.value === 'week') {
+    const start = range.value.start;
+    const last = addDays(range.value.end, -1);
+    const sameMonth = start.getMonth() === last.getMonth();
+    return sameMonth
+      ? `${start.getDate()}–${last.getDate()} de ${start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
+      : `${start.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} – ${last.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  }
+  return referenceDate.value.toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
   });
-};
+});
 
 const fetchEvents = async () => {
   isLoading.value = true;
   errorMessage.value = '';
   try {
-    const { data } = await CalendarEventsAPI.list();
-    events.value = data.payload || [];
+    const { data } = await CalendarEventsAPI.list({
+      timeMin: range.value.start.toISOString(),
+      timeMax: range.value.end.toISOString(),
+      maxResults: 50,
+    });
+    events.value = (data.payload || [])
+      .filter(event => event.start)
+      .map(event => ({
+        ...event,
+        isAllDay: isAllDayValue(event.start),
+        startsAt: new Date(event.start),
+        endsAt: event.end ? new Date(event.end) : null,
+      }));
   } catch (error) {
     errorMessage.value =
       error.response?.data?.error || t('UP_SALES.AGENDA.ERROR');
+    events.value = [];
   } finally {
     isLoading.value = false;
   }
 };
 
-onMounted(() => {
-  now.value = new Date();
-  fetchEvents();
-});
+function goToday() {
+  referenceDate.value = new Date();
+}
+function goPrev() {
+  if (viewMode.value === 'day')
+    referenceDate.value = addDays(referenceDate.value, -1);
+  else if (viewMode.value === 'week')
+    referenceDate.value = addDays(referenceDate.value, -7);
+  else referenceDate.value = addMonths(referenceDate.value, -1);
+}
+function goNext() {
+  if (viewMode.value === 'day')
+    referenceDate.value = addDays(referenceDate.value, 1);
+  else if (viewMode.value === 'week')
+    referenceDate.value = addDays(referenceDate.value, 7);
+  else referenceDate.value = addMonths(referenceDate.value, 1);
+}
+function selectDay(day) {
+  referenceDate.value = day;
+  viewMode.value = 'day';
+}
+
+watch(() => range.value, fetchEvents);
+onMounted(fetchEvents);
 </script>
 
 <template>
-  <div class="p-6 max-w-3xl">
-    <h1 class="text-xl font-semibold text-n-slate-12 mb-6">
-      {{ t('UP_SALES.AGENDA.TITLE') }}
-    </h1>
+  <div class="p-6">
+    <div class="flex items-center flex-wrap gap-3 mb-4">
+      <h1 class="text-xl font-semibold text-n-slate-12 mr-2">
+        {{ t('UP_SALES.AGENDA.TITLE') }}
+      </h1>
+      <Button
+        :label="t('UP_SALES.AGENDA.TODAY')"
+        variant="faded"
+        size="sm"
+        @click="goToday"
+      />
+      <div class="flex items-center gap-1">
+        <Button
+          icon="i-lucide-chevron-left"
+          variant="ghost"
+          size="sm"
+          @click="goPrev"
+        />
+        <Button
+          icon="i-lucide-chevron-right"
+          variant="ghost"
+          size="sm"
+          @click="goNext"
+        />
+      </div>
+      <span class="text-sm font-medium text-n-slate-12 capitalize">{{
+        title
+      }}</span>
+      <ComboBox
+        :model-value="viewMode"
+        :options="VIEW_OPTIONS"
+        class="w-32 ml-auto"
+        @update:model-value="value => (viewMode = value)"
+      />
+    </div>
 
     <div v-if="isLoading" class="text-sm text-n-slate-11">
       {{ t('UP_SALES.AGENDA.LOADING') }}
     </div>
-
     <div
       v-else-if="errorMessage"
       class="rounded-lg border border-n-weak bg-n-solid-1 p-5 text-sm text-n-slate-11"
     >
       {{ errorMessage }}
     </div>
-
-    <div
-      v-else-if="upcomingEvents.length === 0"
-      class="text-sm text-n-slate-11"
-    >
-      {{ t('UP_SALES.AGENDA.EMPTY') }}
-    </div>
-
-    <div v-else class="flex flex-col gap-2">
-      <div
-        v-for="event in upcomingEvents"
-        :key="event.id"
-        class="flex items-start gap-3 rounded-lg border p-4"
-        :class="
-          event.isSoon
-            ? 'border-n-brand bg-n-brand/5'
-            : 'border-n-weak bg-n-solid-1'
-        "
-      >
-        <div class="flex flex-col min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-n-slate-12">
-              {{ event.summary || t('UP_SALES.AGENDA.NO_TITLE') }}
-            </span>
-            <span
-              v-if="event.isSoon"
-              class="text-xxs font-medium text-n-brand bg-n-brand/10 rounded-full px-2 py-0.5 flex-shrink-0"
-            >
-              {{ t('UP_SALES.AGENDA.STARTING_SOON') }}
-            </span>
-          </div>
-          <span class="text-xs text-n-slate-11 mt-1">
-            {{ formatDateTime(event.startsAt) }}
-          </span>
-        </div>
-        <div class="flex items-center gap-3 flex-shrink-0">
-          <a
-            v-if="event.meetLink"
-            :href="event.meetLink"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-xs text-n-brand hover:underline"
-          >
-            {{ t('UP_SALES.AGENDA.JOIN_MEET') }}
-          </a>
-          <a
-            v-if="event.htmlLink"
-            :href="event.htmlLink"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-xs text-n-slate-11 hover:underline"
-          >
-            {{ t('UP_SALES.AGENDA.OPEN_IN_CALENDAR') }}
-          </a>
-        </div>
-      </div>
-    </div>
+    <MonthView
+      v-else-if="viewMode === 'month'"
+      :reference-date="referenceDate"
+      :events="events"
+      @select-day="selectDay"
+    />
+    <TimeGridView
+      v-else
+      :days="weekOrDayColumns"
+      :events="events"
+      @select-day="selectDay"
+    />
   </div>
 </template>
