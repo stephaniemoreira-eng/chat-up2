@@ -19,6 +19,16 @@
       "MEETINGS_SCHEDULED": "Meetings scheduled this month",
       "MEETINGS_PLACEHOLDER": "— (coming in Week C)",
       "DEALS_WON": "Deals won"
+    },
+    "AGENDA": {
+      "TITLE": "Agenda",
+      "LOADING": "Loading agenda…",
+      "EMPTY": "No upcoming events.",
+      "ERROR": "Could not load the agenda right now.",
+      "NO_TITLE": "(untitled)",
+      "STARTING_SOON": "Starting soon",
+      "JOIN_MEET": "Join the call",
+      "OPEN_IN_CALENDAR": "Open in Google Calendar"
     }
   }
 }

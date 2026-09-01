@@ -393,6 +393,12 @@ const menuItems = computed(() => {
       to: accountScopedRoute('up_sales_follow_up_index'),
     },
     {
+      name: 'Up Sales Agenda',
+      label: t('SIDEBAR.AGENDA'),
+      icon: 'i-lucide-calendar-clock',
+      to: accountScopedRoute('up_sales_agenda_index'),
+    },
+    {
       name: 'Inbox',
       label: t('SIDEBAR.INBOX'),
       icon: 'i-lucide-inbox',

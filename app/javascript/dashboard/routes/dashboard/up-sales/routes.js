@@ -4,6 +4,7 @@ import BrandingIndex from './branding/Index.vue';
 import DashboardIndex from './dashboard/Index.vue';
 import ProspectingIndex from './prospecting/Index.vue';
 import FollowUpIndex from './follow-up/Index.vue';
+import AgendaIndex from './agenda/Index.vue';
 
 // Rotas aditivas do Up Sales — reskin dentro do chat-up2. Ver
 // docs/fork/ADR-0004-up-sales-reskin.md. Cada nova tela (Dashboard, Busca, Super Admin,
@@ -26,6 +27,12 @@ export const routes = [
     name: 'up_sales_follow_up_index',
     component: FollowUpIndex,
     meta: { permissions: ['administrator'] },
+  },
+  {
+    path: frontendURL('accounts/:accountId/up-sales/agenda'),
+    name: 'up_sales_agenda_index',
+    component: AgendaIndex,
+    meta: { permissions: ['administrator', 'agent'] },
   },
   {
     path: frontendURL('accounts/:accountId/settings/up-sales-branding'),

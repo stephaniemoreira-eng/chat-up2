@@ -1,4 +1,21 @@
 class Api::V1::Accounts::UpSales::CalendarEventsController < Api::V1::Accounts::BaseController
+  def index
+    agent_tenant = Current.account.up_sales_agent_tenant
+    if agent_tenant.blank?
+      render json: { error: 'Conecte o up2-agents para esta conta antes de ver a agenda.' }, status: :unprocessable_entity
+      return
+    end
+
+    @events = UpSales::Agents::ListCalendarEventsService.new(
+      agent_tenant: agent_tenant,
+      time_min: params[:time_min],
+      time_max: params[:time_max],
+      max_results: params[:max_results]
+    ).perform
+  rescue UpSales::Agents::ListCalendarEventsService::SyncError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   def create
     agent_tenant = Current.account.up_sales_agent_tenant
     if agent_tenant.blank?

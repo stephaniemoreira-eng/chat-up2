@@ -48,4 +48,5 @@ end
 
 # Não é uma rota do módulo Sales:: (CRM) -- fica neste arquivo só para não abrir um segundo
 # `draw` em config/routes.rb (ver ADR-0001). Ver docs/fork/ADR-0004-up-sales-reskin.md.
+get 'up_sales/calendar_events', to: 'up_sales/calendar_events#index'
 post 'up_sales/calendar_events', to: 'up_sales/calendar_events#create'

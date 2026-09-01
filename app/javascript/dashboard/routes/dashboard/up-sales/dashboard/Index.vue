@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import LeadsAPI from 'dashboard/api/sales/leads';
+import CalendarEventsAPI from 'dashboard/api/upSales/calendarEvents';
 
 const { t } = useI18n();
 
@@ -9,10 +10,29 @@ const isLoading = ref(true);
 const leadsCount = ref(0);
 const dealsWonCount = ref(0);
 const lastSearchAt = ref(null);
+const meetingsScheduledCount = ref(null);
 
 const formatDate = iso => {
   if (!iso) return t('UP_SALES.DASHBOARD.LAST_SEARCH_EMPTY');
   return new Date(iso).toLocaleDateString('pt-BR');
+};
+
+const fetchMeetingsScheduledThisMonth = async () => {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  try {
+    const { data } = await CalendarEventsAPI.list({
+      timeMin: monthStart.toISOString(),
+      timeMax: monthEnd.toISOString(),
+      maxResults: 50,
+    });
+    meetingsScheduledCount.value = (data.payload || []).length;
+  } catch {
+    // No calendar connected yet, or up2-agents unreachable — leave the placeholder dash instead
+    // of a scary error on a dashboard tile.
+    meetingsScheduledCount.value = null;
+  }
 };
 
 onMounted(async () => {
@@ -24,6 +44,7 @@ onMounted(async () => {
   } finally {
     isLoading.value = false;
   }
+  fetchMeetingsScheduledThisMonth();
 });
 </script>
 
@@ -54,7 +75,11 @@ onMounted(async () => {
           {{ t('UP_SALES.DASHBOARD.MEETINGS_SCHEDULED') }}
         </p>
         <p class="text-2xl font-semibold text-n-slate-12 mt-2">
-          {{ t('UP_SALES.DASHBOARD.MEETINGS_PLACEHOLDER') }}
+          {{
+            meetingsScheduledCount === null
+              ? t('UP_SALES.DASHBOARD.MEETINGS_PLACEHOLDER')
+              : meetingsScheduledCount
+          }}
         </p>
       </div>
       <div class="rounded-lg border border-n-weak bg-n-solid-1 p-5">
