@@ -137,9 +137,13 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `app/javascript/dashboard/featureFlags.js` | bloco demarcado |
 | `app/javascript/dashboard/i18n/locale/en/index.js` | 1 import + 1 spread |
 | `app/javascript/dashboard/routes/dashboard/dashboard.routes.js` | 1 import + 1 spread |
-| `app/javascript/dashboard/components-next/sidebar/Sidebar.vue` | 1 bloco demarcado |
+| `app/javascript/dashboard/components-next/sidebar/Sidebar.vue` | 1 bloco demarcado (marca dinâmica) + remoção de 3 itens do submenu "Conversas" (Menções/Participantes/Pastas, ADR-0004, reskin) |
 | `app/javascript/dashboard/composables/useUISettings.js` | 1 entrada |
 | `app/javascript/dashboard/routes/dashboard/conversation/ContactPanel.vue` | 1 branch |
+| `app/javascript/dashboard/components/ChatList.vue` | 2 valores default (`STATUS_TYPE.OPEN` → `ALL`, ADR-0004, reskin de Conversas) |
+| `app/javascript/dashboard/store/modules/conversations/index.js` | 1 valor default (`chatStatusFilter`, mesmo motivo acima) |
+| `app/javascript/dashboard/components/widgets/conversation/ConversationCard.vue` | classes de borda esquerda (cor de marca no item ativo, ADR-0004) |
+| `app/javascript/dashboard/components-next/Conversation/ConversationCard/UnreadBadge.vue` | 1 classe de cor (`n-teal-9` → `n-brand`, ADR-0004) |
 | `app/views/super_admin/application/_navigation.html.erb` | 1 bloco demarcado (link "Up Sales — Agentes", ADR-0004) |
 | `config/schedule.yml` | append de 1 entrada (`sales_follow_up_sync_job`, ADR-0004, Follow-up) |
 

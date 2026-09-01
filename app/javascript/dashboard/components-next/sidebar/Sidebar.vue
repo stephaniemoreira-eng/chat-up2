@@ -217,23 +217,11 @@ const getLabelUnreadCount = useMapGetter(
 const getTeamUnreadCount = useMapGetter(
   'conversationUnreadCounts/getTeamUnreadCount'
 );
-const mentionsUnreadCount = useMapGetter(
-  'conversationUnreadCounts/getMentionsUnreadCount'
-);
-const participatingUnreadCount = useMapGetter(
-  'conversationUnreadCounts/getParticipatingUnreadCount'
-);
 const unattendedUnreadCount = useMapGetter(
   'conversationUnreadCounts/getUnattendedUnreadCount'
 );
-const getFolderUnreadCount = useMapGetter(
-  'conversationUnreadCounts/getFolderUnreadCount'
-);
 const teams = useMapGetter('teams/getMyTeams');
 const contactCustomViews = useMapGetter('customViews/getContactCustomViews');
-const conversationCustomViews = useMapGetter(
-  'customViews/getConversationCustomViews'
-);
 const getSidebarSectionSort = useMapGetter(
   'sidebarSortPreferences/getSectionSort'
 );
@@ -319,14 +307,6 @@ const buildSortConfig = section => ({
   activeSort: getSortForSection(section),
   onSortChange: sortBy => updateSortPreference(section, sortBy),
 });
-
-const sortedFolders = computed(() =>
-  sortSidebarItems(conversationCustomViews.value, {
-    sortBy: getSortForSection(SIDEBAR_SORT_SECTIONS.FOLDERS),
-    labelKey: view => view.name,
-    unreadCountKey: view => getFolderUnreadCount.value(view.id),
-  })
-);
 
 const sortedTeams = computed(() =>
   sortSidebarItems(teams.value, {
@@ -436,26 +416,6 @@ const menuItems = computed(() => {
           to: accountScopedRoute('home'),
         },
         {
-          name: 'Mentions',
-          label: t('SIDEBAR.MENTIONED_CONVERSATIONS'),
-          icon: 'i-lucide-at-sign',
-          badgeCount: hasFilteredUnreadCounts.value
-            ? mentionsUnreadCount.value
-            : 0,
-          activeOn: ['conversation_through_mentions'],
-          to: accountScopedRoute('conversation_mentions'),
-        },
-        {
-          name: 'Participating',
-          label: t('SIDEBAR.PARTICIPATING_CONVERSATIONS'),
-          icon: 'i-lucide-user-round-check',
-          badgeCount: hasFilteredUnreadCounts.value
-            ? participatingUnreadCount.value
-            : 0,
-          activeOn: ['conversation_through_participating'],
-          to: accountScopedRoute('conversation_participating'),
-        },
-        {
           name: 'Unattended',
           activeOn: ['conversation_through_unattended'],
           label: t('SIDEBAR.UNATTENDED_CONVERSATIONS'),
@@ -464,23 +424,6 @@ const menuItems = computed(() => {
             ? unattendedUnreadCount.value
             : 0,
           to: accountScopedRoute('conversation_unattended'),
-        },
-        {
-          name: 'Folders',
-          label: t('SIDEBAR.CUSTOM_VIEWS_FOLDER'),
-          icon: 'i-lucide-folder',
-          activeOn: ['conversations_through_folders'],
-          ...buildSortConfig(SIDEBAR_SORT_SECTIONS.FOLDERS),
-          collapsible: true,
-          showTreeLine: true,
-          children: sortedFolders.value.map(view => ({
-            name: `${view.name}-${view.id}`,
-            label: view.name,
-            badgeCount: hasFilteredUnreadCounts.value
-              ? getFolderUnreadCount.value(view.id)
-              : 0,
-            to: accountScopedRoute('folder_conversations', { id: view.id }),
-          })),
         },
         {
           name: 'Teams',
