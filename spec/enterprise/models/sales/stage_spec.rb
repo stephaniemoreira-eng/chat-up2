@@ -90,4 +90,28 @@ RSpec.describe Sales::Stage, type: :model do
       expect(described_class.ordered).to eq([first, second])
     end
   end
+
+  describe 'destroying the last stage of a pipeline' do
+    it 'is blocked, leaving the pipeline with at least one stage' do
+      only_stage = create(:sales_stage, pipeline: pipeline)
+
+      expect { only_stage.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+      expect(pipeline.stages.reload).to eq([only_stage])
+    end
+
+    it 'is allowed when another stage remains in the pipeline' do
+      first = create(:sales_stage, pipeline: pipeline)
+      second = create(:sales_stage, pipeline: pipeline)
+
+      expect { first.destroy! }.not_to raise_error
+      expect(pipeline.stages.reload).to eq([second])
+    end
+
+    it 'does not block deleting the last stage of a DIFFERENT pipeline' do
+      only_stage = create(:sales_stage, pipeline: pipeline)
+      create(:sales_stage, pipeline: create(:sales_pipeline, account: account))
+
+      expect { only_stage.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+    end
+  end
 end

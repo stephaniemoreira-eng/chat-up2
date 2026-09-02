@@ -10,6 +10,7 @@ import {
   addDays,
   addMonths,
   isAllDayValue,
+  parseEventDate,
   startOfDay,
   startOfMonth,
   startOfWeek,
@@ -77,7 +78,13 @@ const title = computed(() => {
   });
 });
 
+// Bumped on every call so a slower, now-stale request can't overwrite a fresher one that
+// happened to resolve first (e.g. clicking Prev/Next twice quickly, or Month -> Week -> Month).
+let fetchToken = 0;
+
 const fetchEvents = async () => {
+  fetchToken += 1;
+  const thisFetch = fetchToken;
   isLoading.value = true;
   errorMessage.value = '';
   try {
@@ -86,20 +93,25 @@ const fetchEvents = async () => {
       timeMax: range.value.end.toISOString(),
       maxResults: 50,
     });
+    if (thisFetch !== fetchToken) return;
     events.value = (data.payload || [])
       .filter(event => event.start)
-      .map(event => ({
-        ...event,
-        isAllDay: isAllDayValue(event.start),
-        startsAt: new Date(event.start),
-        endsAt: event.end ? new Date(event.end) : null,
-      }));
+      .map(event => {
+        const isAllDay = isAllDayValue(event.start);
+        return {
+          ...event,
+          isAllDay,
+          startsAt: parseEventDate(event.start, isAllDay),
+          endsAt: event.end ? parseEventDate(event.end, isAllDay) : null,
+        };
+      });
   } catch (error) {
+    if (thisFetch !== fetchToken) return;
     errorMessage.value =
       error.response?.data?.error || t('UP_SALES.AGENDA.ERROR');
     events.value = [];
   } finally {
-    isLoading.value = false;
+    if (thisFetch === fetchToken) isLoading.value = false;
   }
 };
 

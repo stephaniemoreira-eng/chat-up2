@@ -43,3 +43,13 @@ export function isSameDay(a, b) {
 export function isAllDayValue(value) {
   return typeof value === 'string' && value.length === 10;
 }
+
+// `new Date("2026-09-04")` parses as UTC midnight, not local midnight -- for any timezone behind
+// UTC (Brazil included) that lands on the PREVIOUS local day, so an all-day event would render one
+// day early. Build the Date from the local parts instead. Timed values keep their own offset, so
+// the plain `new Date(value)` there is already correct.
+export function parseEventDate(value, isAllDay) {
+  if (!isAllDay) return new Date(value);
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}

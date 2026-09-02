@@ -74,8 +74,8 @@ const onSync = async () => {
   try {
     const { data } = await FollowUpAPI.sync();
     syncResult.value = data;
-  } catch {
-    useAlert(t('CRM.FOLLOW_UP.SYNC.ERROR'));
+  } catch (error) {
+    useAlert(error.response?.data?.error || t('CRM.FOLLOW_UP.SYNC.ERROR'));
   } finally {
     isSyncing.value = false;
   }

@@ -36,6 +36,7 @@ class Sales::Stage < ApplicationRecord
 
   before_validation :assign_account_from_pipeline
   before_create :assign_position
+  before_destroy :ensure_not_last_stage_in_pipeline
 
   scope :ordered, -> { order(:position) }
 
@@ -59,5 +60,17 @@ class Sales::Stage < ApplicationRecord
     return if position.present?
 
     self.position = (pipeline.stages.maximum(:position) || -1) + 1
+  end
+
+  # A pipeline with zero stages breaks every consumer that assumes one exists (Follow-up sync's
+  # default_stage, prospecting's create_leads default, the CRM board itself) -- some of those
+  # consumers fail loudly, but at least one (prospecting) was silently swallowing the resulting
+  # RecordInvalid and returning success with zero leads created. Block the underlying cause instead
+  # of chasing each symptom.
+  def ensure_not_last_stage_in_pipeline
+    return if pipeline.stages.where.not(id: id).exists?
+
+    errors.add(:base, 'cannot delete the last stage of a pipeline')
+    throw :abort
   end
 end

@@ -13,6 +13,13 @@ class Sales::FollowUp::SyncJob < ApplicationJob
         Sales::FollowUp::SyncService.perform(account: account)
       rescue Sales::FollowUp::SyncService::NotConfiguredError
         next
+      rescue StandardError => e
+        # A single misconfigured account (e.g. its Follow-up pipeline was emptied of stages, see
+        # Sales::Stage's destroy guard) must never take down the sync for every other account.
+        Rails.logger.error(
+          "[Sales::FollowUp::SyncJob] account_id=#{account.id} failed: #{e.class}: #{e.message}"
+        )
+        next
       end
     end
   end
