@@ -149,6 +149,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `config/installation_config.yml` | append de blocos demarcados (`GOOGLE_PLACES_API_KEY`; `PAGESPEED_API_KEY`/`SCANNER_URL`/`SCANNER_TOKEN`, SCAN v1) |
 | `app/controllers/super_admin/app_configs_controller.rb` | append na array `'google'` do mapping `allowed_configs` (mesmas chaves acima) |
 | `app/helpers/super_admin/account_features_helper.rb` | `feature_display_names` faz merge com `Enterprise::Concerns::Account::FORK_SETTINGS_FEATURE_DISPLAY_NAMES` (rotulo amigavel pras flags fork-owned na tela de Features da conta) |
+| `app/controllers/super_admin/accounts_controller.rb` | `resource_params`/`assign_feature_flags`: separa as flags fork-owned de `selected_feature_flags=` (bug pre-existente -- salvar essa tela com `sales_pipeline`/`sales_kanban` visiveis sempre dava 500, `enable_flag` nao reconhece flag fora de `config/features.yml`) |
 
 Regra operacional: **um conflito de merge fora desta lista significa que uma fase vazou
 acoplamento.** Corrigir antes de seguir, em vez de aceitar o conflito. Ver

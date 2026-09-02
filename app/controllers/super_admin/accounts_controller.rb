@@ -37,7 +37,7 @@ class SuperAdmin::AccountsController < SuperAdmin::ApplicationController
     permitted_params = super
     permitted_params[:limits] = permitted_params[:limits].to_h.compact if permitted_params.key?(:limits)
     permitted_params[:captain_models] = permitted_params[:captain_models].to_h.compact_blank.presence if permitted_params.key?(:captain_models)
-    permitted_params[:selected_feature_flags] = params[:enabled_features].keys.map(&:to_sym) if params[:enabled_features].present?
+    assign_feature_flags(permitted_params) if params[:enabled_features].present?
     permitted_params
   end
 
@@ -65,6 +65,27 @@ class SuperAdmin::AccountsController < SuperAdmin::ApplicationController
     # rubocop:disable Rails/I18nLocaleTexts
     redirect_back(fallback_location: [namespace, requested_resource], notice: 'Account deletion is in progress.')
     # rubocop:enable Rails/I18nLocaleTexts
+  end
+
+  private
+
+  # Fork-owned flags (sales_pipeline/sales_kanban/sales_scan, see Enterprise::Concerns::Account)
+  # are deliberately absent from config/features.yml, so they have no FlagShihTzu bit position --
+  # routing them through `selected_feature_flags=` like every native feature raises (unknown
+  # flag). Split them off and assign them through their own settings-backed writer instead
+  # (store_accessor already defines `#{name}_enabled=` for each), same form, two persistence paths.
+  def assign_feature_flags(permitted_params)
+    fork_features = Enterprise::Concerns::Account::FORK_SETTINGS_FEATURES
+    fork_keys = fork_features.index_by { |name| "feature_#{name}" }
+
+    native_keys = params[:enabled_features].keys - fork_keys.keys
+    permitted_params[:selected_feature_flags] = native_keys.map(&:to_sym) if native_keys.any?
+
+    fork_keys.each do |param_key, feature_name|
+      next unless params[:enabled_features].key?(param_key)
+
+      permitted_params["#{feature_name}_enabled"] = ActiveModel::Type::Boolean.new.cast(params[:enabled_features][param_key])
+    end
   end
 end
 

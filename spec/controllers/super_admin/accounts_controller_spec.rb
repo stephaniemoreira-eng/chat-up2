@@ -110,6 +110,31 @@ RSpec.describe 'Super Admin accounts API', type: :request do
         expect(account.keep_pending_on_bot_failure).to be true
       end
 
+      it 'toggles fork-owned settings-backed feature flags without touching the native bitset path', if: ChatwootApp.enterprise? do
+        sign_in(super_admin, scope: :super_admin)
+
+        patch "/super_admin/accounts/#{account.id}",
+              params: {
+                account: { name: account.name, locale: account.locale, status: account.status },
+                enabled_features: {
+                  # Every checkbox submits a value (Rails' checked/unchecked hidden-field pattern),
+                  # native and fork-owned alike -- this reproduces that shape, not just the ones
+                  # actually being turned on.
+                  'feature_reports' => 'true',
+                  'feature_sales_pipeline' => 'true',
+                  'feature_sales_kanban' => 'false',
+                  'feature_sales_scan' => 'true'
+                }
+              }
+
+        expect(response).to have_http_status(:redirect)
+        account.reload
+        expect(account.feature_enabled?('sales_pipeline')).to be(true)
+        expect(account.feature_enabled?('sales_kanban')).to be(false)
+        expect(account.feature_enabled?('sales_scan')).to be(true)
+        expect(account.feature_enabled?('reports')).to be(true)
+      end
+
       it 'rejects invalid Captain model overrides' do
         sign_in(super_admin, scope: :super_admin)
         existing_captain_models = account.captain_models
