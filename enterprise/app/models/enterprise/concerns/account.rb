@@ -9,6 +9,15 @@ module Enterprise::Concerns::Account
   # (kanban_enabled/internal_chat_pro_enabled). See docs/fork/ADR-0001-extension-strategy.md.
   FORK_SETTINGS_FEATURES = %w[sales_pipeline sales_kanban sales_scan].freeze
 
+  # Rotulo amigavel pra tela de Super Admin > Conta > Features (ver SuperAdmin::AccountFeaturesHelper
+  # e enterprise/app/views/fields/account_features_field). config/features.yml nao tem entrada pra
+  # essas flags (secao acima explica o porque), entao sem isso a tela mostraria o nome tecnico cru.
+  FORK_SETTINGS_FEATURE_DISPLAY_NAMES = {
+    'sales_pipeline' => 'Up Sales — Pipeline (CRM)',
+    'sales_kanban' => 'Up Sales — Kanban visual',
+    'sales_scan' => 'Up Sales — Pré-Score (SCAN v1)'
+  }.freeze
+
   included do
     store_accessor :settings, :conversation_required_attributes
     store_accessor :settings, :sales_pipeline_enabled, :sales_kanban_enabled, :sales_scan_enabled

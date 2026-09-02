@@ -9,9 +9,12 @@ module SuperAdmin::AccountFeaturesHelper
 
   # Returns a hash mapping feature names to their display names
   def self.feature_display_names
-    account_features.each_with_object({}) do |feature, hash|
+    names = account_features.each_with_object({}) do |feature, hash|
       hash[feature['name']] = feature['display_name']
     end
+    # Fork-owned flags live outside config/features.yml (see Enterprise::Concerns::Account) --
+    # without this merge they'd render with their raw key instead of a readable label.
+    names.merge(Enterprise::Concerns::Account::FORK_SETTINGS_FEATURE_DISPLAY_NAMES)
   end
 
   def self.filter_internal_features(features)
