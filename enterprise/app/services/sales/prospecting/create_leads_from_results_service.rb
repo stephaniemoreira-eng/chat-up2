@@ -34,6 +34,7 @@ class Sales::Prospecting::CreateLeadsFromResultsService
       }.compact
     )
     result.update!(lead: lead)
+    Sales::Prospecting::ScanResultJob.perform_later(result.id) if account.feature_enabled?('sales_scan')
     lead
   rescue ActiveRecord::RecordInvalid => e
     Rails.logger.error "[Prospecting] Failed to create lead for #{result.name}: #{e.message}"

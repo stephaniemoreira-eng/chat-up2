@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_27_120001) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_02_100001) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1626,9 +1626,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_27_120001) do
     t.integer "user_ratings_total"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "scan_status", default: "pendente", null: false
+    t.string "scan_versao", default: "v1", null: false
+    t.integer "scan_score"
+    t.string "scan_faixa"
+    t.jsonb "scan_pilares", default: {}, null: false
+    t.jsonb "scan_evidencias", default: {}, null: false
+    t.boolean "scan_aprovado", default: false, null: false
+    t.boolean "scan_liberado_envio", default: false, null: false
+    t.datetime "scanned_at"
     t.index ["account_id"], name: "index_sales_prospecting_results_on_account_id"
     t.index ["place_id"], name: "index_sales_prospecting_results_on_place_id"
     t.index ["sales_prospecting_search_id"], name: "index_sales_prospecting_results_on_search_id"
+    t.index ["scan_status"], name: "index_sales_prospecting_results_on_scan_status"
   end
 
   create_table "sales_prospecting_searches", force: :cascade do |t|

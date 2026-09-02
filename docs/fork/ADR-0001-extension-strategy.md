@@ -129,7 +129,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `config/features.yml` | **nenhuma** — permanece byte-idêntico ao upstream (seção 4) |
 | `app/models/concerns/featurable.rb` | **nenhuma** |
 | `db/schema.rb` | regenerado (nunca editado à mão) |
-| `enterprise/app/models/enterprise/concerns/{account,contact,conversation}.rb` | append de associações |
+| `enterprise/app/models/enterprise/concerns/{account,contact,conversation}.rb` | append de associações + `FORK_SETTINGS_FEATURES`/`store_accessor` (feature flags: `sales_pipeline`, `sales_kanban`, `sales_scan`) |
 | `enterprise/app/models/enterprise/automation_rule.rb` | append em duas listas |
 | `enterprise/app/dispatchers/enterprise/async_dispatcher.rb` | append de listener |
 | `lib/events/types.rb` | append de constantes |
@@ -146,6 +146,8 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `app/javascript/dashboard/components-next/Conversation/ConversationCard/UnreadBadge.vue` | 1 classe de cor (`n-teal-9` → `n-brand`, ADR-0004) |
 | `app/views/super_admin/application/_navigation.html.erb` | 1 bloco demarcado (link "Up Sales — Agentes", ADR-0004) |
 | `config/schedule.yml` | append de 1 entrada (`sales_follow_up_sync_job`, ADR-0004, Follow-up) |
+| `config/installation_config.yml` | append de blocos demarcados (`GOOGLE_PLACES_API_KEY`; `PAGESPEED_API_KEY`/`SCANNER_URL`/`SCANNER_TOKEN`, SCAN v1) |
+| `app/controllers/super_admin/app_configs_controller.rb` | append na array `'google'` do mapping `allowed_configs` (mesmas chaves acima) |
 
 Regra operacional: **um conflito de merge fora desta lista significa que uma fase vazou
 acoplamento.** Corrigir antes de seguir, em vez de aceitar o conflito. Ver

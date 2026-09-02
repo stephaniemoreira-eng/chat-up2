@@ -526,6 +526,27 @@
   type: secret
 ## ------ End of fork-owned Google Places config ------ ##
 
+## ------ Fork-owned: SCAN v1 pre-score (Up Sales prospecting) ------ ##
+## Opt-in per account (Account#sales_scan_enabled) -- see enterprise/app/services/sales/prospecting/scan_service.rb.
+- name: PAGESPEED_API_KEY
+  display_title: 'Google PageSpeed Insights API Key'
+  value:
+  locked: false
+  description: 'Used by the SCAN pre-score (Website pillar). Falls back to GOOGLE_PLACES_API_KEY if blank -- same Google Cloud project can serve both APIs.'
+  type: secret
+- name: SCANNER_URL
+  display_title: 'UP2 Scanner URL'
+  value:
+  locked: false
+  description: 'Base URL of the self-hosted up2-scanner service (e.g. https://scan.up2aceleradora.com.br) used by the SCAN pre-score for Website/Instagram signals.'
+- name: SCANNER_TOKEN
+  display_title: 'UP2 Scanner Token'
+  value:
+  locked: false
+  description: 'Auth token for the up2-scanner service (X-Scanner-Token header). Same token configured on the scanner itself.'
+  type: secret
+## ------ End of fork-owned SCAN v1 config ------ ##
+
 ## ------ Configs added for SAML SSO ------ ##
 - name: ENABLE_SAML_SSO_LOGIN
   display_title: 'Enable SAML SSO login'

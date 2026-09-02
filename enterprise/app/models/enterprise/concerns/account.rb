@@ -7,11 +7,11 @@ module Enterprise::Concerns::Account
   # by fazer-ai's own fork) after a merge, silently enabling the wrong feature. This mirrors
   # the fix fazer-ai's own Pro fork already shipped for the identical problem
   # (kanban_enabled/internal_chat_pro_enabled). See docs/fork/ADR-0001-extension-strategy.md.
-  FORK_SETTINGS_FEATURES = %w[sales_pipeline sales_kanban].freeze
+  FORK_SETTINGS_FEATURES = %w[sales_pipeline sales_kanban sales_scan].freeze
 
   included do
     store_accessor :settings, :conversation_required_attributes
-    store_accessor :settings, :sales_pipeline_enabled, :sales_kanban_enabled
+    store_accessor :settings, :sales_pipeline_enabled, :sales_kanban_enabled, :sales_scan_enabled
     # Marca própria por conta (Up Sales) — logo e cor exibidos no lugar da marca genérica do
     # Chatwoot. Ver docs/fork/ADR-0004-up-sales-reskin.md.
     store_accessor :settings, :brand_color, :brand_logo_url
