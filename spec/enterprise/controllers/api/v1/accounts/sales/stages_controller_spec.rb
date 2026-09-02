@@ -107,6 +107,9 @@ RSpec.describe 'Api::V1::Accounts::Sales::Stages', type: :request do
 
   describe 'DELETE /api/v1/accounts/{account.id}/crm/pipelines/{pipeline.id}/stages/{id}' do
     let!(:stage) { create(:sales_stage, pipeline: pipeline) }
+    # A pipeline's last stage can't be deleted (see Sales::Stage#ensure_not_last_stage_in_pipeline)
+    # -- this second stage keeps that unrelated to the permission behavior under test here.
+    let!(:other_stage) { create(:sales_stage, pipeline: pipeline) }
 
     it 'destroys the stage when the user is an administrator' do
       expect do

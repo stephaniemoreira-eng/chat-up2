@@ -113,5 +113,12 @@ RSpec.describe Sales::Stage, type: :model do
 
       expect { only_stage.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
     end
+
+    it 'does not block the pipeline itself from being destroyed with its single stage' do
+      only_stage = create(:sales_stage, pipeline: pipeline)
+
+      expect { pipeline.destroy! }.not_to raise_error
+      expect { only_stage.reload }.to raise_error(ActiveRecord::RecordNotFound)
+    end
   end
 end

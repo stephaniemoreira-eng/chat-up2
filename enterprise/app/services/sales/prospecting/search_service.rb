@@ -47,11 +47,13 @@ class Sales::Prospecting::SearchService
   end
 
   def require_phone?
-    ActiveModel::Type::Boolean.new.cast(params[:require_phone])
+    # ActiveModel::Type::Boolean casts nil to nil, not false -- persist_search inserts this
+    # straight into a NOT NULL column, so an absent param must resolve to a real boolean here.
+    ActiveModel::Type::Boolean.new.cast(params[:require_phone]) == true
   end
 
   def require_website?
-    ActiveModel::Type::Boolean.new.cast(params[:require_website])
+    ActiveModel::Type::Boolean.new.cast(params[:require_website]) == true
   end
 
   def exclude_keyword_list

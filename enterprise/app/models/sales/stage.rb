@@ -68,6 +68,11 @@ class Sales::Stage < ApplicationRecord
   # RecordInvalid and returning success with zero leads created. Block the underlying cause instead
   # of chasing each symptom.
   def ensure_not_last_stage_in_pipeline
+    # Skip when this stage is being removed as part of the pipeline's own `dependent: :destroy`
+    # cascade (Sales::Pipeline#stages) -- the whole pipeline is going away anyway, so a pipeline
+    # with a single stage must still be deletable. `destroyed_by_association` is exactly the flag
+    # Rails sets for this case. Only a standalone "delete this one stage" is what this guards.
+    return if destroyed_by_association
     return if pipeline.stages.where.not(id: id).exists?
 
     errors.add(:base, 'cannot delete the last stage of a pipeline')
