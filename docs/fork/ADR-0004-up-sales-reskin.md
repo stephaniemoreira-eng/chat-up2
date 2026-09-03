@@ -80,9 +80,17 @@ Chatwoot (Vuex/Pinia, ActionCable, Pundit) em vez do padrão mais simples do Nex
 já dominado nesta sessão.
 
 **A registrar à medida que cada peça nova for construída:** Dashboard, Busca/Prospecção, Super
-Admin de configuração de agente, Follow-up (importação + transferência), Calculadora comercial,
-Agenda integrada — ver `C:\Users\Stephanie\.claude\plans\swirling-twirling-nest.md` pro plano
-semana a semana.
+Admin de configuração de agente, Follow-up (importação + transferência), Agenda integrada — ver
+`C:\Users\Stephanie\.claude\plans\swirling-twirling-nest.md` pro plano semana a semana. Todas
+confirmadas prontas e funcionando em 2026-09-03.
+
+**Calculadora comercial — removida do escopo em 2026-09-03.** Decisão da Stéphanie: em vez de uma
+tela de configuração de fórmula/variáveis, a lógica de precificação fica como instrução dentro do
+próprio prompt/configuração do agente de IA — mais simples de manter e naturalmente personalizável
+por cliente (cada agente já tem sua própria configuração, sem precisar de uma tela nova nem de um
+motor de fórmulas genérico). Com isso, o plano original do Up Sales (Dashboard, Busca/Prospecção,
+CRM/Kanban, Super Admin de agente, Follow-up, Agenda) está com todas as peças prontas antes do
+prazo de 14/09/2026.
 
 ## Super Admin de configuração de agente — decisão de local: painel nativo, não a SPA Vue
 
