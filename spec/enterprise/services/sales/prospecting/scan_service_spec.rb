@@ -22,7 +22,8 @@ RSpec.describe Sales::Prospecting::ScanService do
   let(:scanner_response) do
     {
       'site' => { 'title' => 'Clinica Estetica Bela Pele', 'description' => 'Tratamentos faciais e corporais',
-                  'has_whatsapp' => true, 'has_cta' => true, 'has_ecommerce' => false },
+                  'has_whatsapp' => true, 'has_cta' => true, 'has_ecommerce' => false,
+                  'instagram_url' => 'https://www.instagram.com/clinicax' },
       'instagram' => { 'followers' => 1500, 'posts' => 45, 'bio' => 'Clinica de estetica facial e corporal.' }
     }
   end
@@ -98,6 +99,54 @@ RSpec.describe Sales::Prospecting::ScanService do
 
       expect { described_class.call(result) }.not_to raise_error
       expect(result.reload.scan_status).to eq('erro')
+    end
+  end
+
+  describe 'Instagram retry on likely IP block' do
+    let(:blocked_scanner_response) do
+      {
+        'site' => { 'title' => 'Clinica Estetica Bela Pele', 'description' => 'Tratamentos faciais',
+                    'has_whatsapp' => true, 'has_cta' => true, 'has_ecommerce' => false,
+                    'instagram_url' => 'https://www.instagram.com/clinicax' },
+        'instagram' => { 'followers' => 0, 'posts' => 0, 'bio' => '' }
+      }
+    end
+
+    it 'schedules a retry when the profile was found but came back completely empty' do
+      allow(Sales::Prospecting::ScannerClientService).to receive(:call).and_return(blocked_scanner_response)
+
+      expect do
+        described_class.call(result)
+      end.to have_enqueued_job(Sales::Prospecting::ScanResultJob).with(result.id)
+
+      evidencias = result.reload.scan_evidencias
+      expect(evidencias['instagram_retry_count']).to eq(1)
+      expect(evidencias['alertas']).to include(a_string_matching(/bloqueio temporario/))
+    end
+
+    it 'does not schedule a retry when Instagram data came back normally' do
+      expect do
+        described_class.call(result)
+      end.not_to have_enqueued_job(Sales::Prospecting::ScanResultJob)
+    end
+
+    it 'does not schedule a retry when there is no Instagram profile at all' do
+      no_profile_response = blocked_scanner_response.deep_merge('site' => { 'instagram_url' => '' })
+      allow(Sales::Prospecting::ScannerClientService).to receive(:call).and_return(no_profile_response)
+
+      expect do
+        described_class.call(result)
+      end.not_to have_enqueued_job(Sales::Prospecting::ScanResultJob)
+    end
+
+    it 'does not retry a second time once the limit is reached' do
+      result.update!(scan_evidencias: { 'instagram_retry_count' => 1 })
+      allow(Sales::Prospecting::ScannerClientService).to receive(:call).and_return(blocked_scanner_response)
+
+      expect do
+        described_class.call(result)
+      end.not_to have_enqueued_job(Sales::Prospecting::ScanResultJob)
+      expect(result.reload.scan_evidencias['instagram_retry_count']).to eq(1)
     end
   end
 end

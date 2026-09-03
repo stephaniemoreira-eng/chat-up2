@@ -13,6 +13,13 @@
 class Sales::Prospecting::ScanService
   W = Sales::Prospecting::ScanWeights
 
+  # Instagram bloqueia por IP quando visitado com frequencia (mais provavel de um servidor que de
+  # um navegador comum -- ver up2-scanner). Um retry cedo bateria no mesmo bloqueio; espera-se
+  # horas, nao minutos. Limitado a 1 tentativa pra nao reagendar pra sempre se o perfil realmente
+  # nao tiver dado nenhum (ver docs/fork, 12-saas-prospeccao-multicliente.md, item 8).
+  MAX_INSTAGRAM_RETRIES = 1
+  INSTAGRAM_RETRY_DELAY = 4.hours
+
   def self.call(result)
     new(result).call
   end
@@ -35,6 +42,7 @@ class Sales::Prospecting::ScanService
 
     pilares = { website: website[:pontos], maps: maps[:pontos], instagram: instagram[:pontos], icp: icp[:pontos] }
     score = pilares.values.sum
+    instagram_retry_count = schedule_instagram_retry_if_blocked(scanner)
 
     @result.update!(
       scan_status: 'concluido',
@@ -44,7 +52,8 @@ class Sales::Prospecting::ScanService
       scan_evidencias: {
         indicadores: { website: website[:indicadores], maps: maps[:indicadores], instagram: instagram[:indicadores], icp: icp[:indicadores] },
         dados_nao_encontrados: @dados_nao_encontrados,
-        alertas: @alertas
+        alertas: @alertas,
+        instagram_retry_count: instagram_retry_count
       },
       scan_aprovado: false,
       scan_liberado_envio: false,
@@ -56,6 +65,26 @@ class Sales::Prospecting::ScanService
   end
 
   private
+
+  # Assinatura de provavel bloqueio de IP: o scanner achou a URL do Instagram (perfil existe), mas
+  # a leitura do proprio perfil voltou completamente vazia -- diferente de "perfil nao encontrado"
+  # (que vem com instagram_url em branco desde o inicio, tratado em instagram_pillar). So reagenda
+  # se ainda nao tentou de novo (MAX_INSTAGRAM_RETRIES), pra nao ficar reagendando pra sempre.
+  def schedule_instagram_retry_if_blocked(scanner)
+    previous_retry_count = @result.scan_evidencias['instagram_retry_count'].to_i
+    return previous_retry_count if previous_retry_count >= MAX_INSTAGRAM_RETRIES
+
+    url = scanner&.dig('site', 'instagram_url')
+    return previous_retry_count if url.blank?
+
+    instagram = scanner['instagram'] || {}
+    likely_blocked = instagram['followers'].to_i.zero? && instagram['posts'].to_i.zero? && instagram['bio'].blank?
+    return previous_retry_count unless likely_blocked
+
+    Sales::Prospecting::ScanResultJob.set(wait: INSTAGRAM_RETRY_DELAY).perform_later(@result.id)
+    @alertas << "Instagram: perfil encontrado mas sem dados (provavel bloqueio temporario de IP) -- novo scan agendado em #{INSTAGRAM_RETRY_DELAY.inspect}."
+    previous_retry_count + 1
+  end
 
   # ---- Website (30) ----------------------------------------------------------------------
 
