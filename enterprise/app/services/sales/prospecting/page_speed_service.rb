@@ -4,7 +4,10 @@
 class Sales::Prospecting::PageSpeedService
   ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed'.freeze
   CATEGORIES = %w[performance seo best-practices].freeze
-  TIMEOUT_SECONDS = 20
+  # Lighthouse (mobile) em sites reais lentos regularmente passa de 20s -- 20 causava falso
+  # "pagespeed nao encontrado" em sites que so estavam demorando, nao quebrados. Roda em
+  # background (ScanResultJob), entao um timeout mais folgado nao trava nada visivel pro usuario.
+  TIMEOUT_SECONDS = 55
 
   def self.call(website)
     new(website).call
