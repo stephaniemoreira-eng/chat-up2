@@ -49,6 +49,7 @@ class Sales::Lead < ApplicationRecord
                                                                 dependent: :destroy, inverse_of: :lead
   has_many :activities, -> { order(created_at: :desc) }, class_name: 'Sales::Activity', foreign_key: :sales_lead_id,
                                                           dependent: :destroy, inverse_of: :lead
+  has_one :prospecting_result, class_name: 'Sales::ProspectingResult', foreign_key: :sales_lead_id, inverse_of: :lead
 
   enum status: { open: 0, won: 1, lost: 2 }
 

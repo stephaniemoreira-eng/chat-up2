@@ -62,7 +62,7 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   private
 
   def filtered_leads
-    leads = Current.account.sales_leads
+    leads = Current.account.sales_leads.includes(:prospecting_result)
     leads = leads.where(sales_pipeline_id: params[:pipeline_id]) if params[:pipeline_id].present?
     leads = leads.where(sales_stage_id: params[:stage_id]) if params[:stage_id].present?
     leads = leads.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?

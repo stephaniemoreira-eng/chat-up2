@@ -6,6 +6,7 @@ import { useSalesLeadsStore } from 'dashboard/stores/sales/leads';
 
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import SummaryPanel from 'dashboard/components-next/Sales/LeadDetail/SummaryPanel.vue';
+import ScanPanel from 'dashboard/components-next/Sales/LeadDetail/ScanPanel.vue';
 import Timeline from 'dashboard/components-next/Sales/LeadDetail/Timeline.vue';
 
 const { t } = useI18n();
@@ -77,6 +78,14 @@ defineExpose({ open });
     :show-confirm-button="false"
   >
     <div v-if="lead" class="flex flex-col gap-6">
+      <ScanPanel
+        v-if="lead.scan_status"
+        :scan-status="lead.scan_status"
+        :scan-score="lead.scan_score"
+        :scan-faixa="lead.scan_faixa"
+        :scan-pilares="lead.scan_pilares"
+        :scan-evidencias="lead.scan_evidencias"
+      />
       <SummaryPanel
         :summary="lead.summary"
         :is-saving="isSavingSummary"

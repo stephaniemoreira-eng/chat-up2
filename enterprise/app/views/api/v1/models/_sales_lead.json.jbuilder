@@ -23,3 +23,16 @@ json.assignee_name resource.assignee&.name
 json.label_list resource.label_list
 json.created_at resource.created_at.to_i
 json.updated_at resource.updated_at.to_i
+
+# SCAN v1 (ver Sales::Prospecting::ScanService) -- so populado para leads vindos da Busca e
+# quando a conta tem a feature `sales_scan` ligada. nil quando o lead nao passou pelo Scan.
+scan_result = resource.prospecting_result
+if scan_result&.scan_concluido? || scan_result&.scan_erro?
+  json.scan_status scan_result.scan_status
+  json.scan_score scan_result.scan_score
+  json.scan_faixa scan_result.scan_faixa
+  json.scan_pilares scan_result.scan_pilares
+  json.scan_evidencias scan_result.scan_evidencias
+else
+  json.scan_status nil
+end

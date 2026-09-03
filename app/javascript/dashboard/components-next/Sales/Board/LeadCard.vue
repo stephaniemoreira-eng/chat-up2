@@ -10,6 +10,8 @@ const props = defineProps({
   contactName: { type: String, default: '' },
   assigneeName: { type: String, default: '' },
   stageColor: { type: String, default: '' },
+  scanScore: { type: Number, default: null },
+  scanFaixa: { type: String, default: '' },
 });
 
 defineEmits(['click']);
@@ -27,6 +29,21 @@ const formattedValue = computed(() => {
     currency: 'BRL',
   });
 });
+
+// Cores do SCAN v1 (ver ScanWeights::FAIXAS no backend -- manter as 3 faixas em sincronia).
+const SCAN_FAIXA_CLASSES = {
+  baixa_prioridade: 'bg-n-slate-3 text-n-slate-11',
+  revisao_humana: 'bg-n-amber-3 text-n-amber-11',
+  revisao_prioritaria: 'bg-n-teal-3 text-n-teal-11',
+};
+
+const scanBadgeClass = computed(
+  () => SCAN_FAIXA_CLASSES[props.scanFaixa] || 'bg-n-slate-3 text-n-slate-11'
+);
+
+const showScanBadge = computed(
+  () => props.scanScore !== null && props.scanScore !== undefined
+);
 </script>
 
 <template>
@@ -36,9 +53,18 @@ const formattedValue = computed(() => {
     :data-lead-id="id"
     @click="$emit('click', id)"
   >
-    <span class="text-sm font-medium text-n-slate-12 line-clamp-2">
-      {{ title }}
-    </span>
+    <div class="flex items-start justify-between gap-2">
+      <span class="text-sm font-medium text-n-slate-12 line-clamp-2">
+        {{ title }}
+      </span>
+      <span
+        v-if="showScanBadge"
+        class="text-[11px] font-medium rounded-full px-1.5 py-0.5 shrink-0"
+        :class="scanBadgeClass"
+      >
+        {{ scanScore }}
+      </span>
+    </div>
     <div class="flex items-center justify-between gap-2 min-w-0">
       <div class="flex items-center gap-1.5 min-w-0">
         <Avatar :name="displayContactName" :size="16" rounded-full />

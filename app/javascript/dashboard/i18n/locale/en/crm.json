@@ -160,6 +160,24 @@
         "ERROR": "Could not move the lead. Please try again."
       },
       "DETAIL": {
+        "SCAN": {
+          "TITLE": "Pre-Score (SCAN v1)",
+          "ERROR": "Could not calculate the Scan for this lead.",
+          "SCORE_OF_100": "{score}/100",
+          "PILLAR_SCORE": "{value}/{max}",
+          "NOT_FOUND": "Data not found: {items}",
+          "FAIXA": {
+            "baixa_prioridade": "Low priority",
+            "revisao_humana": "Human review",
+            "revisao_prioritaria": "Priority review"
+          },
+          "PILLARS": {
+            "website": "Website",
+            "maps": "Google/Maps",
+            "instagram": "Instagram",
+            "icp": "ICP"
+          }
+        },
         "SUMMARY": {
           "LABEL": "Summary",
           "PLACEHOLDER": "Write a summary of this deal...",

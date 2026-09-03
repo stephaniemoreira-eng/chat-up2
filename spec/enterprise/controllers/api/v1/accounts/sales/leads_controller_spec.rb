@@ -68,6 +68,41 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       expect(response.parsed_body['payload']['contact_name']).to eq(contact.name)
       expect(response.parsed_body['payload']['contact_email']).to eq(contact.email)
     end
+
+    it 'omits scan fields when the lead never went through the Scan' do
+      get "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}", headers: admin.create_new_auth_token, as: :json
+
+      expect(response.parsed_body['payload']['scan_status']).to be_nil
+      expect(response.parsed_body['payload']).not_to have_key('scan_score')
+    end
+
+    it 'includes the Scan breakdown when the linked prospecting result finished' do
+      search = account.sales_prospecting_searches.create!(business_type: 'clinica estetica', city: 'Santos', state: 'SP')
+      search.results.create!(
+        account: account, place_id: 'p1', lead: lead,
+        scan_status: 'concluido', scan_score: 83, scan_faixa: 'revisao_prioritaria',
+        scan_pilares: { website: 25, maps: 26, instagram: 21, icp: 11 }
+      )
+
+      get "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}", headers: admin.create_new_auth_token, as: :json
+
+      payload = response.parsed_body['payload']
+      expect(payload['scan_status']).to eq('concluido')
+      expect(payload['scan_score']).to eq(83)
+      expect(payload['scan_faixa']).to eq('revisao_prioritaria')
+      expect(payload['scan_pilares']).to eq('website' => 25, 'maps' => 26, 'instagram' => 21, 'icp' => 11)
+    end
+
+    it 'reports the Scan status as erro without a score when the scan failed' do
+      search = account.sales_prospecting_searches.create!(business_type: 'clinica estetica', city: 'Santos', state: 'SP')
+      search.results.create!(account: account, place_id: 'p1', lead: lead, scan_status: 'erro')
+
+      get "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}", headers: admin.create_new_auth_token, as: :json
+
+      payload = response.parsed_body['payload']
+      expect(payload['scan_status']).to eq('erro')
+      expect(payload['scan_score']).to be_nil
+    end
   end
 
   describe 'POST /api/v1/accounts/{account.id}/crm/leads' do

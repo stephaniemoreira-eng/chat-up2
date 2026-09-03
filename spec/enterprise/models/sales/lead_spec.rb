@@ -33,6 +33,7 @@ RSpec.describe Sales::Lead, type: :model do
     it { is_expected.to have_many(:lead_conversations).class_name('Sales::LeadConversation').dependent(:destroy) }
     it { is_expected.to have_many(:conversations).through(:lead_conversations) }
     it { is_expected.to have_many(:stage_transitions).class_name('Sales::StageTransition').dependent(:destroy) }
+    it { is_expected.to have_one(:prospecting_result).class_name('Sales::ProspectingResult') }
   end
 
   describe 'delegation to contact' do

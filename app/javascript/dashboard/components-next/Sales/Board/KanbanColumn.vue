@@ -79,6 +79,8 @@ const onDragEnd = event => {
           :contact-name="lead.contact_name"
           :assignee-name="lead.assignee_name"
           :stage-color="stage.color"
+          :scan-score="lead.scan_score"
+          :scan-faixa="lead.scan_faixa"
           @click="emit('clickLead', lead.id)"
         />
       </template>

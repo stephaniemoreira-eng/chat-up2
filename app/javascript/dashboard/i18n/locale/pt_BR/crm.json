@@ -160,6 +160,24 @@
         "ERROR": "Não foi possível mover o negócio. Tente novamente."
       },
       "DETAIL": {
+        "SCAN": {
+          "TITLE": "Pré-Score (SCAN v1)",
+          "ERROR": "Não foi possível calcular o Scan desse lead.",
+          "SCORE_OF_100": "{score}/100",
+          "PILLAR_SCORE": "{value}/{max}",
+          "NOT_FOUND": "Dados não encontrados: {items}",
+          "FAIXA": {
+            "baixa_prioridade": "Baixa prioridade",
+            "revisao_humana": "Revisão humana",
+            "revisao_prioritaria": "Revisão prioritária"
+          },
+          "PILLARS": {
+            "website": "Site",
+            "maps": "Google/Maps",
+            "instagram": "Instagram",
+            "icp": "ICP"
+          }
+        },
         "SUMMARY": {
           "LABEL": "Resumo",
           "PLACEHOLDER": "Escreva um resumo desse negócio...",
