@@ -88,3 +88,12 @@ sales_follow_up_sync_job:
   cron: '*/15 * * * *'
   class: 'Sales::FollowUp::SyncJob'
   queue: scheduled_jobs
+
+# executed once a day at 06:00 UTC
+# Up Sales — Busca automatica: roda as buscas de segmento/localizacao salvas (Sales::
+# ProspectingConfig) sem precisar de alguem abrir o formulario manual. See docs/fork/
+# ADR-0004-up-sales-reskin.md and 12-saas-prospeccao-multicliente.md (item 1).
+sales_prospecting_auto_search_job:
+  cron: '0 6 * * *'
+  class: 'Sales::Prospecting::AutoSearchJob'
+  queue: scheduled_jobs

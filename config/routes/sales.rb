@@ -42,6 +42,8 @@ end
 post 'crm/prospecting/search', to: 'sales/prospecting#search'
 post 'crm/prospecting/create_leads', to: 'sales/prospecting#create_leads'
 
+resources :prospecting_configs, module: :sales, path: 'crm/prospecting/configs', only: %i[index create update destroy]
+
 resource :follow_up, module: :sales, path: 'crm/follow_up', controller: 'follow_up', only: [:show, :update] do
   post :sync, on: :collection
 end

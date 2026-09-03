@@ -75,6 +75,24 @@
     },
     "PROSPECTING": {
       "TITLE": "Busca e prospecção",
+      "TABS": {
+        "MANUAL": "Busca manual",
+        "AUTO": "Buscas automáticas"
+      },
+      "AUTO_SEARCH": {
+        "DESCRIPTION": "Deixe segmentos e localizações salvos aqui — todo dia o sistema busca sozinho e adiciona os leads novos no Kanban escolhido, sem precisar abrir a busca manual.",
+        "ADD_ACTION": "Salvar busca automática",
+        "LOADING": "Carregando buscas automáticas...",
+        "EMPTY": "Nenhuma busca automática configurada ainda.",
+        "LOAD_ERROR": "Não foi possível carregar as buscas automáticas.",
+        "CREATE_SUCCESS": "Busca automática salva.",
+        "CREATE_ERROR": "Não foi possível salvar a busca automática.",
+        "UPDATE_ERROR": "Não foi possível atualizar a busca automática.",
+        "DELETE_ERROR": "Não foi possível remover a busca automática.",
+        "PIPELINE_STAGE": "{pipeline} › {stage}",
+        "LAST_RUN_AT": "Última execução: {when}",
+        "NEVER_RUN": "ainda não rodou"
+      },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Segmento desejado",
         "BUSINESS_TYPE_PLACEHOLDER": "ex.: cafeteria, clínica odontológica, academia",

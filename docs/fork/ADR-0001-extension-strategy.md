@@ -145,7 +145,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 | `app/javascript/dashboard/components/widgets/conversation/ConversationCard.vue` | classes de borda esquerda (cor de marca no item ativo, ADR-0004) |
 | `app/javascript/dashboard/components-next/Conversation/ConversationCard/UnreadBadge.vue` | 1 classe de cor (`n-teal-9` → `n-brand`, ADR-0004) |
 | `app/views/super_admin/application/_navigation.html.erb` | 1 bloco demarcado (link "Up Sales — Agentes", ADR-0004) |
-| `config/schedule.yml` | append de 1 entrada (`sales_follow_up_sync_job`, ADR-0004, Follow-up) |
+| `config/schedule.yml` | append de entradas (`sales_follow_up_sync_job`, ADR-0004, Follow-up; `sales_prospecting_auto_search_job`, busca automatica por segmento, 12-saas-prospeccao-multicliente.md item 1) |
 | `config/installation_config.yml` | append de blocos demarcados (`GOOGLE_PLACES_API_KEY`; `PAGESPEED_API_KEY`/`SCANNER_URL`/`SCANNER_TOKEN`, SCAN v1) |
 | `app/controllers/super_admin/app_configs_controller.rb` | append na array `'google'` do mapping `allowed_configs` (mesmas chaves acima) |
 | `app/helpers/super_admin/account_features_helper.rb` | `feature_display_names` faz merge com `Enterprise::Concerns::Account::FORK_SETTINGS_FEATURE_DISPLAY_NAMES` (rotulo amigavel pras flags fork-owned na tela de Features da conta) |

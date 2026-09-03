@@ -1,0 +1,16 @@
+json.id resource.id
+json.business_type resource.business_type
+json.neighborhood resource.neighborhood
+json.city resource.city
+json.state resource.state
+json.desired_count resource.desired_count
+json.min_rating resource.min_rating
+json.min_reviews resource.min_reviews
+json.require_phone resource.require_phone
+json.require_website resource.require_website
+json.exclude_keywords resource.exclude_keywords
+json.active resource.active
+json.sales_pipeline_id resource.sales_pipeline_id
+json.sales_stage_id resource.sales_stage_id
+json.last_run_at resource.last_run_at&.to_i
+json.created_at resource.created_at.to_i

@@ -75,6 +75,24 @@
     },
     "PROSPECTING": {
       "TITLE": "Search & prospecting",
+      "TABS": {
+        "MANUAL": "Manual search",
+        "AUTO": "Automatic searches"
+      },
+      "AUTO_SEARCH": {
+        "DESCRIPTION": "Save segments and locations here — every day the system searches on its own and adds new leads to the chosen Kanban, without opening the manual search.",
+        "ADD_ACTION": "Save automatic search",
+        "LOADING": "Loading automatic searches...",
+        "EMPTY": "No automatic search configured yet.",
+        "LOAD_ERROR": "Could not load the automatic searches.",
+        "CREATE_SUCCESS": "Automatic search saved.",
+        "CREATE_ERROR": "Could not save the automatic search.",
+        "UPDATE_ERROR": "Could not update the automatic search.",
+        "DELETE_ERROR": "Could not remove the automatic search.",
+        "PIPELINE_STAGE": "{pipeline} › {stage}",
+        "LAST_RUN_AT": "Last run: {when}",
+        "NEVER_RUN": "hasn't run yet"
+      },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Desired segment",
         "BUSINESS_TYPE_PLACEHOLDER": "e.g. coffee shop, dental clinic, gym",

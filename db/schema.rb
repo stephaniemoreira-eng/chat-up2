@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_02_100001) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_03_100001) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1611,6 +1611,28 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_02_100001) do
     t.index ["account_id", "position"], name: "index_sales_pipelines_on_account_id_and_position"
     t.index ["account_id"], name: "index_sales_pipelines_on_account_id"
     t.index ["account_id"], name: "index_sales_pipelines_on_account_id_and_default", unique: true, where: "(is_default = true)"
+  end
+
+  create_table "sales_prospecting_configs", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "sales_pipeline_id", null: false
+    t.bigint "sales_stage_id"
+    t.string "business_type", null: false
+    t.string "neighborhood"
+    t.string "city", null: false
+    t.string "state", null: false
+    t.integer "desired_count", default: 20, null: false
+    t.decimal "min_rating", precision: 2, scale: 1
+    t.integer "min_reviews"
+    t.boolean "require_phone", default: false, null: false
+    t.boolean "require_website", default: false, null: false
+    t.string "exclude_keywords"
+    t.boolean "active", default: true, null: false
+    t.datetime "last_run_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "active"], name: "index_sales_prospecting_configs_on_account_id_and_active"
+    t.index ["account_id"], name: "index_sales_prospecting_configs_on_account_id"
   end
 
   create_table "sales_prospecting_results", force: :cascade do |t|

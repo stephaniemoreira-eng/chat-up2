@@ -17,6 +17,22 @@ class SalesProspectingAPI extends ApiClient {
       result_ids: resultIds,
     });
   }
+
+  getConfigs() {
+    return axios.get(`${this.url}/configs`);
+  }
+
+  createConfig(config) {
+    return axios.post(`${this.url}/configs`, config);
+  }
+
+  updateConfig(id, config) {
+    return axios.patch(`${this.url}/configs/${id}`, config);
+  }
+
+  deleteConfig(id) {
+    return axios.delete(`${this.url}/configs/${id}`);
+  }
 }
 
 export default new SalesProspectingAPI();

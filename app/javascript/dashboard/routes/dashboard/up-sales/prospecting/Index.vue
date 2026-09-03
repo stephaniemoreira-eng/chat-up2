@@ -9,6 +9,7 @@ import { useSalesStagesStore } from 'dashboard/stores/sales/stages';
 import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import AutoSearchPanel from 'dashboard/routes/dashboard/up-sales/prospecting/AutoSearchPanel.vue';
 
 const BRAZILIAN_STATES = [
   'AC',
@@ -43,6 +44,8 @@ const BRAZILIAN_STATES = [
 const MAX_DESIRED_COUNT = 60;
 
 const { t } = useI18n();
+
+const activeTab = ref('manual');
 
 const pipelinesStore = useSalesPipelinesStore();
 const stagesStore = useSalesStagesStore();
@@ -200,7 +203,40 @@ onMounted(async () => {
       {{ t('CRM.PROSPECTING.TITLE') }}
     </h1>
 
-    <form class="flex flex-col gap-4 max-w-3xl" @submit.prevent="onSearch">
+    <div class="flex gap-1 border-b border-n-weak">
+      <button
+        type="button"
+        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px"
+        :class="
+          activeTab === 'manual'
+            ? 'border-n-brand text-n-slate-12'
+            : 'border-transparent text-n-slate-11'
+        "
+        @click="activeTab = 'manual'"
+      >
+        {{ t('CRM.PROSPECTING.TABS.MANUAL') }}
+      </button>
+      <button
+        type="button"
+        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px"
+        :class="
+          activeTab === 'auto'
+            ? 'border-n-brand text-n-slate-12'
+            : 'border-transparent text-n-slate-11'
+        "
+        @click="activeTab = 'auto'"
+      >
+        {{ t('CRM.PROSPECTING.TABS.AUTO') }}
+      </button>
+    </div>
+
+    <AutoSearchPanel v-if="activeTab === 'auto'" />
+
+    <form
+      v-if="activeTab === 'manual'"
+      class="flex flex-col gap-4 max-w-3xl"
+      @submit.prevent="onSearch"
+    >
       <Input
         v-model="businessType"
         :label="t('CRM.PROSPECTING.FORM.BUSINESS_TYPE_LABEL')"
@@ -321,7 +357,10 @@ onMounted(async () => {
       />
     </form>
 
-    <div v-if="hasSearched && !isSearching" class="flex flex-col gap-4">
+    <div
+      v-if="activeTab === 'manual' && hasSearched && !isSearching"
+      class="flex flex-col gap-4"
+    >
       <div v-if="results.length === 0" class="text-sm text-n-slate-11">
         {{ t('CRM.PROSPECTING.SEARCH.EMPTY') }}
       </div>
