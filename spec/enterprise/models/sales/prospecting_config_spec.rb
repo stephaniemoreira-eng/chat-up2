@@ -1,6 +1,6 @@
 require 'rails_helper'
 
-RSpec.describe Sales::ProspectingConfig do
+RSpec.describe Sales::ProspectingConfig, type: :model do
   let(:account) { create(:account) }
   let(:pipeline) { create(:sales_pipeline, account: account) }
 
