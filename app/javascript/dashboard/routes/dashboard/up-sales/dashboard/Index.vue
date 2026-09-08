@@ -17,7 +17,11 @@ const formatDate = iso => {
   return new Date(iso).toLocaleDateString('pt-BR');
 };
 
+let meetingsRequestId = 0;
+
 const fetchMeetingsScheduledThisMonth = async () => {
+  meetingsRequestId += 1;
+  const requestId = meetingsRequestId;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -27,8 +31,12 @@ const fetchMeetingsScheduledThisMonth = async () => {
       timeMax: monthEnd.toISOString(),
       maxResults: 50,
     });
+    // Ignore responses from a stale/overlapping call — otherwise a slower, out-of-order
+    // response (e.g. a transient 401 on a duplicate request) can clobber a newer result.
+    if (requestId !== meetingsRequestId) return;
     meetingsScheduledCount.value = (data.payload || []).length;
   } catch {
+    if (requestId !== meetingsRequestId) return;
     // No calendar connected yet, or up2-agents unreachable — leave the placeholder dash instead
     // of a scary error on a dashboard tile.
     meetingsScheduledCount.value = null;
