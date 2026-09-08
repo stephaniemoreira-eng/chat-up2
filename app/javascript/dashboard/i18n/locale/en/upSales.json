@@ -16,8 +16,8 @@
       "LEADS_COUNT": "Leads",
       "LAST_SEARCH": "Last search",
       "LAST_SEARCH_EMPTY": "— (no search yet)",
-      "MEETINGS_SCHEDULED": "Meetings scheduled this month",
-      "MEETINGS_PLACEHOLDER": "— (coming in Week C)",
+      "MEETINGS_SCHEDULED": "Agenda appointments (month)",
+      "MEETINGS_PLACEHOLDER": "— (no agenda data)",
       "DEALS_WON": "Deals won"
     },
     "AGENDA": {
