@@ -40,10 +40,25 @@ RSpec.describe Sales::Prospecting::PageSpeedService do
     end
 
     it 'returns nil when the response is not successful' do
-      response = instance_double(HTTParty::Response, success?: false)
+      response = instance_double(
+        HTTParty::Response, success?: false, code: 429,
+                             parsed_response: { 'error' => { 'message' => 'Quota exceeded' } }
+      )
       allow(HTTParty).to receive(:get).and_return(response)
 
       expect(described_class.call('https://example.com')).to be_nil
+    end
+
+    it 'logs the HTTP status and error message when the response is not successful' do
+      response = instance_double(
+        HTTParty::Response, success?: false, code: 429,
+                             parsed_response: { 'error' => { 'message' => 'Quota exceeded' } }
+      )
+      allow(HTTParty).to receive(:get).and_return(response)
+
+      expect(Rails.logger).to receive(:error).with(/HTTP 429.*Quota exceeded/)
+
+      described_class.call('https://example.com')
     end
   end
 end

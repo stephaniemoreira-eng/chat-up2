@@ -23,7 +23,10 @@ class Sales::Prospecting::PageSpeedService
     return nil if @website.blank? || api_key.blank?
 
     response = HTTParty.get(ENDPOINT, query: query, timeout: TIMEOUT_SECONDS)
-    return nil unless response.success?
+    unless response.success?
+      Rails.logger.error("[Sales::Prospecting::PageSpeedService] #{@website}: HTTP #{response.code} #{error_from(response)}")
+      return nil
+    end
 
     categories = response.parsed_response.dig('lighthouseResult', 'categories')
     {
@@ -37,6 +40,13 @@ class Sales::Prospecting::PageSpeedService
   end
 
   private
+
+  def error_from(response)
+    parsed = response.parsed_response
+    parsed.is_a?(Hash) ? parsed.dig('error', 'message') : response.body.to_s.truncate(200)
+  rescue StandardError
+    response.body.to_s.truncate(200)
+  end
 
   def query
     { url: @website, key: api_key, strategy: 'mobile', category: CATEGORIES }
