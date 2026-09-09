@@ -26,6 +26,19 @@ export const useSalesLeadsStore = createStore({
       }
     },
 
+    // Recarrega a lista em silencio, sem tocar em `fetchingList`. Usado pelo polling do
+    // pre-score: com a UI flag o board piscaria "carregando" a cada ciclo. Falha de rede aqui e'
+    // ignorada de proposito -- e' atualizacao de fundo, nao acao do usuario.
+    async refresh({ pipelineId } = {}) {
+      try {
+        const { data } = await SalesLeadsAPI.get({ pipelineId });
+        this.records = data.payload || data;
+        return this.records;
+      } catch {
+        return null;
+      }
+    },
+
     // Optimistically moves the lead to its new stage/position so the drag feels instant, then
     // confirms with the backend. On failure the previous stage/position are restored so the
     // board doesn't silently drift from what the server actually persisted.

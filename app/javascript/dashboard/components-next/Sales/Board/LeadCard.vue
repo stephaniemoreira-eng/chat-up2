@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
+import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import { scanFaixaClass } from 'dashboard/components-next/Sales/scanVisuals.js';
 
 const props = defineProps({
   id: { type: Number, required: true },
@@ -12,6 +14,7 @@ const props = defineProps({
   stageColor: { type: String, default: '' },
   scanScore: { type: Number, default: null },
   scanFaixa: { type: String, default: '' },
+  scanStatus: { type: String, default: null },
 });
 
 defineEmits(['click']);
@@ -30,20 +33,15 @@ const formattedValue = computed(() => {
   });
 });
 
-// Cores do SCAN v1 (ver ScanWeights::FAIXAS no backend -- manter as 3 faixas em sincronia).
-const SCAN_FAIXA_CLASSES = {
-  baixa_prioridade: 'bg-n-slate-3 text-n-slate-11',
-  revisao_humana: 'bg-n-amber-3 text-n-amber-11',
-  revisao_prioritaria: 'bg-n-teal-3 text-n-teal-11',
-};
-
-const scanBadgeClass = computed(
-  () => SCAN_FAIXA_CLASSES[props.scanFaixa] || 'bg-n-slate-3 text-n-slate-11'
-);
+const scanBadgeClass = computed(() => scanFaixaClass(props.scanFaixa));
 
 const showScanBadge = computed(
   () => props.scanScore !== null && props.scanScore !== undefined
 );
+
+// Sem isso o card fica identico a um lead sem Scan enquanto o pre-score roda em background (o
+// PageSpeed sozinho pode levar quase um minuto), e parece que o recurso nao existe.
+const isScanPending = computed(() => props.scanStatus === 'pendente');
 </script>
 
 <template>
@@ -63,6 +61,13 @@ const showScanBadge = computed(
         :class="scanBadgeClass"
       >
         {{ scanScore }}
+      </span>
+      <span
+        v-else-if="isScanPending"
+        class="flex items-center rounded-full px-1.5 py-1 shrink-0 bg-n-slate-3 text-n-slate-11"
+        :title="t('CRM.LEAD.DETAIL.SCAN.CALCULATING')"
+      >
+        <Spinner :size="10" />
       </span>
     </div>
     <div class="flex items-center justify-between gap-2 min-w-0">

@@ -365,6 +365,13 @@ const newReportRoutes = () => [
 
 const reportRoutes = computed(() => newReportRoutes());
 
+// Itens nativos do Chatwoot que nao fazem parte do fluxo comercial do Up Sales -- decisao de
+// produto de 09/09/2026 (Caixa de Entrada e' uma segunda visao das mesmas conversas; Chat Interno
+// e Central de Ajuda sao ferramentas de suporte). Filtrar por nome no fim da montagem, em vez de
+// remover as entradas nativas, deixa o codigo do upstream intacto e reduz atrito no merge.
+// Relatorios nao entra aqui: as rotas dele ja exigem `administrator`/`report_manage`.
+const HIDDEN_NATIVE_ITEMS = ['Inbox', 'InternalChat', 'Portals'];
+
 const menuItems = computed(() => {
   const items = [
     {
@@ -880,7 +887,7 @@ const menuItems = computed(() => {
     });
   }
 
-  return items;
+  return items.filter(item => !HIDDEN_NATIVE_ITEMS.includes(item.name));
 });
 </script>
 

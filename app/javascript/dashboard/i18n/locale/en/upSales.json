@@ -24,6 +24,7 @@
       "TITLE": "Agenda",
       "LOADING": "Loading agenda…",
       "ERROR": "Could not load the agenda right now.",
+      "EMPTY": "No events in this period.",
       "TODAY": "Today",
       "VIEW_MONTH": "Month",
       "VIEW_WEEK": "Week",

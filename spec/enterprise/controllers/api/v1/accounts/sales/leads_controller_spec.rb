@@ -76,6 +76,17 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       expect(response.parsed_body['payload']).not_to have_key('scan_score')
     end
 
+    it 'reports the Scan status as pendente while the scan is still running' do
+      search = account.sales_prospecting_searches.create!(business_type: 'clinica estetica', city: 'Santos', state: 'SP')
+      search.results.create!(account: account, place_id: 'p1', lead: lead)
+
+      get "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}", headers: admin.create_new_auth_token, as: :json
+
+      payload = response.parsed_body['payload']
+      expect(payload['scan_status']).to eq('pendente')
+      expect(payload).not_to have_key('scan_score')
+    end
+
     it 'includes the Scan breakdown when the linked prospecting result finished' do
       search = account.sales_prospecting_searches.create!(business_type: 'clinica estetica', city: 'Santos', state: 'SP')
       search.results.create!(

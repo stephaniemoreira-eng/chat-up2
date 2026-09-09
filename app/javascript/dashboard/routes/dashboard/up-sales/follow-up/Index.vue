@@ -105,7 +105,11 @@ onMounted(async () => {
       {{ t('CRM.FOLLOW_UP.TITLE') }}
     </h1>
 
-    <div v-if="!isLoading" class="flex flex-col gap-6 max-w-2xl">
+    <div v-if="isLoading" class="text-sm text-n-slate-11">
+      {{ t('CRM.FOLLOW_UP.LOADING') }}
+    </div>
+
+    <div v-else class="flex flex-col gap-6 max-w-2xl">
       <section class="flex flex-col gap-4">
         <h2 class="text-sm font-semibold text-n-slate-12">
           {{ t('CRM.FOLLOW_UP.CONFIG.TITLE') }}

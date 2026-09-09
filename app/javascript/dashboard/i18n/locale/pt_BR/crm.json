@@ -25,6 +25,7 @@
     },
     "FOLLOW_UP": {
       "TITLE": "Follow-up",
+      "LOADING": "Carregando configuração de follow-up…",
       "CONFIG": {
         "TITLE": "Configuração",
         "PIPELINE_LABEL": "Kanban de Follow-up",
@@ -71,7 +72,8 @@
       "MESSAGES": {
         "ERROR": "Não foi possível salvar a coluna.",
         "DELETE_ERROR": "Não foi possível excluir a coluna."
-      }
+      },
+      "EMPTY_COLUMN": "Arraste um lead para cá"
     },
     "PROSPECTING": {
       "TITLE": "Busca e prospecção",
@@ -116,7 +118,8 @@
         "NOTES_PLACEHOLDER": "ex.: priorizar cafeterias independentes",
         "YES": "Sim",
         "NO": "Não",
-        "SUBMIT": "Buscar leads"
+        "SUBMIT": "Buscar leads",
+        "REQUIRED_HINT": "Falta preencher: {fields}"
       },
       "SEARCH": {
         "EMPTY": "Nenhum resultado para essa busca.",
@@ -181,6 +184,7 @@
         "SCAN": {
           "TITLE": "Pré-Score (SCAN v1)",
           "ERROR": "Não foi possível calcular o Scan desse lead.",
+          "CALCULATING": "Calculando o pré-score deste lead…",
           "SCORE_OF_100": "{score}/100",
           "PILLAR_SCORE": "{value}/{max}",
           "NOT_FOUND": "Dados não encontrados: {items}",

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
@@ -206,6 +206,43 @@ const onConfirmDeletePipelineDialog = async () => {
 };
 
 watch(activePipelineId, pipelineId => loadBoard(pipelineId));
+
+// O pre-score roda em background (Sidekiq) e nao existe evento de websocket avisando a tela --
+// sem isso, o score so aparece se a pessoa recarregar a pagina. Enquanto houver algum lead com
+// Scan pendente no board, recarrega em silencio; para sozinho quando nao houver mais nenhum.
+const SCAN_POLL_INTERVAL_MS = 8000;
+let scanPollTimer = null;
+
+const hasPendingScan = computed(() =>
+  leadsStore.records.some(lead => lead.scan_status === 'pendente')
+);
+
+const stopScanPolling = () => {
+  if (!scanPollTimer) return;
+  clearInterval(scanPollTimer);
+  scanPollTimer = null;
+};
+
+watch(
+  hasPendingScan,
+  isPending => {
+    if (!isPending) {
+      stopScanPolling();
+      return;
+    }
+    if (scanPollTimer) return;
+    scanPollTimer = setInterval(() => {
+      if (activePipelineId.value) {
+        leadsStore.refresh({ pipelineId: activePipelineId.value });
+      }
+    }, SCAN_POLL_INTERVAL_MS);
+  },
+  // A store guarda os records entre visitas -- sem isso o polling nao comeca quando a tela monta
+  // com leads pendentes ja em memoria.
+  { immediate: true }
+);
+
+onBeforeUnmount(stopScanPolling);
 
 onMounted(async () => {
   await pipelinesStore.get();

@@ -97,6 +97,18 @@ const canSearch = computed(
   () => businessType.value.trim() && city.value.trim() && state.value
 );
 
+// O botao desabilitado sozinho nao diz o que falta -- parece que travou. Isso nomeia os campos
+// que faltam, na mesma ordem em que aparecem no formulario.
+const missingRequiredFields = computed(() => {
+  const missing = [];
+  if (!businessType.value.trim()) {
+    missing.push(t('CRM.PROSPECTING.FORM.BUSINESS_TYPE_LABEL'));
+  }
+  if (!city.value.trim()) missing.push(t('CRM.PROSPECTING.FORM.CITY_LABEL'));
+  if (!state.value) missing.push(t('CRM.PROSPECTING.FORM.STATE_LABEL'));
+  return missing;
+});
+
 const toggleResult = resultId => {
   const next = new Set(selectedIds.value);
   if (next.has(resultId)) {
@@ -348,13 +360,24 @@ onMounted(async () => {
         </div>
       </div>
 
-      <Button
-        type="submit"
-        class="self-end"
-        :label="t('CRM.PROSPECTING.FORM.SUBMIT')"
-        :is-loading="isSearching"
-        :disabled="!canSearch"
-      />
+      <div class="flex items-center justify-end gap-3">
+        <span
+          v-if="missingRequiredFields.length"
+          class="text-xs text-n-slate-11"
+        >
+          {{
+            t('CRM.PROSPECTING.FORM.REQUIRED_HINT', {
+              fields: missingRequiredFields.join(', '),
+            })
+          }}
+        </span>
+        <Button
+          type="submit"
+          :label="t('CRM.PROSPECTING.FORM.SUBMIT')"
+          :is-loading="isSearching"
+          :disabled="!canSearch"
+        />
+      </div>
     </form>
 
     <div

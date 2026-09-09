@@ -34,5 +34,7 @@ if scan_result&.scan_concluido? || scan_result&.scan_erro?
   json.scan_pilares scan_result.scan_pilares
   json.scan_evidencias scan_result.scan_evidencias
 else
-  json.scan_status nil
+  # `pendente` chega ao front pra renderizar o estado "calculando"; sem registro de Scan segue
+  # nil, que e' o caso do lead criado a mao (nunca passou pela Busca).
+  json.scan_status scan_result&.scan_status
 end

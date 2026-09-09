@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Draggable from 'vuedraggable';
 import Button from 'dashboard/components-next/button/Button.vue';
 import LeadCard from 'dashboard/components-next/Sales/Board/LeadCard.vue';
@@ -10,6 +11,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['moveLead', 'clickLead', 'addLead', 'editStage']);
+
+const { t } = useI18n();
 
 const localLeads = computed({
   get: () => props.leads,
@@ -81,9 +84,16 @@ const onDragEnd = event => {
           :stage-color="stage.color"
           :scan-score="lead.scan_score"
           :scan-faixa="lead.scan_faixa"
+          :scan-status="lead.scan_status"
           @click="emit('clickLead', lead.id)"
         />
       </template>
     </Draggable>
+    <p
+      v-if="!localLeads.length"
+      class="text-xs text-n-slate-10 border border-dashed border-n-weak rounded-lg py-3 px-2 text-center"
+    >
+      {{ t('CRM.STAGE.EMPTY_COLUMN') }}
+    </p>
   </div>
 </template>

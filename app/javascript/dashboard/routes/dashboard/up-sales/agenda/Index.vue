@@ -187,6 +187,12 @@ onMounted(fetchEvents);
     >
       {{ errorMessage }}
     </div>
+    <div
+      v-else-if="!events.length"
+      class="rounded-lg border border-n-weak bg-n-solid-1 p-5 text-sm text-n-slate-11"
+    >
+      {{ t('UP_SALES.AGENDA.EMPTY') }}
+    </div>
     <MonthView
       v-else-if="viewMode === 'month'"
       :reference-date="referenceDate"

@@ -1,6 +1,12 @@
 <script setup>
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import {
+  scanFaixaClass,
+  SCAN_PILAR_BAR_CLASS,
+  SCAN_PILAR_BAR_ATTENTION_CLASS,
+} from 'dashboard/components-next/Sales/scanVisuals.js';
 
 const props = defineProps({
   scanStatus: { type: String, default: null },
@@ -27,15 +33,7 @@ const FAIXA_LABEL_KEYS = {
   revisao_humana: 'CRM.LEAD.DETAIL.SCAN.FAIXA.revisao_humana',
   revisao_prioritaria: 'CRM.LEAD.DETAIL.SCAN.FAIXA.revisao_prioritaria',
 };
-const FAIXA_CLASSES = {
-  baixa_prioridade: 'bg-n-slate-3 text-n-slate-11',
-  revisao_humana: 'bg-n-amber-3 text-n-amber-11',
-  revisao_prioritaria: 'bg-n-teal-3 text-n-teal-11',
-};
-
-const faixaBadgeClass = computed(
-  () => FAIXA_CLASSES[props.scanFaixa] || 'bg-n-slate-3 text-n-slate-11'
-);
+const faixaBadgeClass = computed(() => scanFaixaClass(props.scanFaixa));
 
 const faixaLabel = computed(() =>
   props.scanFaixa ? t(FAIXA_LABEL_KEYS[props.scanFaixa] || '') : ''
@@ -45,8 +43,8 @@ const scoreLabel = computed(() =>
   t('CRM.LEAD.DETAIL.SCAN.SCORE_OF_100', { score: props.scanScore })
 );
 
-const pilares = computed(() =>
-  PILAR_ORDER.map(key => {
+const pilares = computed(() => {
+  const list = PILAR_ORDER.map(key => {
     const value = props.scanPilares?.[key] ?? 0;
     const max = PILAR_MAX[key];
     return {
@@ -55,8 +53,22 @@ const pilares = computed(() =>
       scoreLabel: t('CRM.LEAD.DETAIL.SCAN.PILLAR_SCORE', { value, max }),
       percentage: Math.min(100, (value / max) * 100),
     };
-  })
-);
+  });
+
+  // So o pilar mais fraco recebe Copper -- e' o ponto que pede intervencao (ver scanVisuals.js).
+  const weakest = list.reduce(
+    (worst, pilar) => (pilar.percentage < worst.percentage ? pilar : worst),
+    list[0]
+  );
+
+  return list.map(pilar => ({
+    ...pilar,
+    barClass:
+      pilar.key === weakest?.key
+        ? SCAN_PILAR_BAR_ATTENTION_CLASS
+        : SCAN_PILAR_BAR_CLASS,
+  }));
+});
 
 const dadosNaoEncontrados = computed(
   () => props.scanEvidencias?.dados_nao_encontrados || []
@@ -71,7 +83,16 @@ const notFoundLabel = computed(() =>
 </script>
 
 <template>
-  <div v-if="scanStatus === 'erro'" class="flex flex-col gap-1">
+  <div v-if="scanStatus === 'pendente'" class="flex flex-col gap-1">
+    <span class="text-sm font-medium text-n-slate-11">
+      {{ t('CRM.LEAD.DETAIL.SCAN.TITLE') }}
+    </span>
+    <span class="flex items-center gap-2 text-xs text-n-slate-11">
+      <Spinner :size="14" />
+      {{ t('CRM.LEAD.DETAIL.SCAN.CALCULATING') }}
+    </span>
+  </div>
+  <div v-else-if="scanStatus === 'erro'" class="flex flex-col gap-1">
     <span class="text-sm font-medium text-n-slate-11">
       {{ t('CRM.LEAD.DETAIL.SCAN.TITLE') }}
     </span>
@@ -110,7 +131,8 @@ const notFoundLabel = computed(() =>
         </div>
         <div class="w-full h-1.5 rounded-full bg-n-slate-4 overflow-hidden">
           <div
-            class="h-full rounded-full bg-n-brand"
+            class="h-full rounded-full"
+            :class="pilar.barClass"
             :style="{ width: `${pilar.percentage}%` }"
           />
         </div>
