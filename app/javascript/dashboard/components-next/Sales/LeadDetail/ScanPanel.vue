@@ -6,6 +6,10 @@ import {
   scanFaixaClass,
   SCAN_PILAR_BAR_CLASS,
   SCAN_PILAR_BAR_ATTENTION_CLASS,
+  SCAN_PILAR_TRACK_CLASS,
+  SCAN_PILAR_TRACK_ATTENTION_CLASS,
+  SCAN_PILAR_VALUE_CLASS,
+  SCAN_PILAR_VALUE_ATTENTION_CLASS,
 } from 'dashboard/components-next/Sales/scanVisuals.js';
 
 const props = defineProps({
@@ -61,13 +65,22 @@ const pilares = computed(() => {
     list[0]
   );
 
-  return list.map(pilar => ({
-    ...pilar,
-    barClass:
-      pilar.key === weakest?.key
+  return list.map(pilar => {
+    const needsAttention = pilar.key === weakest?.key;
+    return {
+      ...pilar,
+      needsAttention,
+      barClass: needsAttention
         ? SCAN_PILAR_BAR_ATTENTION_CLASS
         : SCAN_PILAR_BAR_CLASS,
-  }));
+      trackClass: needsAttention
+        ? SCAN_PILAR_TRACK_ATTENTION_CLASS
+        : SCAN_PILAR_TRACK_CLASS,
+      valueClass: needsAttention
+        ? SCAN_PILAR_VALUE_ATTENTION_CLASS
+        : SCAN_PILAR_VALUE_CLASS,
+    };
+  });
 });
 
 const dadosNaoEncontrados = computed(
@@ -125,11 +138,14 @@ const notFoundLabel = computed(() =>
       >
         <div class="flex items-center justify-between">
           <span class="text-xs text-n-slate-11">{{ pilar.label }}</span>
-          <span class="text-xs font-medium text-n-slate-12">
+          <span class="text-xs font-medium" :class="pilar.valueClass">
             {{ pilar.scoreLabel }}
           </span>
         </div>
-        <div class="w-full h-1.5 rounded-full bg-n-slate-4 overflow-hidden">
+        <div
+          class="w-full h-1.5 rounded-full overflow-hidden"
+          :class="pilar.trackClass"
+        >
           <div
             class="h-full rounded-full"
             :class="pilar.barClass"

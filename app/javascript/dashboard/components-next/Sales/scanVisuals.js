@@ -22,3 +22,12 @@ export const scanFaixaClass = faixa =>
 // Barra do pilar: neutra por padrao, Copper apenas no pilar que puxa o score para baixo.
 export const SCAN_PILAR_BAR_CLASS = 'bg-n-slate-9';
 export const SCAN_PILAR_BAR_ATTENTION_CLASS = 'bg-[#D95B3D]';
+
+// O pilar mais fraco costuma valer 0 -- e uma barra de largura zero nao desenha nada, justo no
+// dado que mais precisa aparecer. Por isso a marcacao vai tambem no numero e num trilho tingido,
+// que existem independentemente do valor.
+export const SCAN_PILAR_TRACK_CLASS = 'bg-n-slate-4';
+export const SCAN_PILAR_TRACK_ATTENTION_CLASS = 'bg-[#D95B3D]/20';
+export const SCAN_PILAR_VALUE_CLASS = 'text-n-slate-12';
+export const SCAN_PILAR_VALUE_ATTENTION_CLASS =
+  'text-[#A8401F] dark:text-[#E88A6F]';
