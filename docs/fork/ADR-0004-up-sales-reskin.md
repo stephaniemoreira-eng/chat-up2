@@ -230,6 +230,8 @@ fechada do ADR-0001 — aumenta a superfície de conflito de merge com o upstrea
 Não é proibitivo, mas é meio, não fim: precisa entrar na lista auditada e ser mantido a cada merge,
 como qualquer outro ponto de toque.
 
-**Status: registrado, não decidido, não priorizado.** Fica para uma conversa futura decidir o
-alcance (só o essencial — título, favicon, e-mails — ou also o painel Super Admin inteiro) e abrir
-uma ADR própria (ADR-0006 ou o próximo número livre) quando for priorizado.
+**Status: decidido em 2026-09-09 — ver [ADR-0005](ADR-0005-white-label-e-ux.md).** A auditoria
+feita naquela data encontrou o motivo pelo qual isso não era "só mais uma tela": as chaves de
+marca da instalação são um recurso pago do fork da fazer.ai (plano `community` as reverte
+diariamente). A decisão foi aplicar a identidade onde o fork já nos dá controle e **não** contornar
+a trava por código, deixando a marca da instalação dependente de uma conversa comercial.
