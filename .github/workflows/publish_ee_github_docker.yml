@@ -1,4 +1,7 @@
 name: Publish Chatwoot Enterprise docker images to GitHub
+# NOTE(2026-09-10): trivial touch to force GitHub to (re-)register this workflow file -- it
+# existed in the repo but never appeared in the Actions API/UI, a known GitHub quirk for workflow
+# files that arrive via a large merge instead of a normal incremental push.
 
 permissions:
   contents: read
