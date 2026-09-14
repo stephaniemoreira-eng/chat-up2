@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_09_03_100001) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_14_140000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1631,6 +1631,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_09_03_100001) do
     t.datetime "last_run_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "scheduled_hour", default: 6, null: false
     t.index ["account_id", "active"], name: "index_sales_prospecting_configs_on_account_id_and_active"
     t.index ["account_id"], name: "index_sales_prospecting_configs_on_account_id"
   end

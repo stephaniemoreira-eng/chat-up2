@@ -41,6 +41,10 @@ const BRAZILIAN_STATES = [
   'TO',
 ];
 const stateOptions = BRAZILIAN_STATES.map(uf => ({ value: uf, label: uf }));
+const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
+  value: hour,
+  label: `${String(hour).padStart(2, '0')}:00`,
+}));
 
 const { t } = useI18n();
 
@@ -61,6 +65,7 @@ const form = reactive({
   requireWebsite: false,
   pipelineId: null,
   stageId: null,
+  scheduledHour: 6,
 });
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
@@ -136,6 +141,7 @@ const onCreate = async () => {
       require_website: form.requireWebsite,
       pipeline_id: form.pipelineId,
       sales_stage_id: form.stageId || undefined,
+      scheduled_hour: form.scheduledHour,
     });
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.CREATE_SUCCESS'));
     form.businessType = '';
@@ -159,6 +165,17 @@ const onToggleActive = async config => {
     await ProspectingAPI.updateConfig(config.id, { active: config.active });
   } catch {
     config.active = previous;
+    useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
+  }
+};
+
+const onChangeScheduledHour = async (config, hour) => {
+  const previous = config.scheduled_hour;
+  config.scheduled_hour = hour;
+  try {
+    await ProspectingAPI.updateConfig(config.id, { scheduled_hour: hour });
+  } catch {
+    config.scheduled_hour = previous;
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
   }
 };
@@ -221,7 +238,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-3 gap-3">
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-n-slate-12">
             {{ t('CRM.PIPELINE_SWITCHER.PLACEHOLDER') }}
@@ -242,7 +259,20 @@ onMounted(async () => {
             @update:model-value="value => (form.stageId = value)"
           />
         </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-n-slate-12">
+            {{ t('CRM.PROSPECTING.FORM.SCHEDULED_HOUR_LABEL') }}
+          </label>
+          <ComboBox
+            :model-value="form.scheduledHour"
+            :options="hourOptions"
+            @update:model-value="value => (form.scheduledHour = value)"
+          />
+        </div>
       </div>
+      <p class="text-xs text-n-slate-11 -mt-2">
+        {{ t('CRM.PROSPECTING.FORM.SCHEDULED_HOUR_HELP') }}
+      </p>
 
       <div class="flex items-center gap-6">
         <label class="flex items-center gap-2 text-sm text-n-slate-12">
@@ -301,6 +331,16 @@ onMounted(async () => {
             </span>
           </div>
           <div class="flex items-center gap-3 shrink-0">
+            <div class="flex flex-col gap-1 w-28">
+              <label class="text-xs text-n-slate-11">
+                {{ t('CRM.PROSPECTING.AUTO_SEARCH.SCHEDULED_HOUR_LABEL') }}
+              </label>
+              <ComboBox
+                :model-value="config.scheduled_hour"
+                :options="hourOptions"
+                @update:model-value="value => onChangeScheduledHour(config, value)"
+              />
+            </div>
             <Switch
               :model-value="config.active"
               @update:model-value="() => onToggleActive(config)"

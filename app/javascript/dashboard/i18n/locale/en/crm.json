@@ -82,7 +82,7 @@
         "AUTO": "Automatic searches"
       },
       "AUTO_SEARCH": {
-        "DESCRIPTION": "Save segments and locations here — every day the system searches on its own and adds new leads to the chosen Kanban, without opening the manual search.",
+        "DESCRIPTION": "Save segments and locations here — every day, at the time you choose, the system searches on its own and adds new leads to the chosen Kanban, without opening the manual search.",
         "ADD_ACTION": "Save automatic search",
         "LOADING": "Loading automatic searches...",
         "EMPTY": "No automatic search configured yet.",
@@ -93,7 +93,8 @@
         "DELETE_ERROR": "Could not remove the automatic search.",
         "PIPELINE_STAGE": "{pipeline} › {stage}",
         "LAST_RUN_AT": "Last run: {when}",
-        "NEVER_RUN": "hasn't run yet"
+        "NEVER_RUN": "hasn't run yet",
+        "SCHEDULED_HOUR_LABEL": "Time"
       },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Desired segment",
@@ -112,6 +113,8 @@
         "MIN_REVIEWS_PLACEHOLDER": "e.g. 10",
         "REQUIRE_PHONE_LABEL": "Require phone?",
         "REQUIRE_WEBSITE_LABEL": "Require website?",
+        "SCHEDULED_HOUR_LABEL": "Search time",
+        "SCHEDULED_HOUR_HELP": "Pick different times for each company or segment, so automatic searches don't all fire at once.",
         "EXCLUDE_KEYWORDS_LABEL": "What shouldn't show up?",
         "EXCLUDE_KEYWORDS_PLACEHOLDER": "e.g. bakeries, restaurants, large franchises",
         "NOTES_LABEL": "Notes",

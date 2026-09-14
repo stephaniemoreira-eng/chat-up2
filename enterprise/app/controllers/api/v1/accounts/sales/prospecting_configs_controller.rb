@@ -1,5 +1,6 @@
 # CRUD das buscas automaticas salvas (Sales::ProspectingConfig). Ver Sales::Prospecting::
-# RunConfigService e Sales::Prospecting::AutoSearchJob (cron diario que as executa).
+# RunConfigService e Sales::Prospecting::AutoSearchJob (cron de hora em hora que as executa,
+# respeitando o scheduled_hour de cada uma).
 class Api::V1::Accounts::Sales::ProspectingConfigsController < Api::V1::Accounts::Sales::BaseController
   before_action -> { check_authorization(Sales::Lead) }
   before_action :set_config, only: %i[update destroy]
@@ -30,7 +31,7 @@ class Api::V1::Accounts::Sales::ProspectingConfigsController < Api::V1::Accounts
   def config_params
     permitted = params.permit(:business_type, :neighborhood, :city, :state, :desired_count, :min_rating,
                                :min_reviews, :require_phone, :require_website, :exclude_keywords, :active,
-                               :pipeline_id, :sales_stage_id)
+                               :pipeline_id, :sales_stage_id, :scheduled_hour)
     permitted[:sales_pipeline_id] = permitted.delete(:pipeline_id) if permitted.key?(:pipeline_id)
     permitted
   end

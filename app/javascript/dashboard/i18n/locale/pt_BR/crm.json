@@ -82,7 +82,7 @@
         "AUTO": "Buscas automáticas"
       },
       "AUTO_SEARCH": {
-        "DESCRIPTION": "Deixe segmentos e localizações salvos aqui — todo dia o sistema busca sozinho e adiciona os leads novos no Kanban escolhido, sem precisar abrir a busca manual.",
+        "DESCRIPTION": "Deixe segmentos e localizações salvos aqui — todo dia, no horário que você escolher, o sistema busca sozinho e adiciona os leads novos no Kanban escolhido, sem precisar abrir a busca manual.",
         "ADD_ACTION": "Salvar busca automática",
         "LOADING": "Carregando buscas automáticas...",
         "EMPTY": "Nenhuma busca automática configurada ainda.",
@@ -93,7 +93,8 @@
         "DELETE_ERROR": "Não foi possível remover a busca automática.",
         "PIPELINE_STAGE": "{pipeline} › {stage}",
         "LAST_RUN_AT": "Última execução: {when}",
-        "NEVER_RUN": "ainda não rodou"
+        "NEVER_RUN": "ainda não rodou",
+        "SCHEDULED_HOUR_LABEL": "Horário"
       },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Segmento desejado",
@@ -112,6 +113,8 @@
         "MIN_REVIEWS_PLACEHOLDER": "ex.: 10",
         "REQUIRE_PHONE_LABEL": "Exigir telefone?",
         "REQUIRE_WEBSITE_LABEL": "Exigir site?",
+        "SCHEDULED_HOUR_LABEL": "Horário da busca",
+        "SCHEDULED_HOUR_HELP": "Escolha horários diferentes para cada empresa ou segmento, assim as buscas automáticas não disparam todas juntas.",
         "EXCLUDE_KEYWORDS_LABEL": "O que não deve aparecer?",
         "EXCLUDE_KEYWORDS_PLACEHOLDER": "ex.: padarias, restaurantes, grandes franquias",
         "NOTES_LABEL": "Observações",

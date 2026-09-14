@@ -10,6 +10,7 @@ json.require_phone resource.require_phone
 json.require_website resource.require_website
 json.exclude_keywords resource.exclude_keywords
 json.active resource.active
+json.scheduled_hour resource.scheduled_hour
 json.sales_pipeline_id resource.sales_pipeline_id
 json.sales_stage_id resource.sales_stage_id
 json.last_run_at resource.last_run_at&.to_i

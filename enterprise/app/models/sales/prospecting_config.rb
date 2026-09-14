@@ -14,6 +14,7 @@
 #  neighborhood      :string
 #  require_phone     :boolean          default(FALSE), not null
 #  require_website   :boolean          default(FALSE), not null
+#  scheduled_hour    :integer          default(6), not null
 #  state             :string           not null
 #  created_at        :datetime         not null
 #  updated_at        :datetime         not null
@@ -30,6 +31,10 @@
 # Sales::Prospecting::AutoSearchJob -- em vez de alguem abrir o formulario manual da tela de
 # Busca/Prospeccao toda vez. Ver docs/fork (12-saas-prospeccao-multicliente.md, item 1) e
 # Sales::Prospecting::RunConfigService.
+#
+# scheduled_hour (0-23, UTC): cada config roda no seu proprio horario -- o AutoSearchJob agora
+# roda a cada hora e filtra pelas configs daquela hora, em vez de todo mundo no mesmo 06:00 fixo.
+# Existe pra nao concentrar todas as contas/clientes batendo a API do Google Places juntas.
 class Sales::ProspectingConfig < ApplicationRecord
   self.table_name = 'sales_prospecting_configs'
 
@@ -38,6 +43,7 @@ class Sales::ProspectingConfig < ApplicationRecord
   belongs_to :stage, class_name: 'Sales::Stage', foreign_key: :sales_stage_id, optional: true, inverse_of: false
 
   validates :business_type, :city, :state, presence: true
+  validates :scheduled_hour, inclusion: { in: 0..23 }
 
   scope :active, -> { where(active: true) }
 end

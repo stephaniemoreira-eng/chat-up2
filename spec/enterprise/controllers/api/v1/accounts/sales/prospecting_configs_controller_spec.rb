@@ -59,6 +59,14 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
       expect(config.reload.active).to be(false)
       expect(config.business_type).to eq('academia')
     end
+
+    it 'updates the scheduled hour' do
+      patch "/api/v1/accounts/#{account.id}/crm/prospecting/configs/#{config.id}",
+            params: { scheduled_hour: 14 }, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(config.reload.scheduled_hour).to eq(14)
+    end
   end
 
   describe 'DELETE /api/v1/accounts/{account.id}/crm/prospecting/configs/{id}' do
