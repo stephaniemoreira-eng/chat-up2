@@ -1,12 +1,16 @@
 # Recebe IDs de resultados persistidos de uma busca de prospeccao (Sales::ProspectingResult) e
 # grava cada um como Contact (sem duplicar, reaproveita DataImport::ContactManager) + Sales::Lead
-# com source: 'busca_prospeccao'. Ver docs/fork/ADR-0004-up-sales-reskin.md.
+# com source: 'busca_prospeccao'. auto_contact_enabled vem da Sales::ProspectingConfig que gerou
+# a busca (quando veio de uma) e e gravado em additional_attributes de cada lead -- trava que o
+# futuro contato ativo do agente de IA vai checar antes de escrever pro lead. Ver
+# docs/fork/ADR-0004-up-sales-reskin.md.
 class Sales::Prospecting::CreateLeadsFromResultsService
-  def initialize(account:, pipeline_id:, sales_stage_id:, result_ids:)
+  def initialize(account:, pipeline_id:, sales_stage_id:, result_ids:, auto_contact_enabled: false)
     @account = account
     @pipeline = account.sales_pipelines.find(pipeline_id)
     @stage = sales_stage_id.present? ? @pipeline.stages.find(sales_stage_id) : @pipeline.stages.ordered.first
     @results = account.sales_prospecting_results.where(id: result_ids)
+    @auto_contact_enabled = auto_contact_enabled
   end
 
   def perform
@@ -15,7 +19,7 @@ class Sales::Prospecting::CreateLeadsFromResultsService
 
   private
 
-  attr_reader :account, :pipeline, :stage
+  attr_reader :account, :pipeline, :stage, :auto_contact_enabled
 
   def create_lead(result)
     contact = build_contact(result)
@@ -30,7 +34,8 @@ class Sales::Prospecting::CreateLeadsFromResultsService
       additional_attributes: {
         place_id: result.place_id,
         address: result.address,
-        website: result.website
+        website: result.website,
+        auto_contact_enabled: auto_contact_enabled
       }.compact
     )
     result.update!(lead: lead)

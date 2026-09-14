@@ -21,5 +21,18 @@ RSpec.describe Sales::Prospecting::CreateLeadsFromResultsService do
         described_class.new(account: account, pipeline_id: pipeline.id, sales_stage_id: stage.id, result_ids: [result.id]).perform
       end.to have_enqueued_job(Sales::Prospecting::ScanResultJob).with(result.id)
     end
+
+    it 'stamps auto_contact_enabled false on the lead by default' do
+      lead = described_class.new(account: account, pipeline_id: pipeline.id, sales_stage_id: stage.id, result_ids: [result.id]).perform.first
+
+      expect(lead.additional_attributes['auto_contact_enabled']).to be(false)
+    end
+
+    it 'stamps auto_contact_enabled true on the lead when passed through' do
+      lead = described_class.new(account: account, pipeline_id: pipeline.id, sales_stage_id: stage.id, result_ids: [result.id],
+                                  auto_contact_enabled: true).perform.first
+
+      expect(lead.additional_attributes['auto_contact_enabled']).to be(true)
+    end
   end
 end

@@ -67,6 +67,14 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
       expect(response).to have_http_status(:success)
       expect(config.reload.scheduled_hour).to eq(14)
     end
+
+    it 'updates auto_contact_enabled' do
+      patch "/api/v1/accounts/#{account.id}/crm/prospecting/configs/#{config.id}",
+            params: { auto_contact_enabled: true }, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(config.reload.auto_contact_enabled).to be(true)
+    end
   end
 
   describe 'DELETE /api/v1/accounts/{account.id}/crm/prospecting/configs/{id}' do

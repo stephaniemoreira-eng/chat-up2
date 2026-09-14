@@ -66,6 +66,7 @@ const form = reactive({
   pipelineId: null,
   stageId: null,
   scheduledHour: 6,
+  autoContactEnabled: false,
 });
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
@@ -142,6 +143,7 @@ const onCreate = async () => {
       pipeline_id: form.pipelineId,
       sales_stage_id: form.stageId || undefined,
       scheduled_hour: form.scheduledHour,
+      auto_contact_enabled: form.autoContactEnabled,
     });
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.CREATE_SUCCESS'));
     form.businessType = '';
@@ -176,6 +178,17 @@ const onChangeScheduledHour = async (config, hour) => {
     await ProspectingAPI.updateConfig(config.id, { scheduled_hour: hour });
   } catch {
     config.scheduled_hour = previous;
+    useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
+  }
+};
+
+const onToggleAutoContact = async config => {
+  const previous = config.auto_contact_enabled;
+  config.auto_contact_enabled = !previous;
+  try {
+    await ProspectingAPI.updateConfig(config.id, { auto_contact_enabled: config.auto_contact_enabled });
+  } catch {
+    config.auto_contact_enabled = previous;
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
   }
 };
@@ -285,6 +298,16 @@ onMounted(async () => {
         </label>
       </div>
 
+      <div class="flex flex-col gap-1 p-3 rounded-lg border border-n-weak bg-n-solid-1">
+        <label class="flex items-center gap-2 text-sm font-medium text-n-slate-12">
+          <Switch v-model="form.autoContactEnabled" />
+          {{ t('CRM.PROSPECTING.FORM.AUTO_CONTACT_LABEL') }}
+        </label>
+        <p class="text-xs text-n-slate-11">
+          {{ t('CRM.PROSPECTING.FORM.AUTO_CONTACT_HELP') }}
+        </p>
+      </div>
+
       <Button
         type="submit"
         class="self-end"
@@ -341,6 +364,15 @@ onMounted(async () => {
                 @update:model-value="value => onChangeScheduledHour(config, value)"
               />
             </div>
+            <label class="flex flex-col items-center gap-1">
+              <span class="text-xs text-n-slate-11">
+                {{ t('CRM.PROSPECTING.AUTO_SEARCH.AUTO_CONTACT_LABEL') }}
+              </span>
+              <Switch
+                :model-value="config.auto_contact_enabled"
+                @update:model-value="() => onToggleAutoContact(config)"
+              />
+            </label>
             <Switch
               :model-value="config.active"
               @update:model-value="() => onToggleActive(config)"

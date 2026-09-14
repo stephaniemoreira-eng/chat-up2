@@ -22,6 +22,15 @@ RSpec.describe Sales::Prospecting::RunConfigService do
       expect(config.reload.last_run_at).to be_present
     end
 
+    it 'propagates auto_contact_enabled from the config to the created lead' do
+      config.update!(auto_contact_enabled: true)
+      stub_places_search([{ place_id: 'p1', name: 'Clinica X', phone_number: '+5513999999999', address: 'Rua X' }])
+
+      described_class.call(config)
+
+      expect(Sales::Lead.last.additional_attributes['auto_contact_enabled']).to be(true)
+    end
+
     it 'skips creating a duplicate lead for a place already turned into a lead in a previous run' do
       previous_search = account.sales_prospecting_searches.create!(business_type: 'x', city: 'Santos', state: 'SP')
       existing_lead = create(:sales_lead, account: account, pipeline: pipeline, stage: stage)

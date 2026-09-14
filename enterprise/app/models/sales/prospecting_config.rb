@@ -4,6 +4,7 @@
 #
 #  id                :bigint           not null, primary key
 #  active            :boolean          default(TRUE), not null
+#  auto_contact_enabled :boolean       default(FALSE), not null
 #  business_type     :string           not null
 #  city              :string           not null
 #  desired_count     :integer          default(20), not null
@@ -35,6 +36,13 @@
 # scheduled_hour (0-23, UTC): cada config roda no seu proprio horario -- o AutoSearchJob agora
 # roda a cada hora e filtra pelas configs daquela hora, em vez de todo mundo no mesmo 06:00 fixo.
 # Existe pra nao concentrar todas as contas/clientes batendo a API do Google Places juntas.
+#
+# auto_contact_enabled: trava por busca -- decide se os leads criados por ela podem ser
+# contatados ativamente pelo agente de IA assim que entram no Kanban (feature ainda em
+# construcao) ou se ficam aguardando liberacao manual. Default false: contato automatico e
+# opt-in, nunca ligado sozinho so por a busca existir. Gravado em Sales::Lead#additional_attributes
+# no momento da criacao (ver CreateLeadsFromResultsService) pra sobreviver a mudanca posterior
+# na config.
 class Sales::ProspectingConfig < ApplicationRecord
   self.table_name = 'sales_prospecting_configs'
 

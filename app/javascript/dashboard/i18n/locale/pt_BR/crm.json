@@ -94,7 +94,8 @@
         "PIPELINE_STAGE": "{pipeline} › {stage}",
         "LAST_RUN_AT": "Última execução: {when}",
         "NEVER_RUN": "ainda não rodou",
-        "SCHEDULED_HOUR_LABEL": "Horário"
+        "SCHEDULED_HOUR_LABEL": "Horário",
+        "AUTO_CONTACT_LABEL": "Contato automático"
       },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Segmento desejado",
@@ -115,6 +116,8 @@
         "REQUIRE_WEBSITE_LABEL": "Exigir site?",
         "SCHEDULED_HOUR_LABEL": "Horário da busca",
         "SCHEDULED_HOUR_HELP": "Escolha horários diferentes para cada empresa ou segmento, assim as buscas automáticas não disparam todas juntas.",
+        "AUTO_CONTACT_LABEL": "Permitir contato automático do agente",
+        "AUTO_CONTACT_HELP": "Desligado (padrão): os leads dessa busca só entram no Kanban, sem nenhuma mensagem automática — alguém libera o contato manualmente. Ligado: assim que o lead é criado, o agente de IA já pode iniciar contato sozinho.",
         "EXCLUDE_KEYWORDS_LABEL": "O que não deve aparecer?",
         "EXCLUDE_KEYWORDS_PLACEHOLDER": "ex.: padarias, restaurantes, grandes franquias",
         "NOTES_LABEL": "Observações",
