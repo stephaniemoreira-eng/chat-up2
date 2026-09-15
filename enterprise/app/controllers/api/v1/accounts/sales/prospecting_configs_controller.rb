@@ -31,7 +31,7 @@ class Api::V1::Accounts::Sales::ProspectingConfigsController < Api::V1::Accounts
   def config_params
     permitted = params.permit(:business_type, :neighborhood, :city, :state, :desired_count, :min_rating,
                                :min_reviews, :require_phone, :require_website, :exclude_keywords, :active,
-                               :pipeline_id, :sales_stage_id, :scheduled_hour, :auto_contact_enabled)
+                               :pipeline_id, :sales_stage_id, :scheduled_hour, :scheduled_minute, :auto_contact_enabled)
     permitted[:sales_pipeline_id] = permitted.delete(:pipeline_id) if permitted.key?(:pipeline_id)
     permitted
   end

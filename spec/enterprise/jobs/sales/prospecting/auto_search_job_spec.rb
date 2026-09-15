@@ -25,6 +25,28 @@ RSpec.describe Sales::Prospecting::AutoSearchJob do
     end
   end
 
+  it 'runs a config scheduled for a specific 5-minute slot within the hour' do
+    travel_to Time.utc(2026, 9, 14, 6, 35, 0) do
+      config = account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP', pipeline: pipeline,
+                                                           scheduled_hour: 6, scheduled_minute: 35)
+
+      expect(Sales::Prospecting::RunConfigService).to receive(:call).with(config)
+
+      described_class.perform_now
+    end
+  end
+
+  it 'does not run configs scheduled for a different 5-minute slot' do
+    travel_to Time.utc(2026, 9, 14, 6, 35, 0) do
+      account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP', pipeline: pipeline,
+                                                 scheduled_hour: 6, scheduled_minute: 40)
+
+      expect(Sales::Prospecting::RunConfigService).not_to receive(:call)
+
+      described_class.perform_now
+    end
+  end
+
   it 'keeps going when one config blows up' do
     travel_to Time.utc(2026, 9, 14, 6, 0, 0) do
       broken = account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP', pipeline: pipeline, scheduled_hour: 6)

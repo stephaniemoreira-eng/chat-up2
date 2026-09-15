@@ -11,6 +11,7 @@ json.require_website resource.require_website
 json.exclude_keywords resource.exclude_keywords
 json.active resource.active
 json.scheduled_hour resource.scheduled_hour
+json.scheduled_minute resource.scheduled_minute
 json.auto_contact_enabled resource.auto_contact_enabled
 json.sales_pipeline_id resource.sales_pipeline_id
 json.sales_stage_id resource.sales_stage_id

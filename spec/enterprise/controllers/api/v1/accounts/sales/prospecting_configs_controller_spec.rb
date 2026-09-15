@@ -68,6 +68,22 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
       expect(config.reload.scheduled_hour).to eq(14)
     end
 
+    it 'updates the scheduled minute' do
+      patch "/api/v1/accounts/#{account.id}/crm/prospecting/configs/#{config.id}",
+            params: { scheduled_minute: 35 }, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(config.reload.scheduled_minute).to eq(35)
+    end
+
+    it 'updates the desired count' do
+      patch "/api/v1/accounts/#{account.id}/crm/prospecting/configs/#{config.id}",
+            params: { desired_count: 40 }, headers: admin.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(config.reload.desired_count).to eq(40)
+    end
+
     it 'updates auto_contact_enabled' do
       patch "/api/v1/accounts/#{account.id}/crm/prospecting/configs/#{config.id}",
             params: { auto_contact_enabled: true }, headers: admin.create_new_auth_token, as: :json

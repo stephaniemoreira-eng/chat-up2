@@ -95,7 +95,8 @@
         "LAST_RUN_AT": "Last run: {when}",
         "NEVER_RUN": "hasn't run yet",
         "SCHEDULED_HOUR_LABEL": "Time",
-        "AUTO_CONTACT_LABEL": "Auto contact"
+        "AUTO_CONTACT_LABEL": "Auto contact",
+        "DESIRED_COUNT_LABEL": "Amount"
       },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Desired segment",

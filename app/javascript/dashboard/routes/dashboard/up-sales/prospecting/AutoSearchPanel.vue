@@ -43,8 +43,14 @@ const BRAZILIAN_STATES = [
 const stateOptions = BRAZILIAN_STATES.map(uf => ({ value: uf, label: uf }));
 const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
   value: hour,
-  label: `${String(hour).padStart(2, '0')}:00`,
+  label: String(hour).padStart(2, '0'),
 }));
+const minuteOptions = Array.from({ length: 12 }, (_, i) => i * 5).map(
+  minute => ({
+    value: minute,
+    label: String(minute).padStart(2, '0'),
+  })
+);
 
 const { t } = useI18n();
 
@@ -66,6 +72,7 @@ const form = reactive({
   pipelineId: null,
   stageId: null,
   scheduledHour: 6,
+  scheduledMinute: 0,
   autoContactEnabled: false,
 });
 
@@ -143,6 +150,7 @@ const onCreate = async () => {
       pipeline_id: form.pipelineId,
       sales_stage_id: form.stageId || undefined,
       scheduled_hour: form.scheduledHour,
+      scheduled_minute: form.scheduledMinute,
       auto_contact_enabled: form.autoContactEnabled,
     });
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.CREATE_SUCCESS'));
@@ -178,6 +186,29 @@ const onChangeScheduledHour = async (config, hour) => {
     await ProspectingAPI.updateConfig(config.id, { scheduled_hour: hour });
   } catch {
     config.scheduled_hour = previous;
+    useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
+  }
+};
+
+const onChangeScheduledMinute = async (config, minute) => {
+  const previous = config.scheduled_minute;
+  config.scheduled_minute = minute;
+  try {
+    await ProspectingAPI.updateConfig(config.id, { scheduled_minute: minute });
+  } catch {
+    config.scheduled_minute = previous;
+    useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
+  }
+};
+
+const onChangeDesiredCount = async (config, count) => {
+  const previous = config.desired_count;
+  const clamped = Math.min(60, Math.max(1, Number(count) || 1));
+  config.desired_count = clamped;
+  try {
+    await ProspectingAPI.updateConfig(config.id, { desired_count: clamped });
+  } catch {
+    config.desired_count = previous;
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
   }
 };
@@ -251,7 +282,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-2 gap-3">
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-n-slate-12">
             {{ t('CRM.PIPELINE_SWITCHER.PLACEHOLDER') }}
@@ -272,20 +303,45 @@ onMounted(async () => {
             @update:model-value="value => (form.stageId = value)"
           />
         </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-n-slate-12">
             {{ t('CRM.PROSPECTING.FORM.SCHEDULED_HOUR_LABEL') }}
           </label>
-          <ComboBox
-            :model-value="form.scheduledHour"
-            :options="hourOptions"
-            @update:model-value="value => (form.scheduledHour = value)"
+          <div class="flex items-center gap-1">
+            <ComboBox
+              :model-value="form.scheduledHour"
+              :options="hourOptions"
+              class="w-20"
+              @update:model-value="value => (form.scheduledHour = value)"
+            />
+            <span class="text-n-slate-11">:</span>
+            <ComboBox
+              :model-value="form.scheduledMinute"
+              :options="minuteOptions"
+              class="w-20"
+              @update:model-value="value => (form.scheduledMinute = value)"
+            />
+          </div>
+          <p class="text-xs text-n-slate-11">
+            {{ t('CRM.PROSPECTING.FORM.SCHEDULED_HOUR_HELP') }}
+          </p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <Input
+            v-model.number="form.desiredCount"
+            type="number"
+            min="1"
+            max="60"
+            :label="t('CRM.PROSPECTING.FORM.DESIRED_COUNT_LABEL')"
           />
+          <span class="text-xs text-n-slate-11">
+            {{ t('CRM.PROSPECTING.FORM.DESIRED_COUNT_HELP') }}
+          </span>
         </div>
       </div>
-      <p class="text-xs text-n-slate-11 -mt-2">
-        {{ t('CRM.PROSPECTING.FORM.SCHEDULED_HOUR_HELP') }}
-      </p>
 
       <div class="flex items-center gap-6">
         <label class="flex items-center gap-2 text-sm text-n-slate-12">
@@ -354,14 +410,37 @@ onMounted(async () => {
             </span>
           </div>
           <div class="flex items-center gap-3 shrink-0">
-            <div class="flex flex-col gap-1 w-28">
+            <div class="flex flex-col gap-1">
               <label class="text-xs text-n-slate-11">
                 {{ t('CRM.PROSPECTING.AUTO_SEARCH.SCHEDULED_HOUR_LABEL') }}
               </label>
-              <ComboBox
-                :model-value="config.scheduled_hour"
-                :options="hourOptions"
-                @update:model-value="value => onChangeScheduledHour(config, value)"
+              <div class="flex items-center gap-1">
+                <ComboBox
+                  :model-value="config.scheduled_hour"
+                  :options="hourOptions"
+                  class="w-16"
+                  @update:model-value="value => onChangeScheduledHour(config, value)"
+                />
+                <span class="text-n-slate-11">:</span>
+                <ComboBox
+                  :model-value="config.scheduled_minute"
+                  :options="minuteOptions"
+                  class="w-16"
+                  @update:model-value="value => onChangeScheduledMinute(config, value)"
+                />
+              </div>
+            </div>
+            <div class="flex flex-col gap-1 w-20">
+              <label class="text-xs text-n-slate-11">
+                {{ t('CRM.PROSPECTING.AUTO_SEARCH.DESIRED_COUNT_LABEL') }}
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max="60"
+                :model-value="config.desired_count"
+                class="!mb-0"
+                @change="event => onChangeDesiredCount(config, event.target.value)"
               />
             </div>
             <label class="flex flex-col items-center gap-1">
