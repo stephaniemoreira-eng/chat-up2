@@ -96,7 +96,8 @@
         "NEVER_RUN": "hasn't run yet",
         "SCHEDULED_HOUR_LABEL": "Time",
         "AUTO_CONTACT_LABEL": "Auto contact",
-        "DESIRED_COUNT_LABEL": "Amount"
+        "DESIRED_COUNT_LABEL": "Amount",
+        "CONTACT_TAG_LABEL": "Tag"
       },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Desired segment",
@@ -119,6 +120,10 @@
         "SCHEDULED_HOUR_HELP": "Pick different times for each company or segment, so automatic searches don't all fire at once.",
         "AUTO_CONTACT_LABEL": "Allow automatic contact from the agent",
         "AUTO_CONTACT_HELP": "Off (default): leads from this search only land on the Kanban, no automatic message — someone releases contact manually. On: as soon as the lead is created, the AI agent may start contact on its own.",
+        "CONTACT_TAG_LABEL": "Contact tag",
+        "CONTACT_TAG_PLACEHOLDER": "e.g.: busca_prospeccao",
+        "CONTACT_TAG_HELP": "Applied to the contact automatically as soon as a lead is created by this search. Type a new tag or click an existing one below. Use the same tag on the AI agent's configuration so it only engages with contacts that came from here.",
+        "CONTACT_TAG_EXISTING": "Existing:",
         "EXCLUDE_KEYWORDS_LABEL": "What shouldn't show up?",
         "EXCLUDE_KEYWORDS_PLACEHOLDER": "e.g. bakeries, restaurants, large franchises",
         "NOTES_LABEL": "Notes",

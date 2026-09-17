@@ -13,6 +13,7 @@ json.active resource.active
 json.scheduled_hour resource.scheduled_hour
 json.scheduled_minute resource.scheduled_minute
 json.auto_contact_enabled resource.auto_contact_enabled
+json.contact_tag resource.contact_tag
 json.sales_pipeline_id resource.sales_pipeline_id
 json.sales_stage_id resource.sales_stage_id
 json.last_run_at resource.last_run_at&.to_i

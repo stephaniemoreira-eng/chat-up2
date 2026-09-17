@@ -7,6 +7,7 @@
 #  auto_contact_enabled :boolean       default(FALSE), not null
 #  business_type     :string           not null
 #  city              :string           not null
+#  contact_tag       :string
 #  desired_count     :integer          default(20), not null
 #  exclude_keywords  :string
 #  last_run_at       :datetime
@@ -46,6 +47,12 @@
 # opt-in, nunca ligado sozinho so por a busca existir. Gravado em Sales::Lead#additional_attributes
 # no momento da criacao (ver CreateLeadsFromResultsService) pra sobreviver a mudanca posterior
 # na config.
+#
+# contact_tag: etiqueta (label do Chatwoot) aplicada ao contato assim que o lead nasce por esta
+# busca -- via Contact#add_labels (Labelable), nao apenas em additional_attributes, entao aparece
+# no Chatwoot e pode ser lida pelo agente de IA (grant Agent.requireContactLabel no up2-agents).
+# Nil/vazio: nenhuma etiqueta aplicada, comportamento inalterado. Texto livre: tanto cria uma
+# etiqueta nova quanto reaproveita uma ja existente na conta (acts_as_taggable_on e idempotente).
 class Sales::ProspectingConfig < ApplicationRecord
   self.table_name = 'sales_prospecting_configs'
 

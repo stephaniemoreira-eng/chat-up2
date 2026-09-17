@@ -5,12 +5,13 @@
 # futuro contato ativo do agente de IA vai checar antes de escrever pro lead. Ver
 # docs/fork/ADR-0004-up-sales-reskin.md.
 class Sales::Prospecting::CreateLeadsFromResultsService
-  def initialize(account:, pipeline_id:, sales_stage_id:, result_ids:, auto_contact_enabled: false)
+  def initialize(account:, pipeline_id:, sales_stage_id:, result_ids:, auto_contact_enabled: false, contact_tag: nil)
     @account = account
     @pipeline = account.sales_pipelines.find(pipeline_id)
     @stage = sales_stage_id.present? ? @pipeline.stages.find(sales_stage_id) : @pipeline.stages.ordered.first
     @results = account.sales_prospecting_results.where(id: result_ids)
     @auto_contact_enabled = auto_contact_enabled
+    @contact_tag = contact_tag.presence
   end
 
   def perform
@@ -19,11 +20,12 @@ class Sales::Prospecting::CreateLeadsFromResultsService
 
   private
 
-  attr_reader :account, :pipeline, :stage, :auto_contact_enabled
+  attr_reader :account, :pipeline, :stage, :auto_contact_enabled, :contact_tag
 
   def create_lead(result)
     contact = build_contact(result)
     contact.save!
+    contact.add_labels(contact_tag) if contact_tag
 
     lead = account.sales_leads.create!(
       contact: contact,

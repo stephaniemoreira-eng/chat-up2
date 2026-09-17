@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import ProspectingAPI from 'dashboard/api/sales/prospecting';
+import LabelsAPI from 'dashboard/api/labels';
 import { useSalesPipelinesStore } from 'dashboard/stores/sales/pipelines';
 import { useSalesStagesStore } from 'dashboard/stores/sales/stages';
 
@@ -60,6 +61,7 @@ const stagesStore = useSalesStagesStore();
 const configs = ref([]);
 const isLoading = ref(false);
 const isSaving = ref(false);
+const existingLabels = ref([]);
 
 const form = reactive({
   businessType: '',
@@ -74,6 +76,7 @@ const form = reactive({
   scheduledHour: 6,
   scheduledMinute: 0,
   autoContactEnabled: false,
+  contactTag: '',
 });
 
 const pipelines = computed(() => pipelinesStore.getPipelines);
@@ -134,6 +137,20 @@ const loadConfigs = async () => {
   }
 };
 
+const loadExistingLabels = async () => {
+  try {
+    const { data } = await LabelsAPI.get();
+    existingLabels.value = (data.payload || []).map(label => label.title);
+  } catch {
+    // Best-effort only: the field still works as free text without suggestions.
+    existingLabels.value = [];
+  }
+};
+
+const onPickExistingTag = title => {
+  form.contactTag = title;
+};
+
 const onCreate = async () => {
   if (!canSave.value) return;
 
@@ -152,6 +169,7 @@ const onCreate = async () => {
       scheduled_hour: form.scheduledHour,
       scheduled_minute: form.scheduledMinute,
       auto_contact_enabled: form.autoContactEnabled,
+      contact_tag: form.contactTag.trim() || undefined,
     });
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.CREATE_SUCCESS'));
     form.businessType = '';
@@ -160,7 +178,9 @@ const onCreate = async () => {
     form.state = null;
     form.requirePhone = false;
     form.requireWebsite = false;
+    form.contactTag = '';
     await loadConfigs();
+    await loadExistingLabels();
   } catch {
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.CREATE_ERROR'));
   } finally {
@@ -217,9 +237,25 @@ const onToggleAutoContact = async config => {
   const previous = config.auto_contact_enabled;
   config.auto_contact_enabled = !previous;
   try {
-    await ProspectingAPI.updateConfig(config.id, { auto_contact_enabled: config.auto_contact_enabled });
+    await ProspectingAPI.updateConfig(config.id, {
+      auto_contact_enabled: config.auto_contact_enabled,
+    });
   } catch {
     config.auto_contact_enabled = previous;
+    useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
+  }
+};
+
+const onChangeContactTag = async (config, tag) => {
+  const previous = config.contact_tag;
+  const trimmed = tag.trim();
+  config.contact_tag = trimmed || null;
+  try {
+    await ProspectingAPI.updateConfig(config.id, {
+      contact_tag: trimmed || null,
+    });
+  } catch {
+    config.contact_tag = previous;
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
   }
 };
@@ -239,6 +275,7 @@ onMounted(async () => {
     pipelines.value.map(pipeline => stagesStore.get(pipeline.id))
   );
   await loadConfigs();
+  await loadExistingLabels();
 });
 </script>
 
@@ -354,14 +391,46 @@ onMounted(async () => {
         </label>
       </div>
 
-      <div class="flex flex-col gap-1 p-3 rounded-lg border border-n-weak bg-n-solid-1">
-        <label class="flex items-center gap-2 text-sm font-medium text-n-slate-12">
+      <div
+        class="flex flex-col gap-1 p-3 rounded-lg border border-n-weak bg-n-solid-1"
+      >
+        <label
+          class="flex items-center gap-2 text-sm font-medium text-n-slate-12"
+        >
           <Switch v-model="form.autoContactEnabled" />
           {{ t('CRM.PROSPECTING.FORM.AUTO_CONTACT_LABEL') }}
         </label>
         <p class="text-xs text-n-slate-11">
           {{ t('CRM.PROSPECTING.FORM.AUTO_CONTACT_HELP') }}
         </p>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <Input
+          v-model="form.contactTag"
+          :label="t('CRM.PROSPECTING.FORM.CONTACT_TAG_LABEL')"
+          :placeholder="t('CRM.PROSPECTING.FORM.CONTACT_TAG_PLACEHOLDER')"
+        />
+        <p class="text-xs text-n-slate-11">
+          {{ t('CRM.PROSPECTING.FORM.CONTACT_TAG_HELP') }}
+        </p>
+        <div
+          v-if="existingLabels.length"
+          class="flex flex-wrap items-center gap-1.5 mt-1"
+        >
+          <span class="text-xs text-n-slate-11">
+            {{ t('CRM.PROSPECTING.FORM.CONTACT_TAG_EXISTING') }}
+          </span>
+          <button
+            v-for="label in existingLabels"
+            :key="label"
+            type="button"
+            class="px-2 py-0.5 rounded-full text-xs border border-n-weak text-n-slate-12 hover:bg-n-solid-2"
+            @click="onPickExistingTag(label)"
+          >
+            {{ label }}
+          </button>
+        </div>
       </div>
 
       <Button
@@ -419,14 +488,18 @@ onMounted(async () => {
                   :model-value="config.scheduled_hour"
                   :options="hourOptions"
                   class="w-16"
-                  @update:model-value="value => onChangeScheduledHour(config, value)"
+                  @update:model-value="
+                    value => onChangeScheduledHour(config, value)
+                  "
                 />
                 <span class="text-n-slate-11">:</span>
                 <ComboBox
                   :model-value="config.scheduled_minute"
                   :options="minuteOptions"
                   class="w-16"
-                  @update:model-value="value => onChangeScheduledMinute(config, value)"
+                  @update:model-value="
+                    value => onChangeScheduledMinute(config, value)
+                  "
                 />
               </div>
             </div>
@@ -440,7 +513,9 @@ onMounted(async () => {
                 max="60"
                 :model-value="config.desired_count"
                 class="!mb-0"
-                @change="event => onChangeDesiredCount(config, event.target.value)"
+                @change="
+                  event => onChangeDesiredCount(config, event.target.value)
+                "
               />
             </div>
             <label class="flex flex-col items-center gap-1">
@@ -452,6 +527,19 @@ onMounted(async () => {
                 @update:model-value="() => onToggleAutoContact(config)"
               />
             </label>
+            <div class="flex flex-col gap-1 w-28">
+              <label class="text-xs text-n-slate-11">
+                {{ t('CRM.PROSPECTING.AUTO_SEARCH.CONTACT_TAG_LABEL') }}
+              </label>
+              <Input
+                :model-value="config.contact_tag"
+                class="!mb-0"
+                :placeholder="t('CRM.PROSPECTING.FORM.CONTACT_TAG_PLACEHOLDER')"
+                @change="
+                  event => onChangeContactTag(config, event.target.value)
+                "
+              />
+            </div>
             <Switch
               :model-value="config.active"
               @update:model-value="() => onToggleActive(config)"

@@ -54,7 +54,8 @@ class Sales::Prospecting::RunConfigService
       pipeline_id: @config.sales_pipeline_id,
       sales_stage_id: @config.sales_stage_id,
       result_ids: result_ids,
-      auto_contact_enabled: @config.auto_contact_enabled
+      auto_contact_enabled: @config.auto_contact_enabled,
+      contact_tag: @config.contact_tag
     ).perform
   end
 end

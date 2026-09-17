@@ -96,7 +96,8 @@
         "NEVER_RUN": "ainda não rodou",
         "SCHEDULED_HOUR_LABEL": "Horário",
         "AUTO_CONTACT_LABEL": "Contato automático",
-        "DESIRED_COUNT_LABEL": "Quantidade"
+        "DESIRED_COUNT_LABEL": "Quantidade",
+        "CONTACT_TAG_LABEL": "Etiqueta"
       },
       "FORM": {
         "BUSINESS_TYPE_LABEL": "Segmento desejado",
@@ -119,6 +120,10 @@
         "SCHEDULED_HOUR_HELP": "Escolha horários diferentes para cada empresa ou segmento, assim as buscas automáticas não disparam todas juntas.",
         "AUTO_CONTACT_LABEL": "Permitir contato automático do agente",
         "AUTO_CONTACT_HELP": "Desligado (padrão): os leads dessa busca só entram no Kanban, sem nenhuma mensagem automática — alguém libera o contato manualmente. Ligado: assim que o lead é criado, o agente de IA já pode iniciar contato sozinho.",
+        "CONTACT_TAG_LABEL": "Etiqueta do contato",
+        "CONTACT_TAG_PLACEHOLDER": "ex.: busca_prospeccao",
+        "CONTACT_TAG_HELP": "Aplicada automaticamente ao contato assim que o lead nasce por esta busca. Digite uma etiqueta nova ou clique numa já existente abaixo. Use a mesma etiqueta na configuração do agente de IA para que ele só converse com quem veio daqui.",
+        "CONTACT_TAG_EXISTING": "Já existentes:",
         "EXCLUDE_KEYWORDS_LABEL": "O que não deve aparecer?",
         "EXCLUDE_KEYWORDS_PLACEHOLDER": "ex.: padarias, restaurantes, grandes franquias",
         "NOTES_LABEL": "Observações",
