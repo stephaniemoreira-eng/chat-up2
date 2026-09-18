@@ -53,6 +53,36 @@ const minuteOptions = Array.from({ length: 12 }, (_, i) => i * 5).map(
   })
 );
 
+// scheduled_hour/scheduled_minute are stored and compared in UTC by
+// Sales::Prospecting::AutoSearchJob, but every Up Sales tenant operates in Brasília time -- this
+// panel is the only place that needs to know that, converting at the edges so the picker shows
+// and accepts the hour a person would actually say out loud. Reading the offset from Intl instead
+// of hardcoding -3 keeps this correct if Brazil ever changes DST policy again.
+const SP_TIMEZONE = 'America/Sao_Paulo';
+
+const spOffsetMinutes = () => {
+  const offsetName = new Intl.DateTimeFormat('en-US', {
+    timeZone: SP_TIMEZONE,
+    timeZoneName: 'shortOffset',
+  })
+    .formatToParts(new Date())
+    .find(part => part.type === 'timeZoneName')?.value;
+  const match = offsetName?.match(/GMT([+-]\d+)/);
+  return match ? Number(match[1]) * 60 : -180;
+};
+
+const wrapMinutes = total => ((total % 1440) + 1440) % 1440;
+
+const utcToLocal = (hour, minute) => {
+  const total = wrapMinutes(hour * 60 + minute + spOffsetMinutes());
+  return { hour: Math.floor(total / 60), minute: total % 60 };
+};
+
+const localToUtc = (hour, minute) => {
+  const total = wrapMinutes(hour * 60 + minute - spOffsetMinutes());
+  return { hour: Math.floor(total / 60), minute: total % 60 };
+};
+
 const { t } = useI18n();
 
 const pipelinesStore = useSalesPipelinesStore();
@@ -156,6 +186,7 @@ const onCreate = async () => {
 
   isSaving.value = true;
   try {
+    const utc = localToUtc(form.scheduledHour, form.scheduledMinute);
     await ProspectingAPI.createConfig({
       business_type: form.businessType.trim(),
       neighborhood: form.neighborhood.trim() || undefined,
@@ -166,8 +197,8 @@ const onCreate = async () => {
       require_website: form.requireWebsite,
       pipeline_id: form.pipelineId,
       sales_stage_id: form.stageId || undefined,
-      scheduled_hour: form.scheduledHour,
-      scheduled_minute: form.scheduledMinute,
+      scheduled_hour: utc.hour,
+      scheduled_minute: utc.minute,
       auto_contact_enabled: form.autoContactEnabled,
       contact_tag: form.contactTag.trim() || undefined,
     });
@@ -199,27 +230,34 @@ const onToggleActive = async config => {
   }
 };
 
-const onChangeScheduledHour = async (config, hour) => {
-  const previous = config.scheduled_hour;
-  config.scheduled_hour = hour;
+const localTime = config =>
+  utcToLocal(config.scheduled_hour, config.scheduled_minute);
+
+const onChangeScheduledTime = async (config, { hour, minute }) => {
+  const previous = {
+    hour: config.scheduled_hour,
+    minute: config.scheduled_minute,
+  };
+  const utc = localToUtc(hour, minute);
+  config.scheduled_hour = utc.hour;
+  config.scheduled_minute = utc.minute;
   try {
-    await ProspectingAPI.updateConfig(config.id, { scheduled_hour: hour });
+    await ProspectingAPI.updateConfig(config.id, {
+      scheduled_hour: utc.hour,
+      scheduled_minute: utc.minute,
+    });
   } catch {
-    config.scheduled_hour = previous;
+    config.scheduled_hour = previous.hour;
+    config.scheduled_minute = previous.minute;
     useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
   }
 };
 
-const onChangeScheduledMinute = async (config, minute) => {
-  const previous = config.scheduled_minute;
-  config.scheduled_minute = minute;
-  try {
-    await ProspectingAPI.updateConfig(config.id, { scheduled_minute: minute });
-  } catch {
-    config.scheduled_minute = previous;
-    useAlert(t('CRM.PROSPECTING.AUTO_SEARCH.UPDATE_ERROR'));
-  }
-};
+const onChangeScheduledHour = (config, hour) =>
+  onChangeScheduledTime(config, { hour, minute: localTime(config).minute });
+
+const onChangeScheduledMinute = (config, minute) =>
+  onChangeScheduledTime(config, { hour: localTime(config).hour, minute });
 
 const onChangeDesiredCount = async (config, count) => {
   const previous = config.desired_count;
@@ -485,7 +523,7 @@ onMounted(async () => {
               </label>
               <div class="flex items-center gap-1">
                 <ComboBox
-                  :model-value="config.scheduled_hour"
+                  :model-value="localTime(config).hour"
                   :options="hourOptions"
                   class="w-16"
                   @update:model-value="
@@ -494,7 +532,7 @@ onMounted(async () => {
                 />
                 <span class="text-n-slate-11">:</span>
                 <ComboBox
-                  :model-value="config.scheduled_minute"
+                  :model-value="localTime(config).minute"
                   :options="minuteOptions"
                   class="w-16"
                   @update:model-value="
