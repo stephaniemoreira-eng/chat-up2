@@ -258,6 +258,35 @@ watch(
   { immediate: true }
 );
 
+// Título da aba e favicon por conta (Up Sales) — a instalação inteira (INSTALLATION_NAME /
+// LOGO_THUMBNAIL em vueapp.html.erb) é travada pela licença do fork da fazer.ai e revertida
+// diariamente (ver docs/fork/ADR-0005-white-label-e-ux.md); NÃO tenta contornar isso. Em vez
+// disso, ajusta document.title/favicon aqui no cliente, DEPOIS que a página já carregou — mesma
+// ideia do brand_color acima, só que pro <title>/<link rel="icon"> em vez de uma CSS var. Só age
+// quando há dado (nome da conta sempre existe; brand_logo_url só depois de configurado em
+// Configurações > Marca), então sem conta ativa (ex.: tela de login, que nunca monta este
+// componente) o valor renderizado pelo servidor nunca é tocado.
+watch(
+  () => currentAccount.value?.name,
+  accountName => {
+    if (accountName) document.title = accountName;
+  },
+  { immediate: true }
+);
+
+watch(
+  () => currentAccount.value?.settings?.brand_logo_url,
+  logoUrl => {
+    if (!logoUrl) return;
+    document
+      .querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')
+      .forEach(link => {
+        link.href = logoUrl;
+      });
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
   store.dispatch('labels/get');
   store.dispatch('inboxes/get');
