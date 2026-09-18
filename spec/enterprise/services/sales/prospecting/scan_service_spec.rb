@@ -102,6 +102,50 @@ RSpec.describe Sales::Prospecting::ScanService do
     end
   end
 
+  describe 'phone number backfill from Place Details' do
+    let(:place_details) do
+      { business_status: 'OPERATIONAL', primary_type: 'beauty_salon', has_opening_hours: false,
+        has_website: true, has_phone: true, phone_number: '+551332221234', rating: 4.5, user_ratings_total: 25 }
+    end
+    let(:contact) { create(:contact, account: account, phone_number: nil) }
+    let(:lead) { create(:sales_lead, account: account, contact: contact) }
+
+    before { result.update!(lead: lead) }
+
+    it "backfills the contact's phone number when it doesn't have one yet" do
+      described_class.call(result)
+
+      expect(contact.reload.phone_number).to eq('+551332221234')
+      expect(result.reload.phone_number).to eq('+551332221234')
+    end
+
+    it 'never overwrites an existing phone number on the contact' do
+      contact.update!(phone_number: '+5511900000000')
+
+      described_class.call(result)
+
+      expect(contact.reload.phone_number).to eq('+5511900000000')
+    end
+
+    it 'does not backfill when Place Details has no usable phone number' do
+      allow(Sales::Prospecting::PlaceDetailsService).to receive(:call).and_return(place_details.merge(phone_number: nil))
+
+      described_class.call(result)
+
+      expect(contact.reload.phone_number).to be_nil
+    end
+
+    it 'logs an alert instead of raising when the number is already used by another contact' do
+      create(:contact, account: account, phone_number: '+551332221234')
+
+      expect { described_class.call(result) }.not_to raise_error
+
+      expect(contact.reload.phone_number).to be_nil
+      expect(result.reload.scan_status).to eq('concluido')
+      expect(result.reload.scan_evidencias['alertas']).to include(a_string_matching(/telefone/))
+    end
+  end
+
   describe 'Instagram retry on likely IP block' do
     let(:blocked_scanner_response) do
       {

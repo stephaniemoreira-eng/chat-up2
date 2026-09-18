@@ -35,6 +35,8 @@ class Sales::Prospecting::ScanService
     pagespeed = Sales::Prospecting::PageSpeedService.call(@result.website)
     scanner = Sales::Prospecting::ScannerClientService.call(website: @result.website, empresa: @result.name)
 
+    backfill_phone_number(place_details)
+
     website = website_pillar(pagespeed, scanner)
     maps = maps_pillar(place_details)
     instagram = instagram_pillar(scanner)
@@ -84,6 +86,25 @@ class Sales::Prospecting::ScanService
     Sales::Prospecting::ScanResultJob.set(wait: INSTAGRAM_RETRY_DELAY).perform_later(@result.id)
     @alertas << "Instagram: perfil encontrado mas sem dados (provavel bloqueio temporario de IP) -- novo scan agendado em #{INSTAGRAM_RETRY_DELAY.inspect}."
     previous_retry_count + 1
+  end
+
+  # A busca inicial (Text Search) so aceita internationalPhoneNumber em E.164 estrito e descarta o
+  # resto -- um numero valido que o Google só expoe aqui, no Place Details, nunca chegava ao
+  # contato. So escreve se o contato ainda nao tem telefone -- nunca sobrescreve um numero real.
+  def backfill_phone_number(place_details)
+    return if place_details.blank?
+
+    phone = place_details[:phone_number]
+    return if phone.blank?
+
+    contact = @result.lead&.contact
+    return if contact.blank? || contact.phone_number.present?
+
+    if contact.update(phone_number: phone)
+      @result.assign_attributes(phone_number: phone)
+    else
+      @alertas << "Nao foi possivel salvar o telefone encontrado no Google Maps: #{contact.errors.full_messages.join(', ')}"
+    end
   end
 
   # ---- Website (30) ----------------------------------------------------------------------

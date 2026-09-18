@@ -71,7 +71,7 @@ class Sales::Prospecting::GooglePlacesSearchService
         place_id: place['id'],
         name: place.dig('displayName', 'text'),
         address: place['formattedAddress'],
-        phone_number: normalized_phone_number(place['internationalPhoneNumber']),
+        phone_number: Sales::Prospecting::PhoneNormalizer.normalize(place['internationalPhoneNumber']),
         website: place['websiteUri'],
         rating: place['rating'],
         user_ratings_total: place['userRatingCount']

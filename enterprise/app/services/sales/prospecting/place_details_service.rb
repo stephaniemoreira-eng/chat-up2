@@ -4,7 +4,7 @@
 class Sales::Prospecting::PlaceDetailsService
   ENDPOINT = 'https://places.googleapis.com/v1/places'.freeze
   FIELD_MASK = 'businessStatus,primaryType,regularOpeningHours,websiteUri,nationalPhoneNumber,' \
-               'rating,userRatingCount'.freeze
+               'internationalPhoneNumber,rating,userRatingCount'.freeze
   TIMEOUT_SECONDS = 15
 
   def self.call(place_id)
@@ -34,6 +34,7 @@ class Sales::Prospecting::PlaceDetailsService
       has_opening_hours: data['regularOpeningHours'].present?,
       has_website: data['websiteUri'].present?,
       has_phone: data['nationalPhoneNumber'].present?,
+      phone_number: Sales::Prospecting::PhoneNormalizer.normalize(data['internationalPhoneNumber']),
       rating: data['rating'],
       user_ratings_total: data['userRatingCount']
     }

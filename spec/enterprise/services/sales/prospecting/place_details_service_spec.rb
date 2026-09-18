@@ -25,8 +25,25 @@ RSpec.describe Sales::Prospecting::PlaceDetailsService do
 
       expect(result).to eq(
         business_status: 'OPERATIONAL', primary_type: 'beauty_salon', has_opening_hours: true,
-        has_website: true, has_phone: true, rating: 4.5, user_ratings_total: 25
+        has_website: true, has_phone: true, phone_number: nil, rating: 4.5, user_ratings_total: 25
       )
+    end
+
+    it 'extracts and normalizes the international phone number when available' do
+      response = instance_double(
+        HTTParty::Response, success?: true,
+                             parsed_response: {
+                               'businessStatus' => 'OPERATIONAL', 'primaryType' => 'beauty_salon',
+                               'regularOpeningHours' => { 'periods' => [] }, 'websiteUri' => 'https://x.com',
+                               'nationalPhoneNumber' => '(13) 3222-1234', 'internationalPhoneNumber' => '+55 13 3222-1234',
+                               'rating' => 4.5, 'userRatingCount' => 25
+                             }
+      )
+      allow(HTTParty).to receive(:get).and_return(response)
+
+      result = described_class.call('p1')
+
+      expect(result[:phone_number]).to eq('+551332221234')
     end
 
     it 'returns nil when the place is no longer found' do
