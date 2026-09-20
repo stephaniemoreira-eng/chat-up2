@@ -15,23 +15,28 @@ module OperationalEngine
 
     has_many :events, class_name: 'OperationalEngine::LeadEvent', foreign_key: :lead_id, inverse_of: :lead
 
-    enum etapa_prospect: string_enum(%w[backlog contatado em_conversa qualificado agendado]), validate: true, prefix: true
-    enum lead_status: string_enum(%w[ativo encerrado]), validate: true, prefix: true
-    enum qualificacao_status: string_enum(%w[em_qualificacao qualificado nao_qualificado nao_concluido]), validate: true, prefix: true
-    enum recuperacao_status: string_enum(%w[inativa ativa]), validate: true, prefix: true
-    enum agendamento_status: string_enum(%w[nao_iniciado em_andamento confirmado callback_registrado callback_realizado cancelado]),
+    # Forma nova (nome, valores, **options) de propósito: a forma antiga `enum coluna: valores`
+    # combinada com outras options no mesmo hash é ambigua para o Ruby 3 (kwargs vs. hash
+    # posicional) e o Rails silenciosamente le `name`/`values` como nil.
+    enum :etapa_prospect, string_enum(%w[backlog contatado em_conversa qualificado agendado]), validate: true, prefix: true
+    enum :lead_status, string_enum(%w[ativo encerrado]), validate: true, prefix: true
+    enum :qualificacao_status, string_enum(%w[em_qualificacao qualificado nao_qualificado nao_concluido]), validate: true, prefix: true
+    enum :recuperacao_status, string_enum(%w[inativa ativa]), validate: true, prefix: true
+    enum :agendamento_status,
+         string_enum(%w[nao_iniciado em_andamento confirmado callback_registrado callback_realizado cancelado]),
          validate: true, prefix: true
-    enum orcamento_status: string_enum(%w[nao_solicitado em_dimensionamento informado personalizado]), validate: true, prefix: true
-    enum resultado_comercial: string_enum(%w[em_aberto ganho perdido]), validate: true, prefix: true
-    enum modo_atendimento: string_enum(%w[lavinia humano]), validate: true, prefix: true
-    enum frente_operacional: string_enum(%w[prospeccao comercial]), validate: true, prefix: true
-    enum etapa_comercial: string_enum(%w[oportunidade em_acompanhamento ganho perdido]), validate: { allow_nil: true }, prefix: true
-    enum propensao_fechamento: string_enum(%w[nao_classificado frio morno quente]), validate: true, prefix: true
-    enum intencao_comercial: string_enum(%w[informativo avaliando quer_orcamento quer_avancar]), validate: { allow_nil: true }, prefix: true
-    enum cobertura_status: string_enum(%w[atendida fora_cobertura a_validar nao_identificada]), validate: { allow_nil: true }, prefix: true
-    enum tipo_conversao: string_enum(%w[agendamento callback]), validate: { allow_nil: true }, prefix: true
-    enum motivo_handoff: string_enum(%w[avanco_comercial orcamento_personalizado excecao]), validate: { allow_nil: true }, prefix: true
-    enum motivo_encerramento: string_enum(%w[sem_resposta sem_interesse nao_qualificado cliente_atual nao_contatar fora_escopo outro]),
+    enum :orcamento_status, string_enum(%w[nao_solicitado em_dimensionamento informado personalizado]), validate: true, prefix: true
+    enum :resultado_comercial, string_enum(%w[em_aberto ganho perdido]), validate: true, prefix: true
+    enum :modo_atendimento, string_enum(%w[lavinia humano]), validate: true, prefix: true
+    enum :frente_operacional, string_enum(%w[prospeccao comercial]), validate: true, prefix: true
+    enum :etapa_comercial, string_enum(%w[oportunidade em_acompanhamento ganho perdido]), validate: { allow_nil: true }, prefix: true
+    enum :propensao_fechamento, string_enum(%w[nao_classificado frio morno quente]), validate: true, prefix: true
+    enum :intencao_comercial, string_enum(%w[informativo avaliando quer_orcamento quer_avancar]), validate: { allow_nil: true }, prefix: true
+    enum :cobertura_status, string_enum(%w[atendida fora_cobertura a_validar nao_identificada]), validate: { allow_nil: true }, prefix: true
+    enum :tipo_conversao, string_enum(%w[agendamento callback]), validate: { allow_nil: true }, prefix: true
+    enum :motivo_handoff, string_enum(%w[avanco_comercial orcamento_personalizado excecao]), validate: { allow_nil: true }, prefix: true
+    enum :motivo_encerramento,
+         string_enum(%w[sem_resposta sem_interesse nao_qualificado cliente_atual nao_contatar fora_escopo outro]),
          validate: { allow_nil: true }, prefix: true
 
     before_validation :normalize_telefone
