@@ -9,7 +9,11 @@ module OperationalEngine
 
     belongs_to :lead, class_name: 'OperationalEngine::Lead', foreign_key: :lead_id, inverse_of: :events
 
-    enum source: %w[system lavinia human commercial import].index_by(&:itself), validate: true, prefix: true
+    # scopes: false because Rails' enum scope for the "import" value would define
+    # LeadEvent.import, colliding with the class method the activerecord-import gem already
+    # defines -- prefix: true only renames the instance predicate (#source_import?), not the
+    # class-level scope.
+    enum source: %w[system lavinia human commercial import].index_by(&:itself), validate: true, prefix: true, scopes: false
 
     validates :event_type, presence: true
 
