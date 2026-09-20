@@ -9,7 +9,7 @@
 # (origem_lead, modo_entrada is the exception -- see below, tipo_entrada, relacao_atual,
 # motivo_perda) stay plain TEXT: inventing a closed list for them would be a business-rule
 # decision this migration has no authority to make (§32).
-class CreateOperationalEngineSchema < ActiveRecord::Migration[7.1]
+class CreateOperationalEngineSchema < OperationalEngine::Migration
   def up
     enable_extension 'pgcrypto' unless extension_enabled?('pgcrypto')
 
