@@ -4,22 +4,29 @@
 # in Coolify (never implicit), so a schema that hasn't caught up fails loudly instead of the
 # app coming up against tables that don't exist yet.
 namespace :oe do
+  # Rails 7.2 removed Connection#schema_migration (the convenience method that used to build
+  # this); building SchemaMigration/InternalMetadata straight from the pool is the replacement --
+  # see https://github.com/rails/rails/blob/v7.2.3.1/activerecord/lib/active_record/schema_migration.rb.
+  # Both need the pool explicitly, or they'd silently default to ActiveRecord::Base's.
+  def operational_engine_migration_context
+    pool = OperationalEngine::Record.connection_pool
+    ActiveRecord::MigrationContext.new(
+      Rails.root.join('db/operational_engine_migrate').to_s,
+      ActiveRecord::SchemaMigration.new(pool),
+      ActiveRecord::InternalMetadata.new(pool)
+    )
+  end
+
   desc 'Run pending Operational Engine (Supabase) migrations'
   task migrate: :environment do
-    context = ActiveRecord::MigrationContext.new(
-      Rails.root.join('db/operational_engine_migrate').to_s,
-      OperationalEngine::Record.connection.schema_migration
-    )
+    context = operational_engine_migration_context
     context.migrate
     puts "Operational Engine schema at version #{context.current_version}"
   end
 
   desc 'Roll back the last Operational Engine (Supabase) migration'
   task rollback: :environment do
-    context = ActiveRecord::MigrationContext.new(
-      Rails.root.join('db/operational_engine_migrate').to_s,
-      OperationalEngine::Record.connection.schema_migration
-    )
+    context = operational_engine_migration_context
     context.rollback
     puts "Operational Engine schema at version #{context.current_version}"
   end
