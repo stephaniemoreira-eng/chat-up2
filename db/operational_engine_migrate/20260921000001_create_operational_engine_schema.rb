@@ -9,12 +9,19 @@
 # (origem_lead, modo_entrada is the exception -- see below, tipo_entrada, relacao_atual,
 # motivo_perda) stay plain TEXT: inventing a closed list for them would be a business-rule
 # decision this migration has no authority to make (§32).
+#
+# `conta_id` is NOT in the SSOT §6.1 field list: the SSOT assumed one Supabase project per
+# client. Decisão de 20/09/2026: este projeto é compartilhado por todos os clientes Up Sales,
+# não só a Lava e Pronto, então o isolamento por tenant precisa existir no schema desde já --
+# sem FK real (Supabase não enxerga o Postgres do Chatwoot), mesmo padrão de
+# inbox_entrada_id/upsales_contact_id.
 class CreateOperationalEngineSchema < OperationalEngine::Migration
   def up
     enable_extension 'pgcrypto' unless extension_enabled?('pgcrypto')
 
     create_table :leads, id: false do |t|
       t.uuid :lead_id, primary_key: true, default: -> { 'gen_random_uuid()' }
+      t.bigint :conta_id, null: false
       t.text :telefone, null: false
       t.text :nome
       t.text :empresa
@@ -91,7 +98,8 @@ class CreateOperationalEngineSchema < OperationalEngine::Migration
       t.timestamptz :atualizado_em, null: false, default: -> { 'now()' }
     end
 
-    add_index :leads, :telefone, unique: true
+    add_index :leads, %i[conta_id telefone], unique: true
+    add_index :leads, :conta_id
     add_index :leads, :entrada_operacao_em
     add_index :leads, %i[lead_status etapa_prospect]
     add_index :leads, :proxima_recuperacao_em,

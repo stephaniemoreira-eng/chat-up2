@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe OperationalEngine::LeadEvent do
-  let(:lead) { OperationalEngine::Lead.create!(telefone: "+551399#{rand(1_000_000..9_999_999)}") }
+  let(:lead) { OperationalEngine::Lead.create!(conta_id: 1, telefone: "+551399#{rand(1_000_000..9_999_999)}") }
 
   def build_event(**attrs)
     described_class.create!({ lead: lead, event_type: 'lead_criado', source: 'system' }.merge(attrs))

@@ -2,7 +2,13 @@ require 'rails_helper'
 
 RSpec.describe OperationalEngine::Lead do
   def build_lead(**attrs)
-    described_class.create!({ telefone: "+551399#{rand(1_000_000..9_999_999)}" }.merge(attrs))
+    described_class.create!({ conta_id: 1, telefone: "+551399#{rand(1_000_000..9_999_999)}" }.merge(attrs))
+  end
+
+  describe 'conta_id' do
+    it 'exige presenca' do
+      expect { build_lead(conta_id: nil) }.to raise_error(ActiveRecord::RecordInvalid)
+    end
   end
 
   describe 'telefone' do
@@ -16,10 +22,16 @@ RSpec.describe OperationalEngine::Lead do
       expect { build_lead(telefone: nil) }.to raise_error(ActiveRecord::RecordInvalid)
     end
 
-    it 'exige unicidade' do
-      build_lead(telefone: '+5513991234567')
+    it 'exige unicidade por conta' do
+      build_lead(conta_id: 1, telefone: '+5513991234567')
 
-      expect { build_lead(telefone: '+5513991234567') }.to raise_error(ActiveRecord::RecordInvalid)
+      expect { build_lead(conta_id: 1, telefone: '+5513991234567') }.to raise_error(ActiveRecord::RecordInvalid)
+    end
+
+    it 'permite o mesmo numero em contas (clientes Up Sales) diferentes' do
+      build_lead(conta_id: 1, telefone: '+5513991234567')
+
+      expect { build_lead(conta_id: 2, telefone: '+5513991234567') }.not_to raise_error
     end
   end
 

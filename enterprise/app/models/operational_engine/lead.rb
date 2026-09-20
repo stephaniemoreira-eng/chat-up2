@@ -4,6 +4,10 @@
 #
 # Enums declarados a partir do valor congelado no SSOT §6.2, não por posição -- uma reordenação
 # nunca troca o significado de um valor já gravado.
+#
+# `conta_id` isola cada cliente Up Sales dentro do mesmo projeto Supabase compartilhado (decisão
+# de 20/09/2026, fora do §6.1 original da SSOT). `telefone` é único por conta, não globalmente --
+# dois clientes podem legitimamente ter um lead com o mesmo número.
 module OperationalEngine
   class Lead < OperationalEngine::Record
     self.table_name = 'leads'
@@ -41,7 +45,8 @@ module OperationalEngine
 
     before_validation :normalize_telefone
 
-    validates :telefone, presence: true, uniqueness: true
+    validates :conta_id, presence: true
+    validates :telefone, presence: true, uniqueness: { scope: :conta_id }
 
     private
 
