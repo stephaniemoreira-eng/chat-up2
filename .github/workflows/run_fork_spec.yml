@@ -89,6 +89,8 @@ jobs:
         run: |
           PGPASSWORD='' psql -h localhost -U postgres -c 'CREATE DATABASE operational_engine_test;'
           bundle exec rake oe:migrate
+          bundle exec rake oe:rollback
+          bundle exec rake oe:migrate
 
       - name: Run fork specs
         run: bundle exec rspec --profile=10 --format progress $SPEC_PATHS

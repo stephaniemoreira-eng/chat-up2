@@ -236,9 +236,11 @@ class CreateOperationalEngineSchema < OperationalEngine::Migration
   end
 
   def down
+    # Drop tables (and the triggers on them) before their functions -- Postgres refuses to
+    # drop a function while a trigger still depends on it.
     drop_table :lead_events
+    drop_table :leads
     execute 'DROP FUNCTION IF EXISTS lead_events_block_mutation()'
     execute 'DROP FUNCTION IF EXISTS leads_block_write_once()'
-    drop_table :leads
   end
 end
