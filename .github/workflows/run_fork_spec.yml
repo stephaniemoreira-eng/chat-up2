@@ -37,6 +37,7 @@ env:
     spec/enterprise/policies/sales
     spec/enterprise/services/sales
     spec/enterprise/controllers/api/v1/accounts/sales
+    spec/enterprise/models/operational_engine
 
 jobs:
   backend:
@@ -67,6 +68,9 @@ jobs:
 
     env:
       RAILS_ENV: test
+      # Same Postgres service as the primary database, second logical database -- standing in
+      # for Supabase here. Real Supabase is a separate provisioned instance in every other env.
+      OPERATIONAL_ENGINE_DATABASE_URL: postgres://postgres@localhost:5432/operational_engine_test
 
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +84,11 @@ jobs:
 
       - name: Load schema
         run: bundle exec rake db:schema:load
+
+      - name: Create and migrate the Operational Engine database
+        run: |
+          PGPASSWORD='' psql -h localhost -U postgres -c 'CREATE DATABASE operational_engine_test;'
+          bundle exec rake oe:migrate
 
       - name: Run fork specs
         run: bundle exec rspec --profile=10 --format progress $SPEC_PATHS
