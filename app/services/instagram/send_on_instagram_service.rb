@@ -1,4 +1,6 @@
 class Instagram::SendOnInstagramService < Instagram::BaseSendService
+  include Instagram::RequestOptions
+
   private
 
   def channel_class
@@ -13,9 +15,10 @@ class Instagram::SendOnInstagramService < Instagram::BaseSendService
     instagram_id = channel.instagram_id.presence || 'me'
 
     response = HTTParty.post(
-      "https://graph.instagram.com/v22.0/#{instagram_id}/messages",
+      "https://graph.instagram.com/#{GlobalConfigService.load('INSTAGRAM_API_VERSION', 'v22.0')}/#{instagram_id}/messages",
       body: message_content,
-      query: query
+      query: query,
+      **INSTAGRAM_REQUEST_OPTIONS
     )
 
     process_response(response, message_content)

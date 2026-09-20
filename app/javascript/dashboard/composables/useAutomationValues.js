@@ -11,6 +11,7 @@ import {
 import {
   MESSAGE_CONDITION_VALUES,
   PRIORITY_CONDITION_VALUES,
+  SENDER_TYPE_CONDITION_VALUES,
 } from 'dashboard/constants/automation';
 
 /**
@@ -55,19 +56,23 @@ export default function useAutomationValues() {
 
   const statusFilterOptions = computed(() => {
     const statusFilters = statusFilterItems.value;
-    return [
-      ...Object.keys(statusFilters).map(status => ({
-        id: status,
-        name: statusFilters[status].TEXT,
-      })),
-      { id: 'all', name: t('CHAT_LIST.FILTER_ALL') },
-    ];
+    return Object.keys(statusFilters).map(status => ({
+      id: status,
+      name: statusFilters[status].TEXT,
+    }));
   });
 
   const messageTypeOptions = computed(() =>
     MESSAGE_CONDITION_VALUES.map(item => ({
       id: item.id,
       name: t(`AUTOMATION.MESSAGE_TYPES.${item.i18nKey}`),
+    }))
+  );
+
+  const senderTypeOptions = computed(() =>
+    SENDER_TYPE_CONDITION_VALUES.map(item => ({
+      id: item.id,
+      name: t(`AUTOMATION.SENDER_TYPES.${item.i18nKey}`),
     }))
   );
 
@@ -108,6 +113,7 @@ export default function useAutomationValues() {
       statusFilterOptions: statusFilterOptions.value,
       priorityOptions: priorityOptions.value,
       messageTypeOptions: messageTypeOptions.value,
+      senderTypeOptions: senderTypeOptions.value,
       teams: teams.value,
       languages,
       countries,
@@ -150,6 +156,7 @@ export default function useAutomationValues() {
     statusFilterOptions,
     priorityOptions,
     messageTypeOptions,
+    senderTypeOptions,
     getConditionDropdownValues,
     getActionDropdownValues,
     agents,

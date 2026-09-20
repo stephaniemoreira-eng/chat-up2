@@ -108,7 +108,8 @@ RSpec.describe Sales::Prospecting::ScanService do
         has_website: true, has_phone: true, phone_number: '+551332221234', rating: 4.5, user_ratings_total: 25 }
     end
     let(:contact) { create(:contact, account: account, phone_number: nil) }
-    let(:lead) { create(:sales_lead, account: account, contact: contact) }
+    let(:pipeline) { create(:sales_pipeline, account: account) }
+    let(:lead) { create(:sales_lead, account: account, contact: contact, pipeline: pipeline) }
 
     before { result.update!(lead: lead) }
 

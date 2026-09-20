@@ -91,8 +91,13 @@ class ConversationReplyMailer < ApplicationMailer
 
   def sender_name(sender_email)
     if @inbox.friendly?
-      I18n.t('conversations.reply.email.header.friendly_name', sender_name: custom_sender_name, business_name: business_name,
-                                                               from_email: sender_email)
+      Email::SenderNameBuilder.new(
+        account: @account,
+        sender: current_message&.sender,
+        sender_email: sender_email,
+        sender_name: custom_sender_name,
+        business_name: business_name
+      ).build
     else
       I18n.t('conversations.reply.email.header.professional_name', business_name: business_name, from_email: sender_email)
     end
@@ -174,7 +179,7 @@ class ConversationReplyMailer < ApplicationMailer
   end
 
   def cc_bcc_emails
-    content_attributes = @conversation.messages.outgoing.last&.content_attributes
+    content_attributes = current_message&.content_attributes
 
     return [] unless content_attributes
     return [] unless content_attributes[:cc_emails] || content_attributes[:bcc_emails]
@@ -183,7 +188,7 @@ class ConversationReplyMailer < ApplicationMailer
   end
 
   def to_emails_from_content_attributes
-    content_attributes = @conversation.messages.outgoing.last&.content_attributes
+    content_attributes = current_message&.content_attributes
 
     return [] unless content_attributes
     return [] unless content_attributes[:to_emails]
@@ -202,10 +207,23 @@ class ConversationReplyMailer < ApplicationMailer
   end
 
   def choose_layout
-    return 'mailer/base' if branded_email_layout_action?
+    return 'mailer/base' if branded_email_layout_action? || csat_survey_action?
     return false if action_name == 'reply_without_summary' || action_name == 'email_reply'
 
     'mailer/base'
+  end
+
+  # Replies go out bare because they are turns inside an email thread, and wrapping each one
+  # in a branded card would clutter the exchange. The CSAT survey is the opposite: a
+  # self-contained system message that closes the conversation, and the layout is what gives
+  # it the installation's logo and colours. This is the file layout, which every other
+  # notification already uses; replacing it with a database one stays premium.
+  def csat_survey_action?
+    return @message.input_csat? if @message.present?
+
+    # any?, not all?: the notification debounce can batch a plain reply together with the
+    # survey, and that batch still has to carry the branding the survey depends on.
+    @messages.present? && @messages.any?(&:input_csat?)
   end
 
   def branded_email_layout_action?

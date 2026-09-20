@@ -10,6 +10,8 @@ class Webhooks::WhatsappController < ActionController::API
       return
     end
 
+    return head :ok if tracking_events_only?
+
     perform_whatsapp_events_job
   end
 
@@ -29,6 +31,13 @@ class Webhooks::WhatsappController < ActionController::API
     head :unauthorized
   rescue Whatsapp::IncomingMessageBaileysService::MessageNotFoundError
     head :not_found
+  end
+
+  def tracking_events_only?
+    return false unless params[:object] == 'whatsapp_business_account'
+
+    changes = params.fetch(:entry, []).flat_map { |entry| entry.fetch(:changes, []) }
+    changes.present? && changes.all? { |change| change[:field] == 'tracking_events' }
   end
 
   def valid_token?(token)
@@ -62,18 +71,10 @@ class Webhooks::WhatsappController < ActionController::API
     metadata = params.dig(:entry, 0, :changes, 0, :value, :metadata)
     return if metadata.blank?
 
-    phone_number = normalized_phone_number(metadata[:display_phone_number])
-    phone_number_id = metadata[:phone_number_id]
-    channel = Channel::Whatsapp.find_by(phone_number: phone_number)
-
-    return channel if channel && channel.provider_config['phone_number_id'] == phone_number_id
-  end
-
-  def normalized_phone_number(phone_number)
-    return if phone_number.blank?
-
-    phone_number = phone_number.to_s
-    phone_number.start_with?('+') ? phone_number : "+#{phone_number}"
+    Whatsapp::WebhookChannelFinderService.new(
+      display_phone_number: metadata[:display_phone_number],
+      phone_number_id: metadata[:phone_number_id]
+    ).perform
   end
 
   def inactive_whatsapp_number?

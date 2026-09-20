@@ -192,6 +192,89 @@ describe Whatsapp::IncomingMessageBaileysService do
         expect(inbox.channel.provider_connection['error']).to be_nil
       end
 
+      it 'persists the quarantine reported with a reconnect loop and clears it on the next update' do
+        params = base_params.merge(
+          {
+            data: {
+              error: 'reconnect_loop_detected',
+              quarantine: { strikes: 3, until: '2026-07-31T12:00:00.000Z' }
+            }
+          }
+        )
+
+        described_class.new(inbox: inbox, params: params).perform
+
+        expect(inbox.channel.provider_connection).to include(
+          'error' => I18n.t('errors.inboxes.channel.provider_connection.reconnect_loop_detected'),
+          'quarantine' => { 'strikes' => 3, 'until' => '2026-07-31T12:00:00.000Z' }
+        )
+
+        next_cycle = base_params.merge({ data: { connection: 'connecting' } })
+        described_class.new(inbox: inbox, params: next_cycle).perform
+
+        expect(inbox.channel.reload.provider_connection['quarantine']).to be_nil
+      end
+
+      # The connection keeps receiving and passing health checks while every send times
+      # out, so this webhook is the only thing that says so. `action` is what tells an
+      # operator whether the provider already recreated the socket or is holding off —
+      # and holding off is when a human has to step in.
+      it 'persists a reported send stall and clears it only when the connection reopens' do
+        params = base_params.merge(
+          {
+            data: {
+              error: 'send_stall_detected',
+              sendStall: {
+                consecutiveTimeouts: 3,
+                stalledForMs: 120_000,
+                action: 'suppressed',
+                until: '2026-08-21T12:00:00.000Z'
+              }
+            }
+          }
+        )
+
+        described_class.new(inbox: inbox, params: params).perform
+
+        expect(inbox.channel.provider_connection).to include(
+          'error' => I18n.t('errors.inboxes.channel.provider_connection.send_stall_detected'),
+          'send_stall' => {
+            'consecutive_timeouts' => 3,
+            'stalled_for_ms' => 120_000,
+            'action' => 'suppressed',
+            'until' => '2026-08-21T12:00:00.000Z'
+          }
+        )
+
+        # The provider reports a stall once per episode. An unrelated update in the
+        # meantime — a standalone reachoutTimeLock push carries no sendStall — must not
+        # clear the warning, because nothing would ever say it again while the connection
+        # is still mute.
+        unrelated = base_params.merge(
+          { data: { reachoutTimeLock: { isActive: false } } }
+        )
+        described_class.new(inbox: inbox, params: unrelated).perform
+
+        expect(inbox.channel.reload.provider_connection['send_stall']).to include(
+          'consecutive_timeouts' => 3
+        )
+        # The error string is the only half of this warning an operator can see:
+        # provider_connection_admin_data serializes error and qr_data_url, and send_stall
+        # reaches no serializer. Preserving the detail without the string preserves nothing
+        # anyone reads.
+        expect(inbox.channel.provider_connection['error']).to eq(
+          I18n.t('errors.inboxes.channel.provider_connection.send_stall_detected')
+        )
+
+        # `open` is a NEW socket, hence a new keystore mutex, whether the provider
+        # restarted it or WhatsApp dropped it. That is the one event that means recovery.
+        next_update = base_params.merge({ data: { connection: 'open' } })
+        described_class.new(inbox: inbox, params: next_update).perform
+
+        expect(inbox.channel.reload.provider_connection['send_stall']).to be_nil
+        expect(inbox.channel.provider_connection['error']).to be_nil
+      end
+
       context 'with reach-out time-lock (error 463 / account restriction)' do
         let(:reachout_data) do
           { isActive: true, timeEnforcementEnds: '2026-06-19T21:52:39.000Z', enforcementType: 'RESTRICT_ALL_COMPANIONS' }
@@ -349,7 +432,7 @@ describe Whatsapp::IncomingMessageBaileysService do
       let(:timestamp) { Time.current.to_i }
       let(:raw_message) do
         {
-          key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511912345678@s.whatsapp.net', fromMe: false, addressingMode: 'lid' },
+          key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511998765432@s.whatsapp.net', fromMe: false, addressingMode: 'lid' },
           pushName: 'John Doe',
           messageTimestamp: timestamp,
           message: { conversation: 'Hello from Baileys' }
@@ -383,11 +466,11 @@ describe Whatsapp::IncomingMessageBaileysService do
           conversation = inbox.conversations.last
           contact = conversation.contact
 
-          expect(Channels::Whatsapp::BaileysUpdateContactAvatarJob).to have_been_enqueued.with(contact, inbox, '5511912345678')
+          expect(Channels::Whatsapp::BaileysUpdateContactAvatarJob).to have_been_enqueued.with(contact, inbox, '5511998765432')
         end
 
         it 'does not enqueue the contact avatar update job when contact already has avatar attached' do
-          contact = create(:contact, account: inbox.account, name: 'John Doe', phone_number: '+5511912345678')
+          contact = create(:contact, account: inbox.account, name: 'John Doe', phone_number: '+5511998765432')
           contact.avatar.attach(io: Rails.root.join('spec/assets/avatar.png').open, filename: 'avatar.png', content_type: 'image/png')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -456,8 +539,8 @@ describe Whatsapp::IncomingMessageBaileysService do
 
       context 'when message is a revoke (contact deleted for everyone)' do
         let(:original_message) do
-          contact = create(:contact, account: inbox.account, phone_number: '+5511912345678')
-          contact_inbox = create(:contact_inbox, contact: contact, inbox: inbox, source_id: '5511912345678')
+          contact = create(:contact, account: inbox.account, phone_number: '+5511998765432')
+          contact_inbox = create(:contact_inbox, contact: contact, inbox: inbox, source_id: '5511998765432')
           conversation = create(:conversation, contact: contact, inbox: inbox, contact_inbox: contact_inbox)
           create(:message, conversation: conversation, source_id: 'original_msg_id', content: 'secret message')
         end
@@ -545,12 +628,12 @@ describe Whatsapp::IncomingMessageBaileysService do
 
             expect(message).to be_present
             expect(message.content).to eq('Hello from Baileys')
-            expect(conversation.contact.name).to eq('5511912345678')
+            expect(conversation.contact.name).to eq('5511998765432')
             expect(message.message_type).to eq('outgoing')
           end
 
           it 'updates the contact name when name is the phone number and message has a pushName' do
-            create(:contact, account: inbox.account, name: '5511912345678')
+            create(:contact, account: inbox.account, name: '5511998765432')
 
             described_class.new(inbox: inbox, params: params).perform
 
@@ -560,7 +643,7 @@ describe Whatsapp::IncomingMessageBaileysService do
 
           it 'updates the contact name when name is the phone number and message has a verifiedBizName' do
             raw_message[:verifiedBizName] = 'Verified John'
-            create(:contact, account: inbox.account, name: '5511912345678')
+            create(:contact, account: inbox.account, name: '5511998765432')
 
             described_class.new(inbox: inbox, params: params).perform
 
@@ -592,7 +675,7 @@ describe Whatsapp::IncomingMessageBaileysService do
             described_class.new(inbox: inbox, params: params).perform
 
             conversation = inbox.conversations.last
-            expect(conversation.contact.name).to eq('5511912345678')
+            expect(conversation.contact.name).to eq('5511998765432')
           end
 
           it 'creates contact with phone number as name on incoming message if pushName is not present' do
@@ -602,12 +685,12 @@ describe Whatsapp::IncomingMessageBaileysService do
             described_class.new(inbox: inbox, params: params).perform
 
             conversation = inbox.conversations.last
-            expect(conversation.contact.name).to eq('5511912345678')
+            expect(conversation.contact.name).to eq('5511998765432')
           end
 
           it 'migrates existing phone-based contact inbox to LID-based when receiving message with LID' do
-            contact = create(:contact, account: inbox.account, name: 'Existing Contact', phone_number: '+5511912345678')
-            contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511912345678')
+            contact = create(:contact, account: inbox.account, name: 'Existing Contact', phone_number: '+5511998765432')
+            contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511998765432')
 
             described_class.new(inbox: inbox, params: params).perform
 
@@ -616,13 +699,13 @@ describe Whatsapp::IncomingMessageBaileysService do
 
             expect(contact_inbox.source_id).to eq('12345678')
             expect(contact.identifier).to eq('12345678@lid')
-            expect(contact.phone_number).to eq('+5511912345678')
+            expect(contact.phone_number).to eq('+5511998765432')
           end
 
           it 'creates a message on an existing conversation' do
             contact = create(:contact, account: inbox.account, name: 'John Doe')
             contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
-            existing_conversation = create(:conversation, inbox: inbox, contact_inbox: contact_inbox)
+            existing_conversation = create(:conversation, inbox: inbox, contact_inbox: contact_inbox, contact: contact)
 
             described_class.new(inbox: inbox, params: params).perform
 
@@ -649,7 +732,7 @@ describe Whatsapp::IncomingMessageBaileysService do
             # 5. By then, source_id should be set, so duplicate is prevented
 
             # Create contact and conversation that will be found
-            contact = create(:contact, account: inbox.account, identifier: '12345678@lid', phone_number: '+5511912345678')
+            contact = create(:contact, account: inbox.account, identifier: '12345678@lid', phone_number: '+5511998765432')
             contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
             conversation = create(:conversation, inbox: inbox, contact_inbox: contact_inbox, contact: contact)
 
@@ -741,7 +824,7 @@ describe Whatsapp::IncomingMessageBaileysService do
 
       context 'when message type is reaction' do
         let!(:message) do
-          contact = create(:contact, account: inbox.account, name: '5511912345678')
+          contact = create(:contact, account: inbox.account, name: '5511998765432')
           contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
           conversation = create(:conversation, inbox: inbox, contact_inbox: contact_inbox)
           create(:message, inbox: inbox, conversation: conversation, source_id: 'msg_123')
@@ -881,7 +964,7 @@ describe Whatsapp::IncomingMessageBaileysService do
               type: 'notify',
               messages: [
                 {
-                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511912345678@s.whatsapp.net', fromMe: false,
+                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511998765432@s.whatsapp.net', fromMe: false,
                          addressingMode: 'lid' },
                   message: { imageMessage: { caption: 'Hello from Baileys', mimetype: 'image/png' } },
                   pushName: 'John Doe'
@@ -934,7 +1017,7 @@ describe Whatsapp::IncomingMessageBaileysService do
               type: 'notify',
               messages: [
                 {
-                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511912345678@s.whatsapp.net', fromMe: false,
+                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511998765432@s.whatsapp.net', fromMe: false,
                          addressingMode: 'lid' },
                   message: { videoMessage: { caption: 'Hello from Baileys', mimetype: 'video/mp4' } },
                   pushName: 'John Doe'
@@ -978,7 +1061,7 @@ describe Whatsapp::IncomingMessageBaileysService do
               type: 'notify',
               messages: [
                 {
-                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511912345678@s.whatsapp.net', fromMe: false,
+                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511998765432@s.whatsapp.net', fromMe: false,
                          addressingMode: 'lid' },
                   message: { documentMessage: { fileName: filename } },
                   pushName: 'John Doe'
@@ -1030,7 +1113,7 @@ describe Whatsapp::IncomingMessageBaileysService do
               type: 'notify',
               messages: [
                 {
-                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511912345678@s.whatsapp.net', fromMe: false,
+                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511998765432@s.whatsapp.net', fromMe: false,
                          addressingMode: 'lid' },
                   message: { audioMessage: { mimetype: 'audio/opus' } },
                   pushName: 'John Doe'
@@ -1049,7 +1132,10 @@ describe Whatsapp::IncomingMessageBaileysService do
           attachment = message.attachments.last
           expect(attachment.file_type).to eq('audio')
           expect(attachment.file.filename.to_s).to eq("audio_msg_123_#{Time.current.strftime('%Y%m%d')}.opus")
-          expect(attachment.file.content_type).to eq('audio/opus')
+          # audio/ogg, not the audio/opus the payload declares: the container is Ogg either way and
+          # audio/ogg is the type registered for it, so this is what makes the note forwardable.
+          # WhatsApp Cloud rejects audio/opus with 131053, and only classifies audio/ogg as voice.
+          expect(attachment.file.content_type).to eq('audio/ogg')
         end
       end
 
@@ -1062,7 +1148,7 @@ describe Whatsapp::IncomingMessageBaileysService do
               type: 'notify',
               messages: [
                 {
-                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511912345678@s.whatsapp.net', fromMe: false,
+                  key: { id: 'msg_123', remoteJid: '12345678@lid', remoteJidAlt: '5511998765432@s.whatsapp.net', fromMe: false,
                          addressingMode: 'lid' },
                   message: { stickerMessage: { mimetype: 'image/png' } },
                   pushName: 'John Doe'
@@ -1088,7 +1174,7 @@ describe Whatsapp::IncomingMessageBaileysService do
       context 'when processing multiple messages' do
         it 'creates separate contacts and conversations for each message' do
           raw_message1 = {
-            key: { id: 'msg_123', remoteJid: '5511912345678@s.whatsapp.net', remoteJidAlt: '12345678@lid', fromMe: false, addressingMode: 'pn' },
+            key: { id: 'msg_123', remoteJid: '5511998765432@s.whatsapp.net', remoteJidAlt: '12345678@lid', fromMe: false, addressingMode: 'pn' },
             pushName: 'John Doe',
             messageTimestamp: timestamp,
             message: { conversation: 'Hello from Baileys' }
@@ -1129,7 +1215,7 @@ describe Whatsapp::IncomingMessageBaileysService do
 
       context 'when jid type is lid' do
         it 'processes the message with phone number from addressingMode pn' do
-          raw_message[:key][:remoteJid] = '5511912345678@s.whatsapp.net'
+          raw_message[:key][:remoteJid] = '5511998765432@s.whatsapp.net'
           raw_message[:key][:remoteJidAlt] = '12345678@lid'
           raw_message[:key][:addressingMode] = 'pn'
 
@@ -1139,7 +1225,7 @@ describe Whatsapp::IncomingMessageBaileysService do
           message = conversation.messages.last
 
           expect(message).to be_present
-          expect(conversation.contact.phone_number).to eq('+5511912345678')
+          expect(conversation.contact.phone_number).to eq('+5511998765432')
         end
       end
 
@@ -1165,24 +1251,24 @@ describe Whatsapp::IncomingMessageBaileysService do
         end
 
         it 'updates existing contact_inbox from phone to LID source_id' do
-          contact = create(:contact, account: inbox.account, phone_number: '+5511912345678', identifier: nil)
-          create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511912345678')
+          contact = create(:contact, account: inbox.account, phone_number: '+5511998765432', identifier: nil)
+          create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511998765432')
 
           described_class.new(inbox: inbox, params: params).perform
 
           contact_inbox = inbox.contact_inboxes.find_by(contact: contact)
           expect(contact_inbox.source_id).to eq('12345678')
           expect(contact.reload.identifier).to eq('12345678@lid')
-          expect(contact.phone_number).to eq('+5511912345678')
+          expect(contact.phone_number).to eq('+5511998765432')
         end
 
         it 'reuses a contact saved with the Brazilian ninth digit when the reply arrives without it' do
           # Regression: the agent saved the number with the ninth digit and outbound
           # normalization was skipped; the reply delivers the canonical number without
           # it and must not spawn a duplicate contact in a new conversation.
-          raw_message[:key][:remoteJidAlt] = '551112345678@s.whatsapp.net'
-          contact = create(:contact, account: inbox.account, phone_number: '+5511912345678', identifier: nil)
-          contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511912345678')
+          raw_message[:key][:remoteJidAlt] = '551198765432@s.whatsapp.net'
+          contact = create(:contact, account: inbox.account, phone_number: '+5511998765432', identifier: nil)
+          contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511998765432')
           conversation = create(:conversation, inbox: inbox, contact: contact, contact_inbox: contact_inbox)
 
           expect do
@@ -1191,12 +1277,12 @@ describe Whatsapp::IncomingMessageBaileysService do
 
           expect(contact_inbox.reload.source_id).to eq('12345678')
           expect(contact.reload.identifier).to eq('12345678@lid')
-          expect(contact.phone_number).to eq('+551112345678')
+          expect(contact.phone_number).to eq('+551198765432')
           expect(conversation.reload.messages.last.content).to eq('Hello from Baileys')
         end
 
         it 'does not update contact_inbox if source_id is already LID' do
-          contact = create(:contact, account: inbox.account, phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, phone_number: '+5511998765432', identifier: '12345678@lid')
           contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1213,11 +1299,11 @@ describe Whatsapp::IncomingMessageBaileysService do
 
           described_class.new(inbox: inbox, params: params).perform
 
-          expect(contact.reload.phone_number).to eq('+5511912345678')
+          expect(contact.reload.phone_number).to eq('+5511998765432')
         end
 
         it 'updates contact name if it matches phone number' do
-          contact = create(:contact, account: inbox.account, name: '5511912345678', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: '5511998765432', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1228,7 +1314,7 @@ describe Whatsapp::IncomingMessageBaileysService do
         it 'updates contact name when stored name is a phone variant missing the Brazilian 9' do
           # The contact was registered without the "9"; phone normalization later aligned
           # phone_number to the canonical number, but the name kept the stale digits.
-          contact = create(:contact, account: inbox.account, name: '551112345678', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: '551198765432', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1237,7 +1323,7 @@ describe Whatsapp::IncomingMessageBaileysService do
         end
 
         it 'updates contact name when stored name is a phone number with a leading +' do
-          contact = create(:contact, account: inbox.account, name: '+5511912345678', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: '+5511998765432', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1246,7 +1332,7 @@ describe Whatsapp::IncomingMessageBaileysService do
         end
 
         it 'updates contact name if it matches LID source_id' do
-          contact = create(:contact, account: inbox.account, name: '12345678', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: '12345678', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1255,7 +1341,7 @@ describe Whatsapp::IncomingMessageBaileysService do
         end
 
         it 'updates contact name if it matches identifier' do
-          contact = create(:contact, account: inbox.account, name: '12345678@lid', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: '12345678@lid', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1264,7 +1350,7 @@ describe Whatsapp::IncomingMessageBaileysService do
         end
 
         it 'does not update contact name if it is different from phone number, source_id, and identifier' do
-          contact = create(:contact, account: inbox.account, name: 'Existing Name', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: 'Existing Name', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1273,7 +1359,7 @@ describe Whatsapp::IncomingMessageBaileysService do
         end
 
         it 'does not overwrite a digit-only name that is not this contact phone or LID' do
-          contact = create(:contact, account: inbox.account, name: '99887766', phone_number: '+5511912345678', identifier: '12345678@lid')
+          contact = create(:contact, account: inbox.account, name: '99887766', phone_number: '+5511998765432', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1328,6 +1414,36 @@ describe Whatsapp::IncomingMessageBaileysService do
 
           expect(conversation.reload.agent_last_seen_at).to eq(Time.current)
           expect(conversation.assignee_last_seen_at).to eq(Time.current)
+        end
+
+        # The provider echoes back the receipt this app sent, and taking it for a device of
+        # this account clears the unread badge of a conversation nobody here has opened.
+        it 'leaves the markers alone when the read receipt is our own echoed back' do
+          update_payload[:key][:fromMe] = false
+          update_payload[:update][:status] = 4
+          conversation.update!(agent_last_seen_at: 1.day.ago, assignee_last_seen_at: 1.day.ago)
+          Whatsapp::SelfReadReceipts.record(conversation, [message])
+
+          expect do
+            described_class.new(inbox: inbox, params: params).perform
+          end.to(not_change { conversation.reload.agent_last_seen_at })
+
+          Redis::Alfred.delete(Whatsapp::SelfReadReceipts.key(conversation, message.source_id))
+        end
+
+        # `messages.update` is a batch, so a lookup per update would put a Redis round trip on
+        # each one; the ids of the whole webhook are asked for once, as the session handler does.
+        it 'reads the acknowledged ids once for the whole batch' do
+          second = create(:message, inbox: inbox, conversation: conversation, source_id: 'msg_124', status: 'sent')
+          params[:data] = [
+            { key: { id: message.source_id, fromMe: false }, update: { status: 4 } },
+            { key: { id: second.source_id, fromMe: false }, update: { status: 4 } }
+          ]
+          allow(Whatsapp::SelfReadReceipts).to receive(:acknowledged).and_call_original
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(Whatsapp::SelfReadReceipts).to have_received(:acknowledged).with(conversation, %w[msg_123 msg_124]).once
         end
 
         it "does not downgrade a 'read' message to delivered" do
@@ -1402,6 +1518,109 @@ describe Whatsapp::IncomingMessageBaileysService do
           expect(message.reload.content).to eq('New message content')
           expect(message.is_edited).to be(true)
           expect(message.previous_content).to eq(original_content)
+        end
+
+        it 'records the edit timestamp in milliseconds so a later update can be ordered against it' do
+          update_payload[:update] = {
+            message: { editedMessage: { message: { conversation: 'New message content' } } },
+            messageTimestamp: 1_700_000_000
+          }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.edited_at).to eq(1_700_000_000_000)
+        end
+
+        # A force restart or a cluster handoff leaves the discarded connection
+        # draining its webhooks while the replacement already handles new events,
+        # so an older edit retrying on the old one can land after a newer one.
+        it 'ignores an edit older than the one already applied' do
+          message.update!(edited_at: 1_700_000_060_000)
+          update_payload[:update] = {
+            message: { editedMessage: { message: { conversation: 'Stale message content' } } },
+            messageTimestamp: 1_700_000_000
+          }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.content).not_to eq('Stale message content')
+          expect(message.is_edited).to be_falsey
+        end
+
+        it 'applies an edit newer than the one already applied' do
+          message.update!(edited_at: 1_700_000_000_000)
+          update_payload[:update] = {
+            message: { editedMessage: { message: { conversation: 'Newer message content' } } },
+            messageTimestamp: 1_700_000_060
+          }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.content).to eq('Newer message content')
+          expect(message.edited_at).to eq(1_700_000_060_000)
+        end
+
+        # Equal timestamps carry no order to respect, and WhatsApp stamps edits in
+        # whole seconds.
+        it 'applies an edit stamped in the same second as the one already applied' do
+          message.update!(edited_at: 1_700_000_000_000)
+          update_payload[:update] = {
+            message: { editedMessage: { message: { conversation: 'Same second content' } } },
+            messageTimestamp: 1_700_000_000
+          }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.content).to eq('Same second content')
+        end
+
+        # Refusing it would drop the edit outright, which is worse than applying
+        # it out of order.
+        it 'applies an edit that carries no timestamp' do
+          message.update!(edited_at: 1_700_000_060_000)
+          update_payload[:update] = { message: { editedMessage: { message: { conversation: 'Undated content' } } } }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.content).to eq('Undated content')
+        end
+
+        # Writing nil would erase what a later out-of-order edit is checked against.
+        it 'keeps the stored timestamp when an undated edit is applied' do
+          message.update!(edited_at: 1_700_000_060_000)
+          update_payload[:update] = { message: { editedMessage: { message: { conversation: 'Undated content' } } } }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.edited_at).to eq(1_700_000_060_000)
+        end
+
+        # A protobuf 64-bit field reaches us either as a number or as a { low, high }
+        # hash, and calling to_i on the hash would raise and drop the edit.
+        it 'reads a timestamp that arrives as a structured protobuf long' do
+          update_payload[:update] = {
+            message: { editedMessage: { message: { conversation: 'Structured stamp' } } },
+            messageTimestamp: { 'low' => 1_700_000_000, 'high' => 0, 'unsigned' => true }
+          }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.content).to eq('Structured stamp')
+          expect(message.edited_at).to eq(1_700_000_000_000)
+        end
+
+        # An edit that clears an image caption sends an empty string, and dropping it
+        # would leave the old caption on screen.
+        it 'applies an edit that clears the content' do
+          update_payload[:update] = {
+            message: { editedMessage: { message: { imageMessage: { caption: '' } } } },
+            messageTimestamp: 1_700_000_000
+          }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.content).to eq('')
+          expect(message.is_edited).to be(true)
         end
       end
     end

@@ -4,9 +4,13 @@
 # Table name: channel_whatsapp
 #
 #  id                             :bigint           not null, primary key
+#  business_management_token      :text
 #  message_templates              :jsonb
 #  message_templates_last_updated :datetime
 #  phone_number                   :string           not null
+#  phone_number_health            :jsonb            not null
+#  phone_number_health_checked_at :datetime
+#  phone_number_health_error      :string(500)
 #  provider                       :string           default("default")
 #  provider_config                :jsonb
 #  provider_connection            :jsonb
@@ -16,20 +20,27 @@
 #
 # Indexes
 #
-#  index_channel_whatsapp_on_phone_number      (phone_number) UNIQUE
-#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text])) USING gin
+#  index_channel_whatsapp_connection_state                   (((provider_connection ->> 'connection'::text))) WHERE ((provider)::text = ANY ((ARRAY['baileys'::character varying, 'zapi'::character varying, 'native'::character varying, 'uazapi'::character varying])::text[]))
+#  index_channel_whatsapp_on_phone_number                    (phone_number) UNIQUE
+#  index_channel_whatsapp_on_phone_number_health_checked_at  (phone_number_health_checked_at)
+#  index_channel_whatsapp_provider_connection                (provider_connection) WHERE ((provider)::text = ANY ((ARRAY['baileys'::character varying, 'zapi'::character varying, 'native'::character varying, 'uazapi'::character varying])::text[])) USING gin
+#  index_channel_whatsapp_session_id                         (((provider_config ->> 'session_id'::text))) UNIQUE WHERE ((provider)::text = ANY ((ARRAY['native'::character varying, 'uazapi'::character varying])::text[]))
 #
 # rubocop:enable Layout/LineLength
 
 class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLength
   include Channelable
   include Reauthorizable
+  # Session providers (native, uazapi) answer through this module; every override falls
+  # back to `super` for the cloud and legacy providers.
+  prepend Whatsapp::Session::ChannelExtension
 
   self.table_name = 'channel_whatsapp'
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
+  encrypts :business_management_token if Chatwoot.encryption_configured?
 
   # default at the moment is 360dialog lets change later.
-  PROVIDERS = %w[default whatsapp_cloud baileys zapi].freeze
+  PROVIDERS = (%w[default whatsapp_cloud baileys zapi] + Whatsapp::Session::PROVIDERS).freeze
   REACTION_SUPPORTED_PROVIDERS = %w[whatsapp_cloud baileys zapi].freeze
   # UI-relevant subset of the baileys new-chat message cap payload that we persist in
   # provider_connection. server_sent_timestamp is intentionally dropped (it changes on every
@@ -89,6 +100,16 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     else
       Whatsapp::Providers::Whatsapp360DialogService.new(whatsapp_channel: self)
     end
+  end
+
+  def template_access_token
+    return provider_config['api_key'] unless ChatwootApp.chatwoot_cloud? && provider_config['source'] == 'embedded_signup'
+
+    business_management_token.presence || provider_config['api_key']
+  end
+
+  def serializable_hash(options = nil)
+    super.except('business_management_token')
   end
 
   def use_internal_host?
@@ -185,11 +206,21 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     data = { connection: provider_connection['connection'] }
     data[:reachout_time_lock] = provider_connection['reachout_time_lock'] if provider_connection['reachout_time_lock'].present?
     data[:new_chat_cap] = provider_connection['new_chat_cap'] if provider_connection['new_chat_cap'].present?
-    if Current.account_user&.administrator?
-      data[:qr_data_url] = provider_connection['qr_data_url']
-      data[:error] = provider_connection['error']
-    end
+    # Agent-visible, unlike the QR and the error string: a stall carries no credential (a
+    # timeout count, a duration, what the provider decided to do and until when), and the
+    # agent is the one being told their reply went nowhere. Without it the conversation
+    # view has nothing to render, because `connection` still reads 'open' throughout.
+    data[:send_stall] = provider_connection['send_stall'] if provider_connection['send_stall'].present?
+    data.merge!(provider_connection_admin_data) if Current.account_user&.administrator?
     data
+  end
+
+  # The admin-only half of the connection payload, shared by the REST serializer above and
+  # by the cable push, so a field added to one cannot go missing from the other. The
+  # argument is the snapshot being presented: on the push path that is the hash the event
+  # carried, not whatever the record happens to hold by the time the listener runs.
+  def provider_connection_admin_data(connection = provider_connection)
+    { qr_data_url: connection['qr_data_url'], error: connection['error'] }
   end
 
   def toggle_typing_status(typing_status, conversation:)
@@ -217,6 +248,10 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
                      conversation.contact.identifier || conversation.contact.phone_number
                    end
 
+    # Marked before the send: the provider echoes this receipt back as an inbound one, and
+    # the handlers that read it must not take it for a device of this account opening the
+    # chat. See Whatsapp::SelfReadReceipts.
+    Whatsapp::SelfReadReceipts.record(conversation, messages) if marker_read_back?
     provider_service.read_messages(messages, recipient_id: recipient_id)
   end
 
@@ -231,7 +266,15 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   def disconnect_channel_provider
     provider_service.disconnect_channel_provider
   rescue StandardError => e
-    # NOTE: Don't prevent destruction if disconnect fails
+    # Two callers, opposite needs. A destroy must not be blocked by a provider that will
+    # not let go, so there the failure is logged and swallowed. An explicit disconnect is
+    # an operator waiting for an answer: reporting a session closed while it is still
+    # live leaves them with a connected number, a dashboard that disagrees, and no reason
+    # to try again — and for a send stall it also clears the warning that was the only
+    # thing telling anyone the inbox was mute. @session_teardown is set by the prepended
+    # before_destroy callback, so it means exactly "we are being destroyed".
+    raise unless @session_teardown
+
     Rails.logger.error "Failed to disconnect channel provider: #{e.message}"
   end
 
@@ -365,6 +408,7 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
 
   delegate :setup_channel_provider, to: :provider_service
   delegate :import_session, to: :provider_service
+  delegate :reassert_desired_state, to: :provider_service
   delegate :presence_subscribe, to: :provider_service
   delegate :send_message, to: :provider_service
   delegate :send_template, to: :provider_service
@@ -385,14 +429,75 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   delegate :group_join_approval_mode, to: :provider_service
   delegate :group_member_add_mode, to: :provider_service
 
-  def setup_webhooks
-    perform_webhook_setup
+  def send_contact_info_request(identifier, message)
+    raise NotImplementedError, 'Contact information requests require a WhatsApp Cloud provider' unless provider == 'whatsapp_cloud'
+
+    Whatsapp::Providers::WhatsappCloudContactInfoRequestService.perform(self, identifier, message)
+  end
+
+  def setup_webhooks(is_coexistence: nil)
+    perform_webhook_setup(is_coexistence: is_coexistence)
   rescue StandardError => e
     Rails.logger.error "[WHATSAPP] Webhook setup failed: #{e.message}"
+    return unless credentials_refused?(e)
+
+    Rails.logger.error("[WHATSAPP] Asking for reauthorization on channel #{id}: #{reauthorization_reason(e)}")
     prompt_reauthorization!
   end
 
   private
+
+  # `prompt_reauthorization!` is not a log line: it writes the marker, runs the handler that emails
+  # the operator, invalidates the inbox cache and fires the event, and `Webhooks::WhatsappEventsJob`
+  # discards every inbound webhook while the marker stands. Nothing clears it but a human. So it
+  # takes an answer that says the credentials are the problem, and a Meta that accepts the
+  # connection and stays quiet is not one: measured on `main`, three ceiling-capped calls in a row
+  # marked a perfectly good channel in 30s.
+  #
+  # `ArgumentError` is the opposite case rather than an exception to the rule. It is what
+  # `Whatsapp::WebhookSetupService` raises when the access token or the WABA id is blank, and a
+  # credential that is not there is as definite an answer as one Meta rejected.
+  #
+  # The walk down `cause` is what makes this survive the layers in between: the setup service
+  # re-raises with a prefix so the operator can see which step failed, and Ruby keeps the original
+  # underneath. Asking only the outermost error would read every one of those as silence.
+  def credentials_refused?(error)
+    # Read at the top and not down the chain, unlike Meta's answer: the setup service raises this one
+    # from `perform` and nothing wraps it, while an `ArgumentError` coming from inside the Graph call
+    # path would be about something else entirely and has no business speaking for the credentials.
+    return true if error.is_a?(ArgumentError)
+
+    while error
+      return true if error.is_a?(Whatsapp::ApiError) && error.authorization_error?
+
+      error = error.cause
+    end
+
+    false
+  end
+
+  # Named by what happened, not by "Meta refused": the blank-credential branch reaches this line
+  # without a single call having left, and a log that says Meta spoke is the same trade this class
+  # of bug is about. The channel id rather than the inbox's, because the `after_commit on: :create`
+  # path runs before the inbox exists and was printing "for inbox ;".
+  def reauthorization_reason(error)
+    return 'the setup could not run without a credential' if error.is_a?(ArgumentError)
+
+    'Meta answered that the credentials are the problem'
+  end
+
+  # Whether anything on the way in will read the marker back. Written by exactly the two
+  # inbound paths that can mistake our own receipt for a device read: the canonical session
+  # handler, which covers every session provider, and the legacy Baileys one.
+  #
+  # Not `session_family?`, though it is nearly the same set. That asks "is this a paired
+  # phone", and the echo does need one -- a business API has no second device to hear it
+  # from. But Z-API is a paired phone whose status callback only moves a message's status
+  # and never `agent_last_seen_at`, so it has nothing to be misled about, and a marker
+  # written for it is a key per message that expires without ever being read.
+  def marker_read_back?
+    session_provider? || provider == 'baileys'
+  end
 
   # Pushes the connection status to the account's agents over the websocket without
   # going through the full dispatcher, which would always enqueue an EventDispatcherJob
@@ -410,8 +515,14 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys])
   end
 
+  # A check that could not reach a verdict is neither a refusal nor a broken application, so it gets a
+  # sentence of its own. Only that one class is rescued: a defect of ours inside the check escapes as
+  # itself, because telling the operator to try again is no use when the thing to fix is the code.
   def validate_provider_config
     errors.add(:provider_config, 'Invalid Credentials') unless provider_service.validate_provider_config?
+  rescue Whatsapp::CredentialCheck::Unavailable => e
+    Rails.logger.warn("[WHATSAPP] Credential check could not be completed for #{provider} channel #{id || 'new'}: #{e.message}")
+    errors.add(:provider_config, I18n.t('errors.inboxes.channel.credential_check_unavailable'))
   end
 
   # Logs only the embedded signup → manual migration (the save drops the
@@ -424,12 +535,12 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     Rails.logger.info("[WHATSAPP_EMBEDDED_TO_MANUAL] success account_id=#{account_id} channel_id=#{id}")
   end
 
-  def perform_webhook_setup
-    webhook_setup_service.perform
+  def perform_webhook_setup(is_coexistence: nil)
+    webhook_setup_service(is_coexistence: is_coexistence).perform
   end
 
-  def webhook_setup_service
-    Whatsapp::WebhookSetupService.new(self, provider_config['business_account_id'], provider_config['api_key'])
+  def webhook_setup_service(is_coexistence: nil)
+    Whatsapp::WebhookSetupService.new(self, provider_config['business_account_id'], provider_config['api_key'], is_coexistence: is_coexistence)
   end
 
   def teardown_webhooks
@@ -442,8 +553,11 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   end
 
   def should_auto_setup_webhooks?
-    # Only auto-setup webhooks for whatsapp_cloud provider with manual setup
-    # Embedded signup calls setup_webhooks explicitly in EmbeddedSignupService
-    provider == 'whatsapp_cloud' && provider_config['source'] != 'embedded_signup'
+    # Embedded signup and Manual V2 run webhook setup explicitly so their API
+    # responses can reflect the real result instead of swallowing callback errors.
+    explicitly_configured_sources = %w[embedded_signup manual_setup_v2]
+    provider == 'whatsapp_cloud' && explicitly_configured_sources.exclude?(provider_config['source'])
   end
 end
+
+Channel::Whatsapp.prepend_mod_with('Channel::Whatsapp')

@@ -19,6 +19,7 @@
 #  lock_to_single_conversation   :boolean          default(FALSE), not null
 #  name                          :string           not null
 #  out_of_office_message         :string
+#  prevent_assignment_takeover   :boolean          default(FALSE), not null
 #  sender_name_type              :integer          default("friendly"), not null
 #  timezone                      :string           default("UTC")
 #  working_hours_enabled         :boolean          default(FALSE)
@@ -46,6 +47,7 @@ class Inbox < ApplicationRecord
   include AccountCacheRevalidator
   include InboxAgentAvailability
   include InboxBrandedEmailLayoutable
+  include InboxBotStatus
 
   # Not allowing characters:
   validates :name, presence: true
@@ -77,6 +79,8 @@ class Inbox < ApplicationRecord
   has_one :assignment_policy, through: :inbox_assignment_policy
   has_one :agent_bot_inbox, dependent: :destroy_async
   has_one :agent_bot, through: :agent_bot_inbox
+  has_many :agent_bot_observers, dependent: :destroy_async
+  has_many :observer_agent_bots, through: :agent_bot_observers, source: :agent_bot
   has_many :webhooks, dependent: :destroy_async
   has_many :hooks, dependent: :destroy_async, class_name: 'Integrations::Hook'
 
@@ -175,11 +179,6 @@ class Inbox < ApplicationRecord
 
   def assignable_agents
     (account.users.where(id: members.select(:user_id)) + account.administrators).uniq
-  end
-
-  def active_bot?
-    agent_bot_inbox&.active? || hooks.where(app_id: %w[dialogflow],
-                                            status: 'enabled').count.positive?
   end
 
   def inbox_type

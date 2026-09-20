@@ -1,4 +1,5 @@
 class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController # rubocop:disable Metrics/ClassLength
+  include GroupChannelResolver
   include Sift
   sort_on :email, type: :string
   sort_on :name, internal_name: :order_on_name, type: :scope, scope_params: [:direction]
@@ -82,12 +83,15 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController 
     @contact.save!
   end
 
+  # Through the inbox the caller named, so a group that is in two of them is refreshed on
+  # the one the agent is looking at rather than on whichever came first, which can be a
+  # session that is not even connected.
   def sync_group
     authorize @contact, :sync_group?
     raise ActionController::BadRequest, I18n.t('contacts.sync_group.not_a_group') if @contact.group_type_individual?
     raise ActionController::BadRequest, I18n.t('contacts.sync_group.no_identifier') if @contact.identifier.blank?
 
-    Contacts::SyncGroupJob.perform_later(@contact)
+    Contacts::SyncGroupJob.perform_later(@contact, channel: channel)
     head :accepted
   end
 
@@ -179,7 +183,7 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController 
       contact: @contact,
       inbox: inbox,
       source_id: params[:source_id],
-      validate_baileys_phone: true
+      validate_whatsapp_phone: true
     ).perform
   end
 

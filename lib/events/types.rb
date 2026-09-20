@@ -24,8 +24,10 @@ module Events::Types
   # FIXME: deprecate the opened and resolved events in future in favor of status changed event.
   CONVERSATION_OPENED = 'conversation.opened'
   CONVERSATION_RESOLVED = 'conversation.resolved'
-  CONVERSATION_CAPTAIN_INFERENCE_RESOLVED = 'conversation.captain_inference_resolved'
-  CONVERSATION_CAPTAIN_INFERENCE_HANDOFF = 'conversation.captain_inference_handoff'
+  CAPTAIN_CONVERSATION_HANDED_OFF = 'captain.conversation.handed_off'
+  CAPTAIN_CONVERSATION_RESOLVED = 'captain.conversation.resolved'
+  CAPTAIN_RESPONSE_COMPLETED = 'captain.response.completed'
+  CAPTAIN_RESPONSE_FAILED = 'captain.response.failed'
 
   CONVERSATION_STATUS_CHANGED = 'conversation.status_changed'
   CONVERSATION_CONTACT_CHANGED = 'conversation.contact_changed'
@@ -37,12 +39,24 @@ module Events::Types
   CONVERSATION_TYPING_OFF = 'conversation.typing_off'
   CONVERSATION_MENTIONED = 'conversation.mentioned'
   CONVERSATION_UNREAD = 'conversation.unread'
+  CONVERSATION_PINNED = 'conversation.pinned'
+  CONVERSATION_UNPINNED = 'conversation.unpinned'
 
   # message events
   MESSAGE_CREATED = 'message.created'
   FIRST_REPLY_CREATED = 'first.reply.created'
   REPLY_CREATED = 'reply.created'
   MESSAGE_UPDATED = 'message.updated'
+  # The body of a message that was stored before it could be read arriving into the row it was stored
+  # as. Not an update of an existing message: it is the first time anything can be asked about this
+  # message's content. Only the automation listener answers it (fazer-ai/chatwoot#491).
+  MESSAGE_RECOVERED = 'message.recovered'
+  # The body of a stored message replaced by a new one the sender wrote in its place. A different
+  # question from the two above: a creation and a recovery are both the first readable body a row ever
+  # had, and an edit is somebody changing what was said. Announced from the row itself
+  # (`Message#dispatch_update_event`), so every channel that edits in place is covered by one dispatch
+  # (fazer-ai/chatwoot#648).
+  MESSAGE_EDITED = 'message.edited'
   MESSAGES_READ = 'messages.read'
 
   # scheduled message events

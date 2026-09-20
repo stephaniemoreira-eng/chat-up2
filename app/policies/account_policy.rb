@@ -15,6 +15,10 @@ class AccountPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 
+  def brand_logo_email?
+    @account_user.administrator?
+  end
+
   def update_active_at?
     true
   end
@@ -43,3 +47,5 @@ class AccountPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 end
+
+AccountPolicy.prepend_mod_with('AccountPolicy')

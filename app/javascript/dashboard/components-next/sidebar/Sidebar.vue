@@ -2,6 +2,7 @@
 import { h, ref, computed, onMounted, watch } from 'vue';
 import { provideSidebarContext, useSidebarResize } from './provider';
 import { useAccount } from 'dashboard/composables/useAccount';
+import { useConfig } from 'dashboard/composables/useConfig';
 import { useKbd } from 'dashboard/composables/utils/useKbd';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useStore } from 'vuex';
@@ -18,6 +19,7 @@ import SidebarChangelogCard from './SidebarChangelogCard.vue';
 import SidebarChangelogButton from './SidebarChangelogButton.vue';
 import ChannelLeaf from './ChannelLeaf.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
+import EmojiIcon from 'next/emoji-icon-picker/EmojiIcon.vue';
 import SidebarAccountSwitcher from './SidebarAccountSwitcher.vue';
 import Logo from 'next/icon/Logo.vue';
 import ComposeConversation from 'dashboard/components-next/NewConversation/ComposeConversation.vue';
@@ -43,7 +45,14 @@ const emit = defineEmits([
 ]);
 
 const { accountScopedRoute, isOnChatwootCloud, currentAccount } = useAccount();
+const { isEnterprise } = useConfig();
 const store = useStore();
+
+// Calls run on the enterprise-only API (cloud runs enterprise); hide the entry
+// on community so it doesn't lead to a dashboard/CTA the backend can't serve.
+const isCallsAvailable = computed(
+  () => isOnChatwootCloud.value || isEnterprise
+);
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
 
@@ -106,6 +115,12 @@ const fetchConversationUnreadCounts = ([currentAccountId, isEnabled]) => {
 const fetchSidebarSortPreferences = ([currentAccountId, userId]) => {
   if (!currentAccountId || !userId) return;
   store.dispatch('sidebarSortPreferences/initialize');
+};
+
+const fetchConversationPins = currentAccountId => {
+  if (!currentAccountId) return;
+  store.dispatch('conversationPins/reset');
+  store.dispatch('conversationPins/fetch');
 };
 
 const toggleShortcutModalFn = show => {
@@ -306,6 +321,8 @@ watch([accountId, currentUserId], fetchSidebarSortPreferences, {
   immediate: true,
 });
 
+watch(accountId, fetchConversationPins, { immediate: true });
+
 const hasUnreadCountsForSection = section => {
   if (section === SIDEBAR_SORT_SECTIONS.FOLDERS) {
     return hasFilteredUnreadCounts.value;
@@ -479,6 +496,13 @@ const menuItems = computed(() => {
             name: `${team.name}-${team.id}`,
             label: team.name,
             badgeCount: getTeamUnreadCount.value(team.id),
+            icon: team.icon
+              ? h(EmojiIcon, {
+                  value: team.icon,
+                  color: team.icon_color,
+                  class: 'size-3.5',
+                })
+              : undefined,
             to: accountScopedRoute('team_conversations', { teamId: team.id }),
           })),
         },
@@ -528,6 +552,123 @@ const menuItems = computed(() => {
         },
       ],
     },
+    {
+      name: 'InternalChat',
+      label: t('SIDEBAR.INTERNAL_CHAT'),
+      icon: 'i-lucide-messages-square',
+      to: accountScopedRoute('internal_chat_home'),
+      activeOn: [
+        'internal_chat',
+        'internal_chat_home',
+        'internal_chat_channel',
+        'internal_chat_dm',
+        'internal_chat_thread',
+        'internal_chat_drafts',
+      ],
+      getterKeys: {
+        count: 'internalChat/getUnreadCount',
+      },
+    },
+    {
+      name: 'Kanban',
+      label: t('SIDEBAR.KANBAN'),
+      icon: 'i-lucide-columns-3',
+      to: accountScopedRoute('kanban_view'),
+      activeOn: ['kanban_view'],
+    },
+    {
+      name: 'Captain',
+      icon: 'i-woot-captain',
+      label: t('SIDEBAR.CAPTAIN'),
+      activeOn: ['captain_assistants_create_index'],
+      children: [
+        {
+          name: 'Overview',
+          label: t('SIDEBAR.CAPTAIN_OVERVIEW'),
+          activeOn: ['captain_assistants_overview_index'],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_overview_index',
+          }),
+        },
+        {
+          name: 'FAQs',
+          label: t('SIDEBAR.CAPTAIN_RESPONSES'),
+          activeOn: [
+            'captain_assistants_responses_index',
+            'captain_assistants_faq_suggestions',
+          ],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_responses_index',
+          }),
+        },
+        {
+          name: 'Documents',
+          label: t('SIDEBAR.CAPTAIN_DOCUMENTS'),
+          activeOn: ['captain_assistants_documents_index'],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_documents_index',
+          }),
+        },
+        {
+          name: 'Scenarios',
+          label: t('SIDEBAR.CAPTAIN_SCENARIOS'),
+          activeOn: ['captain_assistants_scenarios_index'],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_scenarios_index',
+          }),
+        },
+        {
+          name: 'Playground',
+          label: t('SIDEBAR.CAPTAIN_PLAYGROUND'),
+          activeOn: ['captain_assistants_playground_index'],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_playground_index',
+          }),
+        },
+        {
+          name: 'Inboxes',
+          label: t('SIDEBAR.CAPTAIN_INBOXES'),
+          activeOn: ['captain_assistants_inboxes_index'],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_inboxes_index',
+          }),
+        },
+        {
+          name: 'Tools',
+          label: t('SIDEBAR.CAPTAIN_TOOLS'),
+          activeOn: ['captain_tools_index'],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_tools_index',
+          }),
+        },
+        {
+          name: 'Settings',
+          label: t('SIDEBAR.CAPTAIN_SETTINGS'),
+          activeOn: [
+            'captain_assistants_settings_index',
+            'captain_assistants_settings_system_index',
+            'captain_assistants_settings_audience_index',
+            'captain_assistants_settings_schedule_index',
+            'captain_assistants_guidelines_index',
+            'captain_assistants_guardrails_index',
+          ],
+          to: accountScopedRoute('captain_assistants_index', {
+            navigationPath: 'captain_assistants_settings_index',
+          }),
+        },
+      ],
+    },
+    ...(isCallsAvailable.value
+      ? [
+          {
+            name: 'Calls',
+            label: t('SIDEBAR.CALLS'),
+            icon: 'i-lucide-phone',
+            to: accountScopedRoute('calls_dashboard_index'),
+            activeOn: ['calls_dashboard_index'],
+          },
+        ]
+      : []),
     {
       name: 'Contacts',
       label: t('SIDEBAR.CONTACTS'),
@@ -808,6 +949,12 @@ const menuItems = computed(() => {
             'settings_inboxes_add_agents',
           ],
           to: accountScopedRoute('settings_inbox_list'),
+        },
+        {
+          name: 'Settings Templates',
+          label: t('SIDEBAR.WHATSAPP_TEMPLATES'),
+          icon: 'i-lucide-layout-template',
+          to: accountScopedRoute('settings_templates'),
         },
         {
           name: 'Settings Labels',

@@ -2,8 +2,9 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useElementBounding, useWindowSize } from '@vueuse/core';
-import { picoSearch } from '@scmmishra/pico-search';
+import { picoSearch } from '@chatwoot/pico-search';
 import Icon from 'next/icon/Icon.vue';
+import EmojiIcon from 'next/emoji-icon-picker/EmojiIcon.vue';
 import Button from 'next/button/Button.vue';
 import DropdownContainer from 'next/dropdown-menu/base/DropdownContainer.vue';
 import DropdownSection from 'next/dropdown-menu/base/DropdownSection.vue';
@@ -138,7 +139,7 @@ const toggleSelected = option => {
 </script>
 
 <template>
-  <DropdownContainer>
+  <DropdownContainer class="min-w-0">
     <template #trigger="{ toggle }">
       <Button
         v-if="selectedItem"
@@ -150,7 +151,15 @@ const toggleSelected = option => {
         :icon="selectedItem.icon"
         :label="selectedItem.name"
         @click="toggle"
-      />
+      >
+        <template v-if="selectedItem.emoji" #icon>
+          <EmojiIcon
+            :value="selectedItem.emoji"
+            :color="selectedItem.iconColor"
+            class="flex-shrink-0 size-4"
+          />
+        </template>
+      </Button>
       <Button
         v-else
         ref="triggerRef"
@@ -164,7 +173,7 @@ const toggleSelected = option => {
         <template #icon>
           <Icon :icon="placeholderIcon" class="text-n-slate-11" />
         </template>
-        <span class="text-n-slate-11">{{
+        <span class="text-n-slate-11 min-w-0 truncate">{{
           placeholder || t('COMBOBOX.PLACEHOLDER')
         }}</span>
       </Button>
@@ -198,6 +207,13 @@ const toggleSelected = option => {
             :icon="option.icon"
             @click="toggleSelected(option)"
           >
+            <template v-if="option.emoji" #icon>
+              <EmojiIcon
+                :value="option.emoji"
+                :color="option.iconColor"
+                class="flex-shrink-0 size-4"
+              />
+            </template>
             <template #label>
               {{ option.name }}
               <Icon
