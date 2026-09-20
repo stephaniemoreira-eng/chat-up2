@@ -12,7 +12,8 @@ RSpec.describe OperationalEngine::LeadEvent do
   end
 
   it 'rejeita uma origem fora do congelado no SSOT §7.1' do
-    expect { build_event(source: 'inventado') }.to raise_error(ArgumentError)
+    # validate: true troca o ArgumentError imediato do enum por uma validação Rails normal.
+    expect { build_event(source: 'inventado') }.to raise_error(ActiveRecord::RecordInvalid)
   end
 
   describe 'append-only (SSOT §7.2)' do

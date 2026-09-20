@@ -7,7 +7,7 @@ RSpec.describe OperationalEngine::Lead do
 
   describe 'telefone' do
     it 'normaliza um numero informado em formato solto' do
-      lead = build_lead(telefone: '(13) 99123-4567')
+      lead = build_lead(telefone: '+55 (13) 99123-4567')
 
       expect(lead.telefone).to eq('+5513991234567')
     end
@@ -36,7 +36,8 @@ RSpec.describe OperationalEngine::Lead do
 
   describe 'enums' do
     it 'rejeita um valor fora do congelado no SSOT §6.2' do
-      expect { build_lead(etapa_prospect: 'inventado') }.to raise_error(ArgumentError)
+      # validate: true troca o ArgumentError imediato do enum por uma validação Rails normal.
+      expect { build_lead(etapa_prospect: 'inventado') }.to raise_error(ActiveRecord::RecordInvalid)
     end
 
     it 'aceita etapa_comercial nula antes da oportunidade' do
@@ -76,7 +77,7 @@ RSpec.describe OperationalEngine::Lead do
     it 'nao deixa reescrever tipo_conversao depois do primeiro marco de conversao' do
       lead = build_lead(conversao_em: 1.day.ago, tipo_conversao: 'agendamento')
 
-      expect { lead.update!(tipo_conversao: 'callback') }.to raise_error(ActiveRecord::StatementInvalid, /write-once/)
+      expect { lead.update!(tipo_conversao: 'callback') }.to raise_error(ActiveRecord::StatementInvalid, /locked once conversao_em/)
     end
 
     it 'permite preencher esses campos pela primeira vez' do
