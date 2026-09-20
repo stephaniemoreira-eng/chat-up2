@@ -49,8 +49,6 @@
     }
   },
   "SIDEBAR": {
-    "INTERNAL_CHAT": "Chat interno",
-    "KANBAN": "Kanban",
     "APPS": "Apps"
   },
   "KEYBOARD_SHORTCUTS": {
