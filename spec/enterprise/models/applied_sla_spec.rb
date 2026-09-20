@@ -17,6 +17,7 @@ RSpec.describe AppliedSla, type: :model do
           sla_status: applied_sla.sla_status,
           created_at: applied_sla.created_at.to_i,
           updated_at: applied_sla.updated_at.to_i,
+          sla_completed_at: nil,
           sla_description: applied_sla.sla_policy.description,
           sla_name: applied_sla.sla_policy.name,
           sla_first_response_time_threshold: applied_sla.sla_policy.first_response_time_threshold,
@@ -71,16 +72,25 @@ RSpec.describe AppliedSla, type: :model do
   end
 
   describe '.with_sla_applicable_conversation' do
-    it 'excludes blocked contacts and keeps conversations with missing contacts' do
+    # This used to reach the contactless case by writing `contact_id: nil`, which
+    # `null: false` has refused since the orphan cleanup (20260422170000). The case itself is
+    # still live, just shaped differently: `Contact has_many :conversations,
+    # dependent: :destroy_async` deletes the contact and cleans its conversations up in a job,
+    # and no foreign key closes that window -- one cannot exist, since it would make the
+    # contact's own delete raise. So the id stays, the row goes, and the scope's `left_joins`
+    # plus `blocked: [false, nil]` is what keeps those conversations in.
+    it 'excludes blocked contacts and keeps conversations whose contact row is gone' do
       applied_sla = create(:applied_sla)
       blocked_applied_sla = create(:applied_sla)
-      missing_contact_applied_sla = create(:applied_sla)
+      dangling_applied_sla = create(:applied_sla)
 
       blocked_applied_sla.conversation.contact.update!(blocked: true)
-      missing_contact_applied_sla.conversation.update_columns(contact_id: nil, contact_inbox_id: nil) # rubocop:disable Rails/SkipsModelValidations
+      dangling_applied_sla.conversation.contact.delete
 
-      expect(described_class.with_sla_applicable_conversation).to include(applied_sla, missing_contact_applied_sla)
-      expect(described_class.with_sla_applicable_conversation).not_to include(blocked_applied_sla)
+      applicable_sla_ids = described_class.with_sla_applicable_conversation.ids
+
+      expect(applicable_sla_ids).to include(applied_sla.id, dangling_applied_sla.id)
+      expect(applicable_sla_ids).not_to include(blocked_applied_sla.id)
     end
   end
 

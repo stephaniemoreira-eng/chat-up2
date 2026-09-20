@@ -44,6 +44,7 @@
 # rubocop:enable Layout/LineLength
 
 class Contact < ApplicationRecord # rubocop:disable Metrics/ClassLength
+  include JsonColumnMerge
   include Avatarable
   include AvailabilityStatusable
   include Labelable
@@ -55,7 +56,7 @@ class Contact < ApplicationRecord # rubocop:disable Metrics/ClassLength
   validates :identifier, allow_blank: true, uniqueness: { scope: [:account_id] }
   validates :phone_number,
             allow_blank: true, uniqueness: { scope: [:account_id] },
-            format: { with: /\+[1-9]\d{1,14}\z/, message: I18n.t('errors.contacts.phone_number.invalid') }
+            format: { with: /\A\+[1-9]\d{1,14}\z/, message: I18n.t('errors.contacts.phone_number.invalid') }
 
   belongs_to :account
   has_many :conversations, dependent: :destroy_async
@@ -158,6 +159,16 @@ class Contact < ApplicationRecord # rubocop:disable Metrics/ClassLength
     contact_inboxes.first&.inbox&.channel
   end
 
+  # Whether the number behind one inbox has left the WhatsApp group this contact is.
+  # The fact belongs to the contact inbox (see `ContactInbox#group_left?`); this is the
+  # reader for the callers that hold the group contact and an inbox id rather than the
+  # row itself.
+  def group_left_in?(inbox_id)
+    return false if inbox_id.blank?
+
+    contact_inboxes.find_by(inbox_id: inbox_id)&.group_left? || false
+  end
+
   def push_event_data
     data = {
       additional_attributes: additional_attributes,
@@ -218,7 +229,7 @@ class Contact < ApplicationRecord # rubocop:disable Metrics/ClassLength
   def phone_number_format
     return if phone_number.blank?
 
-    self.phone_number = phone_number_was unless phone_number.match?(/\+[1-9]\d{1,14}\z/)
+    self.phone_number = phone_number_was unless phone_number.match?(/\A\+[1-9]\d{1,14}\z/)
   end
 
   def email_format

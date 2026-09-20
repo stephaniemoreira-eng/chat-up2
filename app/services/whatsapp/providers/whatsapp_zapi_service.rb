@@ -1,5 +1,10 @@
 class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseService # rubocop:disable Metrics/ClassLength
-  class ProviderUnavailableError < StandardError; end
+  include Whatsapp::TransportFailure
+  include Whatsapp::CredentialCheck
+  include Whatsapp::ZapiRequestOptions
+
+  # See the note in WhatsappBaileysService: legacy errors share the session hierarchy.
+  class ProviderUnavailableError < Whatsapp::Session::Errors::ProviderUnavailable; end
 
   API_BASE_PATH = 'https://api.z-api.io'.freeze
 
@@ -26,10 +31,10 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   end
 
   def validate_provider_config?
-    response = HTTParty.get(
-      "#{api_instance_path_with_token}/status",
-      headers: api_headers
-    )
+    url = "#{api_instance_path_with_token}/status"
+    headers = api_headers
+    response = credential_check_request { HTTParty.get(url, headers: headers, **ZAPI_REQUEST_OPTIONS) }
+    ensure_credential_verdict!(response)
 
     process_response(response)
   end
@@ -41,7 +46,8 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
       body: {
         value: whatsapp_channel.inbox.callback_webhook_url,
         notifySentByMe: true
-      }.to_json
+      }.to_json,
+      **ZAPI_REQUEST_OPTIONS
     )
 
     raise ProviderUnavailableError unless process_response(response)
@@ -56,7 +62,8 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   def disconnect_channel_provider
     response = HTTParty.get(
       "#{api_instance_path_with_token}/disconnect",
-      headers: api_headers
+      headers: api_headers,
+      **ZAPI_REQUEST_OPTIONS
     )
 
     raise ProviderUnavailableError unless process_response(response)
@@ -67,7 +74,8 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   def qr_code_image
     response = HTTParty.get(
       "#{api_instance_path_with_token}/qr-code/image",
-      headers: api_headers
+      headers: api_headers,
+      **ZAPI_REQUEST_OPTIONS
     )
 
     if response.parsed_response['connected']
@@ -99,7 +107,8 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
       body: {
         phone: phone,
         messageId: message_source_id
-      }.to_json
+      }.to_json,
+      **ZAPI_REQUEST_OPTIONS
     )
 
     process_response(response)
@@ -108,7 +117,8 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   def on_whatsapp(phone_number)
     response = HTTParty.get(
       "#{api_instance_path_with_token}/phone-exists/#{phone_number.delete('+')}",
-      headers: api_headers
+      headers: api_headers,
+      **ZAPI_REQUEST_OPTIONS
     )
 
     raise ProviderUnavailableError unless process_response(response)
@@ -128,7 +138,8 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
         messageId: message.source_id,
         phone: phone,
         owner: message.message_type == 'outgoing'
-      }
+      },
+      **ZAPI_REQUEST_OPTIONS
     )
 
     raise ProviderUnavailableError unless process_response(response)
@@ -156,7 +167,7 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   end
 
   def send_text_message(phone, message, **params)
-    response = HTTParty.post(
+    response = post_outgoing(
       "#{api_instance_path_with_token}/send-text",
       headers: api_headers,
       body: {
@@ -209,7 +220,7 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   end
 
   def send_image_message(phone, message, buffer, **params)
-    response = HTTParty.post(
+    response = post_outgoing(
       "#{api_instance_path_with_token}/send-image",
       headers: api_headers,
       body: {
@@ -226,7 +237,7 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   end
 
   def send_audio_message(phone, _message, buffer, **params)
-    response = HTTParty.post(
+    response = post_outgoing(
       "#{api_instance_path_with_token}/send-audio",
       headers: api_headers,
       body: {
@@ -249,7 +260,7 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
       file_extension = 'bin'
     end
 
-    response = HTTParty.post(
+    response = post_outgoing(
       "#{api_instance_path_with_token}/send-document/#{file_extension}",
       headers: api_headers,
       body: {
@@ -267,7 +278,7 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   end
 
   def send_video_message(phone, message, buffer, **params)
-    response = HTTParty.post(
+    response = post_outgoing(
       "#{api_instance_path_with_token}/send-video",
       headers: api_headers,
       body: {
@@ -284,7 +295,7 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
   end
 
   def send_reaction_message(phone, message, **params)
-    response = HTTParty.post(
+    response = post_outgoing(
       "#{api_instance_path_with_token}/send-reaction",
       headers: api_headers,
       body: {
@@ -298,5 +309,13 @@ class Whatsapp::Providers::WhatsappZapiService < Whatsapp::Providers::BaseServic
     raise ProviderUnavailableError unless process_response(response)
 
     response.parsed_response&.dig('messageId')
+  end
+
+  # Every HTTP call that puts a message on its way out goes through here, and nothing else does.
+  # One line inside the `rescue`, on purpose: see Whatsapp::TransportFailure.
+  def post_outgoing(url, **)
+    HTTParty.post(url, **, **ZAPI_SEND_OPTIONS)
+  rescue StandardError => e
+    raise_transport_failure(e)
   end
 end

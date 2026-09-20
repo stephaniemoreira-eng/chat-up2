@@ -2,6 +2,7 @@ module Enterprise::Concerns::Contact
   extend ActiveSupport::Concern
   included do
     belongs_to :company, optional: true, counter_cache: true
+    has_many :campaign_recipients, dependent: :destroy_async
 
     # Fork-owned CRM module. See docs/fork/ADR-0002-namespace-sales.md and
     # docs/fork/ADR-0003-lead-domain-model.md. Deliberately not built on Contact#contact_type or

@@ -28,6 +28,13 @@ class ActionCableBroadcastJob < ApplicationJob
     account = Account.find(data[:account_id])
     conversation = account.conversations.find_by!(display_id: data[:id])
     fresh_data = conversation.push_event_data.merge(account_id: data[:account_id])
+    # Refresh the values, preserve the shape. Contact-bound broadcasts arrive
+    # here already narrowed to the contact allowlist (ActionCableListener
+    # #broadcast_to_contact), and rebuilding from the conversation row would
+    # hand the contact back the whole agent payload. Keeping to the keys the
+    # caller sent means this job never has to know which those are — including
+    # the ones Pro and Enterprise add.
+    fresh_data = fresh_data.slice(*data.keys)
     # The refreshed payload comes from the conversation row; transient per-event
     # metadata set by the listener (eg. `source: 'reaction_toggle'` so the
     # frontend skips SCROLL_TO_MESSAGE) lives only on the original `data` hash,

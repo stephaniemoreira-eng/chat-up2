@@ -1,6 +1,5 @@
 class Api::V1::AccountsController < Api::BaseController
   include AuthHelper
-  include CacheKeysHelper
 
   skip_before_action :authenticate_user!, :set_current_user, :handle_with_exception,
                      only: [:create], raise: false
@@ -18,7 +17,7 @@ class Api::V1::AccountsController < Api::BaseController
               with: :render_error_response
 
   def show
-    @latest_chatwoot_version = ::Redis::Alfred.get(::Redis::Alfred::LATEST_CHATWOOT_VERSION)
+    @latest_chatwoot_version = latest_chatwoot_version
     render 'api/v1/accounts/show', format: :json
   end
 
@@ -52,15 +51,20 @@ class Api::V1::AccountsController < Api::BaseController
 
   def cache_keys
     expires_in 10.seconds, public: false, stale_while_revalidate: 5.minutes
-    render json: { cache_keys: cache_keys_for_account }, status: :ok
+    render json: { cache_keys: @account.cache_keys }, status: :ok
   end
 
   def update
-    @account.assign_attributes(account_params.slice(:name, :locale, :domain, :support_email))
+    @account.assign_attributes(account_params.slice(:name, :locale, :domain, :support_email, :brand_logo_email))
     @account.custom_attributes.merge!(custom_attributes_params)
     @account.settings.merge!(settings_params)
     @account.custom_attributes['onboarding_step'] = 'invite_team' if @account.custom_attributes['onboarding_step'] == 'account_update'
     @account.save!
+  end
+
+  def brand_logo_email
+    @account.brand_logo_email.purge if @account.brand_logo_email.attached?
+    render 'api/v1/accounts/show', format: :json
   end
 
   def update_active_at
@@ -70,6 +74,10 @@ class Api::V1::AccountsController < Api::BaseController
   end
 
   private
+
+  def latest_chatwoot_version
+    Redis::Alfred.get(Redis::Alfred::LATEST_CHATWOOT_VERSION)
+  end
 
   def enqueue_branding_enrichment
     email = account_params[:email].presence || @user&.email
@@ -93,14 +101,6 @@ class Api::V1::AccountsController < Api::BaseController
     raise CustomExceptions::Account::InvalidParams.new({})
   end
 
-  def cache_keys_for_account
-    {
-      label: fetch_value_for_key(params[:id], Label.name.underscore),
-      inbox: fetch_value_for_key(params[:id], Inbox.name.underscore),
-      team: fetch_value_for_key(params[:id], Team.name.underscore)
-    }
-  end
-
   def fetch_account
     @account = current_user.accounts.find(params[:id])
     @current_account_user = @account.account_users.find_by(user_id: current_user.id)
@@ -113,7 +113,7 @@ class Api::V1::AccountsController < Api::BaseController
   end
 
   def account_params
-    params.permit(:account_name, :email, :name, :password, :locale, :domain, :support_email, :user_full_name)
+    params.permit(:account_name, :email, :name, :password, :locale, :domain, :support_email, :user_full_name, :brand_logo_email)
   end
 
   def custom_attributes_params
@@ -125,7 +125,8 @@ class Api::V1::AccountsController < Api::BaseController
   end
 
   def permitted_settings_attributes
-    [:auto_resolve_after, :auto_resolve_message, :auto_resolve_ignore_waiting, :audio_transcriptions, :auto_resolve_label]
+    [:auto_resolve_after, :auto_resolve_message, :auto_resolve_ignore_waiting, :audio_transcriptions, :auto_resolve_label,
+     :brand_name, :brand_url, :brand_color]
   end
 
   def check_signup_enabled

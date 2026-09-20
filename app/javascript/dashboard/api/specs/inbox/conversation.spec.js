@@ -16,6 +16,9 @@ describe('#ConversationAPI', () => {
     expect(conversationAPI).toHaveProperty('toggleTyping');
     expect(conversationAPI).toHaveProperty('mute');
     expect(conversationAPI).toHaveProperty('unmute');
+    expect(conversationAPI).toHaveProperty('pin');
+    expect(conversationAPI).toHaveProperty('unpin');
+    expect(conversationAPI).toHaveProperty('fetchPins');
     expect(conversationAPI).toHaveProperty('meta');
     expect(conversationAPI).toHaveProperty('sendEmailTranscript');
     expect(conversationAPI).toHaveProperty('filter');
@@ -148,6 +151,25 @@ describe('#ConversationAPI', () => {
       );
     });
 
+    it('#pin', () => {
+      conversationAPI.pin(45);
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/conversations/45/pin'
+      );
+    });
+
+    it('#unpin', () => {
+      conversationAPI.unpin(45);
+      expect(axiosMock.delete).toHaveBeenCalledWith(
+        '/api/v1/conversations/45/unpin'
+      );
+    });
+
+    it('#fetchPins', () => {
+      conversationAPI.fetchPins();
+      expect(axiosMock.get).toHaveBeenCalledWith('/api/v1/conversations/pins');
+    });
+
     it('#meta', () => {
       conversationAPI.meta({
         inboxId: 1,
@@ -196,6 +218,7 @@ describe('#ConversationAPI', () => {
     it('#filter', () => {
       const payload = {
         page: 1,
+        sortBy: 'last_activity_at_asc',
         queryData: {
           payload: [
             {
@@ -223,7 +246,37 @@ describe('#ConversationAPI', () => {
       expect(axiosMock.post).toHaveBeenCalledWith(
         '/api/v1/conversations/filter',
         payload.queryData,
-        { params: { page: payload.page } }
+        {
+          params: {
+            page: payload.page,
+            sort_by: payload.sortBy,
+          },
+        }
+      );
+    });
+
+    it('#filter forwards the sort order when one is given', () => {
+      const payload = {
+        page: 2,
+        sortBy: 'last_activity_at_asc',
+        queryData: { payload: [] },
+      };
+      conversationAPI.filter(payload);
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/conversations/filter',
+        payload.queryData,
+        { params: { page: 2, sort_by: 'last_activity_at_asc' } }
+      );
+    });
+
+    // Absent rather than null: the server picks its own default when the key is missing,
+    // and sending an empty one would have to be handled as a special case there.
+    it('#filter omits sort_by when no order is given', () => {
+      conversationAPI.filter({ page: 1, queryData: { payload: [] } });
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/conversations/filter',
+        { payload: [] },
+        { params: { page: 1 } }
       );
     });
 

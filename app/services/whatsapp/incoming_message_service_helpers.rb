@@ -1,4 +1,10 @@
 module Whatsapp::IncomingMessageServiceHelpers # rubocop:disable Metrics/ModuleLength
+  # How long a message stands waiting for the chat before it gives up and lets the job come
+  # back for it. Sized by the album it exists for -- the sibling webhooks of one upload land
+  # within a second or two of each other -- and not by how long the work behind the lock
+  # takes, which is what `Locks::CHAT_LOCK_TTL` is for.
+  CONTACT_LOCK_WAIT = 5.seconds
+
   def download_attachment_file(attachment_payload)
     Down.download(inbox.channel.media_url(attachment_payload[:id]), headers: inbox.channel.api_headers)
   end
@@ -30,15 +36,18 @@ module Whatsapp::IncomingMessageServiceHelpers # rubocop:disable Metrics/ModuleL
     messages_data.first[:type]
   end
 
+  # Where a body can live, in the order WhatsApp can carry them. A message has exactly one
+  # of these, so the first hit is the content.
+  CONTENT_PATHS = [
+    %i[text body], %i[button text], %i[interactive button_reply title],
+    %i[interactive list_reply title], %i[name formatted_name], %i[reaction emoji]
+  ].freeze
+
   def message_content(message)
+    return I18n.t('conversations.messages.whatsapp.flow_response') if message.dig(:interactive, :nfm_reply).present?
+
     # TODO: map interactive messages back to button messages in chatwoot
-    message.dig(:text, :body) ||
-      message.dig(:button, :text) ||
-      message.dig(:interactive, :button_reply, :title) ||
-      message.dig(:interactive, :list_reply, :title) ||
-      message.dig(:name, :formatted_name) ||
-      message.dig(:reaction, :emoji) ||
-      referral_fallback_content(message)
+    CONTENT_PATHS.lazy.filter_map { |path| message.dig(*path) }.first || referral_fallback_content(message)
   end
 
   # Edited messages nest the new content under `edit.message`, which carries its own
@@ -118,6 +127,13 @@ module Whatsapp::IncomingMessageServiceHelpers # rubocop:disable Metrics/ModuleL
     { source: source, app: context_info[:entryPointConversionApp].presence }.compact.presence
   end
 
+  def parse_flow_response_json(response_json)
+    parsed_response = JSON.parse(response_json)
+    parsed_response.is_a?(Hash) ? parsed_response : response_json
+  rescue JSON::ParserError, TypeError
+    response_json
+  end
+
   def file_content_type(file_type)
     return :image if %w[image sticker].include?(file_type)
     return :audio if %w[audio voice].include?(file_type)
@@ -140,6 +156,10 @@ module Whatsapp::IncomingMessageServiceHelpers # rubocop:disable Metrics/ModuleL
     Whatsapp::PhoneNumberNormalizationService.new(inbox).normalize_and_find_contact_by_provider(waid, :cloud)
   end
 
+  def phone_number_candidates(phone_number)
+    Whatsapp::PhoneNumberNormalizationService.new(inbox).phone_number_candidates(phone_number)
+  end
+
   def whatsapp_phone_number(identifier)
     identifier = identifier.to_s
     return if identifier.blank?
@@ -159,6 +179,19 @@ module Whatsapp::IncomingMessageServiceHelpers # rubocop:disable Metrics/ModuleL
   def process_in_reply_to(message)
     @in_reply_to_external_id = message['context']&.[]('id')
     @in_reply_to_external_id = message.dig(:reaction, :message_id) if message[:type] == 'reaction'
+  end
+
+  # Resolved when the message row is built, not when the reply id is read. This fork reads
+  # that id before the conversation is chosen, because a reaction has to land in the
+  # conversation of the message it annotates, and the finder searches inside a conversation.
+  def in_reply_to_message_id
+    return @in_reply_to_message_id if defined?(@in_reply_to_message_id)
+    return @in_reply_to_message_id = nil if @in_reply_to_external_id.blank? || @conversation.blank?
+
+    @in_reply_to_message_id = Whatsapp::InReplyToMessageFinder.new(
+      conversation: @conversation,
+      source_id: @in_reply_to_external_id
+    ).perform&.id
   end
 
   def find_message_by_source_id(source_id)
@@ -187,27 +220,24 @@ module Whatsapp::IncomingMessageServiceHelpers # rubocop:disable Metrics/ModuleL
   # Lock by contact phone to prevent race conditions when multiple messages
   # from the same contact arrive simultaneously (e.g., WhatsApp albums).
   # Without this, each message could create its own conversation.
-  def with_contact_lock(phone, timeout: 5.seconds)
+  #
+  # The same lock the session layer takes, on the same key, and now through the same code:
+  # two implementations of one lock is how the legacy path came to release unconditionally
+  # while the session path released by token, and an overrunning worker here could delete
+  # the lease an import was still writing under.
+  #
+  # `wait` is what this path adds and the only thing it needs of its own. It covers what
+  # the lock was built for: two messages of the same chat landing together, where the first
+  # is done in well under a second, and a job retry a quarter of a minute later would be
+  # worse than a short park. It does not cover the other holder of the same key -- a
+  # history import leases the chat for a whole batch (`Locks::IMPORT_CHAT_LOCK_TTL`), two
+  # orders of magnitude longer than any wait a worker thread should sit through -- so past
+  # the wait it gives up with `Locks::Busy`, which the caller retries, rather than the
+  # Timeout::Error nothing was listening for that used to take the message down with it.
+  def with_contact_lock(phone, wait: CONTACT_LOCK_WAIT, &)
     raise ArgumentError, 'A block is required for with_contact_lock' unless block_given?
     return yield if phone.blank?
 
-    key = "WHATSAPP::CONTACT_LOCK::#{inbox.id}_#{phone}"
-    start_time = Time.now.to_i
-    lock_acquired = false
-
-    while (Time.now.to_i - start_time) < timeout
-      if Redis::Alfred.set(key, 1, nx: true, ex: timeout)
-        lock_acquired = true
-        break
-      end
-
-      sleep(0.1)
-    end
-
-    raise Timeout::Error, "Timeout acquiring contact lock for #{phone}" unless lock_acquired
-
-    yield
-  ensure
-    Redis::Alfred.delete(key) if lock_acquired
+    Whatsapp::Session::Inbound::Locks.with_chat_lock(inbox, phone, wait: wait, &)
   end
 end

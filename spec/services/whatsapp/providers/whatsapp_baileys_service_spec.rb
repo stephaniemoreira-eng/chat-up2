@@ -108,7 +108,8 @@ describe Whatsapp::Providers::WhatsappBaileysService do
               webhookUrl: whatsapp_channel.inbox.callback_webhook_url,
               webhookVerifyToken: whatsapp_channel.provider_config['webhook_verify_token'],
               includeMedia: false,
-              groupsEnabled: described_class.groups_enabled?
+              groupsEnabled: described_class.groups_enabled?,
+              syncFullHistory: false
             }.to_json
           )
           .to_return(status: 200)
@@ -129,7 +130,8 @@ describe Whatsapp::Providers::WhatsappBaileysService do
               webhookUrl: whatsapp_channel.inbox.callback_webhook_url,
               webhookVerifyToken: whatsapp_channel.provider_config['webhook_verify_token'],
               includeMedia: false,
-              groupsEnabled: described_class.groups_enabled?
+              groupsEnabled: described_class.groups_enabled?,
+              syncFullHistory: false
             }.to_json
           )
           .to_return(
@@ -145,6 +147,67 @@ describe Whatsapp::Providers::WhatsappBaileysService do
         end.to raise_error(Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError)
 
         expect(Rails.logger).to have_received(:error).with('error message').twice
+      end
+    end
+
+    context 'with a confirmed reconnect loop (quarantine strikes at the reset threshold)' do
+      before do
+        whatsapp_channel.update_provider_connection!(
+          connection: 'reconnecting',
+          quarantine: { strikes: 3, until: '2026-07-31T12:00:00.000Z' }
+        )
+      end
+
+      it 'discards the stored session before requesting the new connection, so a QR is offered' do
+        delete_stub = stub_request(:delete, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
+                      .to_return(status: 200)
+        post_stub = stub_request(:post, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
+                    .to_return(status: 200)
+
+        expect(service.setup_channel_provider).to be(true)
+
+        expect(delete_stub).to have_been_requested
+        expect(post_stub).to have_been_requested
+      end
+    end
+
+    context 'with quarantine strikes below the reset threshold' do
+      before do
+        whatsapp_channel.update_provider_connection!(
+          connection: 'reconnecting',
+          quarantine: { strikes: 2, until: '2026-07-31T12:00:00.000Z' }
+        )
+      end
+
+      it 'does not discard the stored session' do
+        post_stub = stub_request(:post, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
+                    .to_return(status: 200)
+
+        expect(service.setup_channel_provider).to be(true)
+
+        expect(post_stub).to have_been_requested
+        expect(a_request(:delete, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"))
+          .not_to have_been_made
+      end
+    end
+
+    context 'when the channel is open despite stale quarantine data' do
+      before do
+        whatsapp_channel.update_provider_connection!(
+          connection: 'open',
+          quarantine: { strikes: 5, until: '2026-07-31T12:00:00.000Z' }
+        )
+      end
+
+      it 'never discards the stored session of an open channel' do
+        post_stub = stub_request(:post, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
+                    .to_return(status: 200)
+
+        expect(service.setup_channel_provider).to be(true)
+
+        expect(post_stub).to have_been_requested
+        expect(a_request(:delete, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"))
+          .not_to have_been_made
       end
     end
   end
@@ -176,7 +239,8 @@ describe Whatsapp::Providers::WhatsappBaileysService do
                       webhookUrl: whatsapp_channel.inbox.callback_webhook_url,
                       webhookVerifyToken: whatsapp_channel.provider_config['webhook_verify_token'],
                       includeMedia: false,
-                      groupsEnabled: described_class.groups_enabled?
+                      groupsEnabled: described_class.groups_enabled?,
+                      syncFullHistory: false
                     }.to_json
                   )
                   .to_return(status: 202)
@@ -211,34 +275,48 @@ describe Whatsapp::Providers::WhatsappBaileysService do
       end
     end
 
-    # disconnect is best-effort: a missing session (404), a Baileys API error
-    # (5xx), or a transport failure shouldn't propagate. The caller (e.g.
-    # convert_provider!) just needs the cleanup attempt to be made, not to
-    # succeed.
+    # The outcome has to travel. Swallowing it let the caller record the inbox as closed
+    # while the session was still live — and for a send stall, whose only recovery is
+    # re-pairing, that also cleared the warning that was the only thing telling anyone the
+    # inbox was mute. The teardown callers that genuinely do not care rescue it themselves
+    # (Channel::Whatsapp#disconnect_channel_provider), which is where that decision belongs.
+    # 404 is the state being asked for, not a failure. Reporting it as one aborts a
+    # provider conversion and leaves the modal offering Disconnect forever for a session
+    # that is already gone.
+    context 'when the session is already absent' do
+      it 'returns true for HTTP 404' do
+        stub_request(:delete, disconnect_url)
+          .with(headers: stub_headers(whatsapp_channel))
+          .to_return(status: 404, body: 'not found')
+
+        expect(service.disconnect_channel_provider).to be(true)
+      end
+    end
+
     context 'when the Baileys API responds with an error status' do
-      [404, 500].each do |status|
-        it "returns true, logs a warning, and does not raise for HTTP #{status}" do
-          stub_request(:delete, disconnect_url)
-            .with(headers: stub_headers(whatsapp_channel))
-            .to_return(status: status, body: 'baileys error')
+      it 'raises and logs a warning for HTTP 500' do
+        stub_request(:delete, disconnect_url)
+          .with(headers: stub_headers(whatsapp_channel))
+          .to_return(status: 500, body: 'baileys error')
 
-          allow(Rails.logger).to receive(:warn)
+        allow(Rails.logger).to receive(:warn)
 
-          expect(service.disconnect_channel_provider).to be(true)
-          expect(Rails.logger).to have_received(:warn).with(/disconnect_channel_provider non-success status=#{status}/)
-        end
+        expect { service.disconnect_channel_provider }
+          .to raise_error(Whatsapp::Session::Errors::ProviderUnavailable, /did not end the session/)
+        expect(Rails.logger).to have_received(:warn).with(/disconnect_channel_provider non-success status=500/)
       end
     end
 
     context 'when the request itself fails' do
-      it 'returns true, logs a warning, and does not raise' do
+      it 'raises and logs a warning' do
         stub_request(:delete, disconnect_url)
           .with(headers: stub_headers(whatsapp_channel))
           .to_raise(Net::OpenTimeout)
 
         allow(Rails.logger).to receive(:warn)
 
-        expect(service.disconnect_channel_provider).to be(true)
+        expect { service.disconnect_channel_provider }
+          .to raise_error(Whatsapp::Session::Errors::ProviderUnavailable, /Could not reach the provider/)
         expect(Rails.logger).to have_received(:warn).with(/disconnect_channel_provider failed/)
       end
 
@@ -248,7 +326,7 @@ describe Whatsapp::Providers::WhatsappBaileysService do
           .to_raise(Net::OpenTimeout)
         reconnect_request = stub_request(:post, disconnect_url)
 
-        service.disconnect_channel_provider
+        expect { service.disconnect_channel_provider }.to raise_error(Whatsapp::Session::Errors::Error)
 
         expect(reconnect_request).not_to have_been_requested
       end
@@ -677,6 +755,57 @@ describe Whatsapp::Providers::WhatsappBaileysService do
       end
     end
 
+    context 'when reserving the WhatsApp message id' do
+      let(:unsent_message) { create(:message, inbox: whatsapp_channel.inbox, content: 'Hello') }
+
+      it 'sends under a reserved id and persists it before the request' do
+        stub_request(:post, request_path)
+          .to_return(status: 200, headers: { 'Content-Type' => 'application/json' }, body: result_body.to_json)
+
+        service.send_message(test_send_phone_number, unsent_message)
+
+        reserved = unsent_message.reload.pending_source_id
+        expect(reserved).to match(/\A3EB0[0-9A-F]{18}\z/)
+        expect(WebMock).to(have_requested(:post, request_path).with { |req| JSON.parse(req.body)['messageId'] == reserved })
+        # Stored so the echo handler's lookup can read it back out of the JSON column.
+        expect(Message.where("(content_attributes#>>'{}')::jsonb->>'pending_source_id' = ?", reserved)).to exist
+      end
+
+      # A send can sit behind the channel lock for minutes; the row may have been re-reserved (or
+      # cleared and re-reserved by a reaction toggle) since it was loaded.
+      it 'reads the reservation under the lock instead of the copy loaded before waiting' do
+        Message.find(unsent_message.id).update!(content_attributes: { pending_source_id: 'RESERVED_ELSEWHERE' })
+        stub_request(:post, request_path)
+          .to_return(status: 200, headers: { 'Content-Type' => 'application/json' }, body: result_body.to_json)
+
+        service.send_message(test_send_phone_number, unsent_message)
+
+        expect(WebMock).to(have_requested(:post, request_path).with { |req| JSON.parse(req.body)['messageId'] == 'RESERVED_ELSEWHERE' })
+      end
+
+      # The reservation is bookkeeping for a send that has not happened yet: it must not look like a
+      # message update to integrations, nor invalidate the idempotency key a retry has to reuse.
+      it 'does not touch updated_at when reserving' do
+        stub_request(:post, request_path)
+          .to_return(status: 200, headers: { 'Content-Type' => 'application/json' }, body: result_body.to_json)
+
+        expect { service.send_message(test_send_phone_number, unsent_message) }
+          .not_to(change { unsent_message.reload.updated_at })
+      end
+
+      it 'reuses the reserved id when the same message is sent again' do
+        stub_request(:post, request_path)
+          .to_return(status: 200, headers: { 'Content-Type' => 'application/json' }, body: result_body.to_json)
+
+        service.send_message(test_send_phone_number, unsent_message)
+        reserved = unsent_message.reload.pending_source_id
+        service.send_message(test_send_phone_number, unsent_message)
+
+        expect(unsent_message.reload.pending_source_id).to eq(reserved)
+        expect(WebMock).to(have_requested(:post, request_path).with { |req| JSON.parse(req.body)['messageId'] == reserved }.twice)
+      end
+    end
+
     context 'when request is unsuccessful' do
       it 'raises ProviderUnavailableError' do
         stub_request(:post, request_path)
@@ -693,6 +822,167 @@ describe Whatsapp::Providers::WhatsappBaileysService do
         expect do
           service.send_message(test_send_phone_number, message)
         end.to raise_error(Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError)
+      end
+    end
+
+    # Every non-2xx used to collapse into a bare ProviderUnavailableError, so the job
+    # retried "this message can never be sent" exactly as hard as "the connection is
+    # down", and buried both in the dead set.
+    context 'when the server reports the send outcome is unknown' do
+      it 'raises a non-retryable error and does not reconnect the channel' do
+        stub_request(:post, request_path)
+          .to_return(
+            status: 409,
+            headers: { 'x-baileys-idempotency-state' => 'indeterminate' },
+            body: 'Previous send timed out; outcome unknown'
+          )
+
+        setup_url = "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to(raise_error do |error|
+          expect(error.class.name).to eq('Whatsapp::Providers::WhatsappBaileysService::SendOutcomeUnknownError')
+          # Resending could deliver the message twice, and only a human can tell.
+          expect(error.retryable?).to be(false)
+        end)
+
+        expect(WebMock).not_to have_requested(:post, setup_url)
+      end
+    end
+
+    context 'when the send times out' do
+      it 'raises a retryable timeout error' do
+        stub_request(:post, request_path)
+          .to_return(status: 504, body: 'Send timed out; outcome unknown')
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to(raise_error do |error|
+          expect(error.class.name).to eq('Whatsapp::Providers::WhatsappBaileysService::SendTimeoutError')
+          expect(error.retryable?).to be(true)
+        end)
+      end
+
+      # The connection is receiving and answering health checks; only sending is wedged.
+      # Marking it closed would drop it out of the health-check cycle that detects
+      # exactly this, and POST /connections cannot repair it anyway.
+      it 'leaves the channel open so the health check keeps watching it' do
+        stub_request(:post, request_path)
+          .to_return(status: 504, body: 'Send timed out; outcome unknown')
+
+        setup_url = "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"
+
+        expect { service.send_message(test_send_phone_number, message) }.to raise_error(StandardError)
+
+        expect(WebMock).not_to have_requested(:post, setup_url)
+      end
+    end
+
+    # 503 is where the whole episode settles: after the third timeout the API's circuit
+    # breaker refuses without touching the socket, so every later send gets this. Folding
+    # it into the generic ProviderUnavailableError would mark the channel closed for the
+    # entire stall and drop it out of the very cycle meant to detect it.
+    context 'when the connection is refusing sends outright' do
+      it 'raises a retryable stall error and leaves the channel open' do
+        stub_request(:post, request_path)
+          .to_return(status: 503, body: 'Connection is not accepting sends',
+                     headers: { 'x-baileys-send-state' => 'stalled' })
+
+        setup_url = "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to(raise_error do |error|
+          expect(error.class.name).to eq('Whatsapp::Providers::WhatsappBaileysService::SendStalledError')
+          # The provider recreates the socket on its own; the next attempt after that works.
+          expect(error.retryable?).to be(true)
+        end)
+
+        expect(WebMock).not_to have_requested(:post, setup_url)
+      end
+
+      # The stall branch is the one that must NOT mark the channel down. An outage and a
+      # draining proxy answer the same 503, and applying the stall reading to them leaves
+      # a genuinely dead channel recorded as open, skipping the reconnect it needed and
+      # dropping it out of the health-check cycle for good.
+      it 'treats a 503 without the provider marker as an ordinary outage' do
+        stub_request(:post, request_path)
+          .to_return(status: 503, body: 'Service Unavailable')
+        setup_url = "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"
+        stub_request(:post, setup_url).to_return(status: 200)
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to(raise_error do |error|
+          expect(error.class.name).to eq('Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError')
+        end)
+
+        expect(WebMock).to have_requested(:post, setup_url)
+      end
+    end
+
+    context 'when the attachment is rejected as too large' do
+      it 'raises a non-retryable error without marking the channel closed' do
+        stub_request(:post, request_path).to_return(status: 413, body: 'Payload Too Large')
+
+        setup_url = "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to raise_error(Whatsapp::Session::Errors::MediaTooLarge)
+
+        # Marking the channel closed here would drop it out of the health-check cycle,
+        # which only enqueues channels whose connection is 'open'.
+        expect(WebMock).not_to have_requested(:post, setup_url)
+      end
+    end
+
+    context 'when the message content is rejected' do
+      it 'raises a non-retryable error' do
+        stub_request(:post, request_path).to_return(status: 422, body: 'Unprocessable')
+
+        setup_url = "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}"
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to(raise_error do |error|
+          expect(error).to be_a(Whatsapp::Session::Errors::InvalidPayload)
+          expect(error.retryable?).to be(false)
+        end)
+
+        expect(WebMock).not_to have_requested(:post, setup_url)
+      end
+    end
+
+    # SendReplyJob persists error.message as external_error when the retries run out, so a
+    # bare raise puts the Ruby class name in front of the agent where the reason belongs.
+    it 'gives a generic provider failure a reason an agent can read' do
+      stub_request(:post, request_path).to_return(status: 500, body: 'Internal Server Error')
+      stub_request(:post, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
+        .to_return(status: 200)
+
+      expect do
+        service.send_message(test_send_phone_number, message)
+      end.to(raise_error do |error|
+        expect(error.message).to eq(I18n.t('errors.inboxes.channel.outgoing.provider_error'))
+        expect(error.message).not_to include('WhatsappBaileysService')
+      end)
+    end
+
+    context 'when the provider is unavailable' do
+      it 'raises a retryable provider error' do
+        stub_request(:post, request_path)
+          .to_return(status: 503, body: 'Service Unavailable')
+        stub_request(:post, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
+          .to_return(status: 200)
+
+        expect do
+          service.send_message(test_send_phone_number, message)
+        end.to(raise_error do |error|
+          expect(error).to be_a(Whatsapp::Session::Errors::ProviderUnavailable)
+          expect(error.retryable?).to be(true)
+        end)
       end
     end
 
@@ -1520,7 +1810,8 @@ describe Whatsapp::Providers::WhatsappBaileysService do
               webhookUrl: whatsapp_channel.inbox.callback_webhook_url,
               webhookVerifyToken: whatsapp_channel.provider_config['webhook_verify_token'],
               includeMedia: false,
-              groupsEnabled: described_class.groups_enabled?
+              groupsEnabled: described_class.groups_enabled?,
+              syncFullHistory: false
             }.to_json
           )
           .to_return(status: 200)
@@ -1539,7 +1830,8 @@ describe Whatsapp::Providers::WhatsappBaileysService do
               webhookUrl: whatsapp_channel.inbox.callback_webhook_url,
               webhookVerifyToken: whatsapp_channel.provider_config['webhook_verify_token'],
               includeMedia: false,
-              groupsEnabled: described_class.groups_enabled?
+              groupsEnabled: described_class.groups_enabled?,
+              syncFullHistory: false
             }.to_json
           )
           .to_return(status: 200)
@@ -1558,7 +1850,8 @@ describe Whatsapp::Providers::WhatsappBaileysService do
               webhookUrl: whatsapp_channel.inbox.callback_webhook_url,
               webhookVerifyToken: whatsapp_channel.provider_config['webhook_verify_token'],
               includeMedia: false,
-              groupsEnabled: described_class.groups_enabled?
+              groupsEnabled: described_class.groups_enabled?,
+              syncFullHistory: false
             }.to_json
           )
           .to_return(status: 400, body: 'reconnection failed')
@@ -1638,6 +1931,57 @@ describe Whatsapp::Providers::WhatsappBaileysService do
 
           expect(WebMock).to have_requested(:post, "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}")
         end
+      end
+    end
+  end
+
+  describe 'history sync' do
+    let(:history_url) do
+      "#{whatsapp_channel.provider_config['provider_url']}/connections/#{whatsapp_channel.phone_number}/fetch-message-history"
+    end
+    let(:contact) { create(:contact, account: whatsapp_channel.inbox.account, phone_number: '+551187654321', identifier: '99887766@lid') }
+    let(:conversation) { create(:conversation, inbox: whatsapp_channel.inbox, account: whatsapp_channel.inbox.account, contact: contact) }
+
+    before { create(:contact_inbox, inbox: whatsapp_channel.inbox, contact: contact, source_id: '99887766') }
+
+    describe '#history_sync?' do
+      it 'is off until the operator turns it on' do
+        expect(service.history_sync?).to be(false)
+      end
+
+      it 'is on once the inbox carries the setting' do
+        whatsapp_channel.update!(provider_config: whatsapp_channel.provider_config.merge('history_sync' => true))
+
+        expect(service.history_sync?).to be(true)
+      end
+    end
+
+    describe '#request_history' do
+      # WhatsApp can only walk backwards, so a request needs a message to walk back from.
+      it 'asks the phone for what came before the oldest stored message' do
+        create(:message, conversation: conversation, inbox: whatsapp_channel.inbox, source_id: 'NEWER',
+                         created_at: 1.day.ago, content_attributes: { external_created_at: 200 })
+        create(:message, conversation: conversation, inbox: whatsapp_channel.inbox, source_id: 'OLDEST',
+                         created_at: 5.days.ago, content_attributes: { external_created_at: 100 })
+        request = stub_request(:post, history_url)
+                  .with(
+                    headers: stub_headers(whatsapp_channel),
+                    body: {
+                      count: 50,
+                      oldestMsgKey: { id: 'OLDEST', remoteJid: '99887766@lid', fromMe: false },
+                      # In milliseconds: the bridge hands this to `oldestMsgTimestampMs`.
+                      oldestMsgTimestamp: 100_000
+                    }.to_json
+                  )
+                  .to_return(status: 200)
+
+        expect(service.request_history(contact)).to be(true)
+        expect(request).to have_been_requested
+      end
+
+      it 'asks nothing for a contact with no stored message to anchor on' do
+        expect(service.request_history(contact)).to be(false)
+        expect(a_request(:post, history_url)).not_to have_been_made
       end
     end
   end
@@ -1928,6 +2272,78 @@ describe Whatsapp::Providers::WhatsappBaileysService do
       expect(group_contact.additional_attributes).to include('description' => 'Group description', 'owner' => '111@lid')
     end
 
+    # The group contact is read once, at the top of `sync_group`, and every write afterwards
+    # merges into that copy. Four network calls happen in between, so anything another writer
+    # stores during any of them is in the row and not in the copy, and the next write erases it.
+    # No threads: the copy is simply old. One example per window, because each window is a
+    # different write, and a fix that only moves the last one leaves the others standing.
+    describe 'a writer that lands during one of the network calls' do
+      def intrude
+        Contact.find(group_contact.id).then do |stored|
+          stored.update!(additional_attributes: stored.additional_attributes.merge('custom_note' => 'kept'))
+        end
+      end
+
+      it 'survives a write during the metadata call, which happens before any write' do
+        stub_request(:get, "#{base_url}/group-metadata")
+          .with(headers: stub_headers(whatsapp_channel), query: { jid: group_contact.identifier })
+          .to_return do
+            intrude
+            { status: 200, body: metadata.merge(participants: []).to_json }
+          end
+
+        service.sync_group(conversation)
+
+        expect(group_contact.reload.additional_attributes).to include('custom_note' => 'kept')
+      end
+
+      it 'survives a write during the invite code call' do
+        stub_group_metadata(metadata.merge(participants: []))
+        stub_request(:get, "#{base_url}/group-invite-code")
+          .with(headers: stub_headers(whatsapp_channel), query: { jid: group_contact.identifier })
+          .to_return do
+            intrude
+            # `data.inviteCode` is what the fetcher reads; the shared stub above returns a shape
+            # it ignores, so nothing was ever written through this path before.
+            { status: 200, body: { data: { inviteCode: 'ABC123' } }.to_json }
+          end
+
+        service.sync_group(conversation)
+
+        expect(group_contact.reload.additional_attributes).to include('custom_note' => 'kept', 'invite_code' => 'ABC123')
+      end
+
+      it 'survives a write during the join requests call' do
+        stub_group_metadata(metadata.merge(participants: []))
+        stub_request(:get, "#{base_url}/group-request-participants-list")
+          .with(headers: stub_headers(whatsapp_channel), query: { jid: group_contact.identifier })
+          .to_return do
+            intrude
+            { status: 200, body: [].to_json }
+          end
+
+        service.sync_group(conversation)
+
+        expect(group_contact.reload.additional_attributes).to include('custom_note' => 'kept')
+      end
+
+      # The other half of the same defect: a key the other writer *removed* during the window is
+      # still in the old copy, so writing the copy back brings it home from the dead.
+      it 'does not resurrect a key removed during the window' do
+        group_contact.update!(additional_attributes: { 'custom_note' => 'stale' })
+        stub_request(:get, "#{base_url}/group-metadata")
+          .with(headers: stub_headers(whatsapp_channel), query: { jid: group_contact.identifier })
+          .to_return do
+            Contact.find(group_contact.id).update!(additional_attributes: {})
+            { status: 200, body: metadata.merge(participants: []).to_json }
+          end
+
+        service.sync_group(conversation)
+
+        expect(group_contact.reload.additional_attributes).not_to have_key('custom_note')
+      end
+    end
+
     it 'creates group members with correct roles from participants' do
       admin_contact = create(:contact, account: whatsapp_channel.account)
       member_contact = create(:contact, account: whatsapp_channel.account)
@@ -1961,7 +2377,13 @@ describe Whatsapp::Providers::WhatsappBaileysService do
     }
   end
 
+  # The service reserves the WhatsApp message id before posting, so reserve it here too or the
+  # expected body would carry a different `messageId`. The reload matters: the reservation runs
+  # under a row lock, which re-reads the row, so the service builds the idempotency key from the
+  # database `updated_at` (microseconds) rather than the in-memory one written by `update!`.
   def send_message_body(hash, msg = message)
-    hash.merge(chatwootMessageId: "#{msg.id}:#{msg.updated_at.to_f}").to_json
+    msg.update_under_lock!(pending_source_id: 'reserved_msg_id') if msg.pending_source_id.blank?
+    msg.reload
+    hash.merge(chatwootMessageId: "#{msg.id}:#{msg.updated_at.to_f}", messageId: msg.pending_source_id).to_json
   end
 end

@@ -66,6 +66,8 @@ const MessageControl = Symbol('MessageControl');
  * @property {EmailContent} [email] - Email content and metadata
  * @property {string|null} [ccEmail] - CC email addresses
  * @property {string|null} [bccEmail] - BCC email addresses
+ * @property {Object} [whatsappFlowResponse] - WhatsApp Flow response metadata
+ * @property {Record<string, unknown>|string} [whatsappFlowResponse.responseJson] - Structured fields or the raw response submitted by the contact
  * @property {Object} [referral] - Click-to-WhatsApp ad metadata on the first message after an ad click (keys camelized by MessageList)
  * @property {string} [referral.sourceType] - Ad source type (e.g. 'ad', 'post')
  * @property {string} [referral.sourceId] - Source ad identifier
@@ -75,6 +77,9 @@ const MessageControl = Symbol('MessageControl');
  * @property {string} [referral.body] - Ad body text
  * @property {string} [referral.mediaType] - Ad media type ('image'|'video'|'none')
  * @property {string} [referral.thumbnailUrl] - Ad thumbnail URL
+ * @property {string} [referral.mediaUrl] - Media URL of a Twilio referral
+ * @property {string} [referral.mediaContentType] - Media content type of a Twilio referral
+ * @property {{type: 'request', state: 'pending'|'shared'|'identity_conflict'}} [whatsappContactInfo] - WhatsApp contact information request state
  */
 
 /**
@@ -110,7 +115,7 @@ const MessageControl = Symbol('MessageControl');
  * @property {import('vue').ComputedRef<MessageVariant>} variant - The visual variant of the message
  * @property {import('vue').ComputedRef<boolean>} isBotOrAgentMessage - Does the message belong to the current user
  * @property {import('vue').ComputedRef<boolean>} isPrivate - Proxy computed value for private
- * @property {import('vue').ComputedRef<boolean>} shouldGroupWithNext - Should group with the next message or not, it is differnt from groupWithNext, this has a bypass for a failed message
+ * @property {import('vue').ComputedRef<boolean>} shouldGroupWithNext - Should group with the next message or not, it is different from groupWithNext, this has a bypass for a failed message
  */
 
 /**

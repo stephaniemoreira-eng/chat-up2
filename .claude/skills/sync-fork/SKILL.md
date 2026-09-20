@@ -23,7 +23,9 @@ Branch from our fork's `main`, merge `upstream/develop` (or a release tag like `
 
 ### B) fazer-ai/chatwoot → fazer-ai/chatwoot-pro (Pro merge)
 
-Switch to `chatwoot-pro-main`, pull it even with `chatwoot-pro/main`, then `git merge main --no-ff -m "Merge branch 'main' into chatwoot-pro-main"`. Repo history shows this is done directly on `chatwoot-pro-main` (no PR), then pushed to `chatwoot-pro/main` along with the new `vX.Y.Z-fazer-ai-pro.N` tag.
+Switch to `chatwoot-pro-main`, pull it even with `chatwoot-pro/chatwoot-pro-main`, then `git merge main --no-ff -m "Merge branch 'main' into chatwoot-pro-main"`. Repo history shows this is done directly on `chatwoot-pro-main` (no PR), then pushed to `chatwoot-pro/chatwoot-pro-main` along with the new `vX.Y.Z-fazer-ai-pro.N` tag.
+
+⚠️ The remote branch is `chatwoot-pro-main`, so the tracking ref is `chatwoot-pro/chatwoot-pro-main`. **`chatwoot-pro/main` is a different, long-dead branch** that the Pro repo keeps only as its nominal GitHub default. Resetting onto it or pushing to it puts the merge on a stale ancestor.
 
 - HEAD = Pro (`chatwoot-pro-main`), MERGE_HEAD = CE (`main`).
 - Pro is a strict superset of CE: every conflict is either "CE changed something we overrode" (usually KC/CO to preserve Pro behavior) or "CE added new code next to our additions" (usually CO).
@@ -39,9 +41,33 @@ When triggered on a merge, don't just read the file and wing it — walk the ful
 4. Run the **Validation flow** end-to-end (it is mandatory, not optional). Do not commit if any step fails.
 5. Run the **Mandatory subagent review** (see section below) — it is a required gate, not optional. Address every FAIL before merging.
 6. Trigger the upstream CI on the branch (**Validate on upstream CI** section) and wait for green before merging.
-7. For Pro merges, recall that pushing to `chatwoot-pro/main` is directly followed by tagging `vX.Y.Z-fazer-ai-pro.N` and cutting a release — coordinate with the `release-user-notes` skill (and its `PRIVACY.md` companion) before writing the release body.
+7. Merge the CE sync PR with a **merge commit, never squash** (**Merging the sync PR** section), then verify the upstream tag is an ancestor of `main`.
+8. For Pro merges, recall that pushing to `chatwoot-pro/chatwoot-pro-main` is directly followed by tagging `vX.Y.Z-fazer-ai-pro.N` and cutting a release — coordinate with the `release-user-notes` skill (and its `PRIVACY.md` companion) before writing the release body.
 
 ## Pre-flight
+
+**Before creating the sync branch (CE), check that the last synced upstream tag is still an ancestor of `main`:**
+
+```bash
+git merge-base --is-ancestor <last-synced-tag> main && echo "ancestry ok" || echo "ANCESTRY BROKEN — see below"
+git merge-base main <new-tag> | xargs git log -1 --format='%h %s'   # this is the base the merge will use
+```
+
+If it says BROKEN, a previous sync PR was squashed and the merge you're about to run will base on a much older tag — replaying a whole version's diff and fabricating conflicts on every file the fork touched since. Restore the lost parent on the sync branch first (see **Repairing a squashed sync** below), then merge.
+
+> **Precedent: v4.16.2 (PR #348), already repaired.** That PR was merged with `--squash`, so `v4.16.2` stopped being an ancestor of `main` — the merge base fell back to `00a50dd79c` (`Merge branch 'release/4.16.0'`), 52 commits behind, and GitHub reported `main` as 197 commits behind `chatwoot:develop`. Repaired on 2026-08-17 by commit `590ca10ebf`, which recorded the PR head `2efdd58b30` as a second parent with the recipe below (the squashed commit `0a29032c9f` had a byte-identical tree, so nothing on disk changed). `git rev-list --count main..v4.16.2` is now 0.
+
+### Repairing a squashed sync
+
+```bash
+git checkout -b chore/merge-upstream-X.Y.Z main
+git diff --stat <squashed-pr-head> <squash-commit>   # MUST be empty — proves the tree already contains that sync
+git merge -s ours <squashed-pr-head> -m "chore: restore upstream vA.B.C ancestry (squashed in #NNN)"
+git merge-base --is-ancestor vA.B.C HEAD && echo "link restored"
+git merge vX.Y.Z    # now bases on vA.B.C instead of the stale tag
+```
+
+`-s ours` records the second parent without touching a single file — it does not re-apply anything, it only tells git what the tree already contains. If the `git diff --stat` above is NOT empty, stop: the squash and the branch diverged, and `-s ours` would permanently hide the difference. Resolve that by hand before merging.
 
 After `git merge upstream/develop` (CE) or `git merge main` (Pro), before touching anything:
 
@@ -169,6 +195,62 @@ Upstream 4.16.0 rearchitected `Featurable`: `FEATURE_FLAG_COLUMNS = ['feature_fl
 - Controller gate: `can_reconfigure_channel?` (upstream name, our body) accepts any `Channel::Whatsapp` (fork conversion flow) and requires the `whatsapp_reconfigure` feature flag only when `provider_config['source'] == 'embedded_signup'`. Keep that shape.
 - Enterprise's new `Inbox#ensure_create_permitted` runs `account.inboxes.count` in `before_create` — fork specs that `instance_double` the `account.inboxes` relation must materialize factory records BEFORE installing the double (lazy `let` inside the `allow(...).with(baileys_inbox.id)` line fires mid-stub otherwise).
 
+### WhatsApp session providers (`native`, `uazapi`)
+
+The provider-neutral layer for the QR/pairing family. Nearly all of it is fork-only code in
+paths upstream has never had, so it does not conflict: `app/services/whatsapp/session/**`,
+`app/jobs/whatsapp/session/**`, `app/controllers/webhooks/whatsapp/**`,
+`app/controllers/api/v1/accounts/whatsapp/**`, `app/javascript/dashboard/helper/whatsappSession.js`,
+`.../inbox/channels/session/**`, `.../inbox/settingsPage/SessionProviderConfiguration.vue`,
+`lib/tasks/whatsapp_session.rake`. Merge conflicts there mean someone edited our tree, not upstream.
+
+What it *does* touch upstream is deliberately small, and every one is **KC** on a CE merge
+(upstream has no idea these providers exist):
+
+| File | Ours |
+|---|---|
+| `app/models/channel/whatsapp.rb` | `prepend Whatsapp::Session::ChannelExtension` and `PROVIDERS = (%w[...] + Whatsapp::Session::PROVIDERS)`. Every behavior override lives in the module, so upstream changing a method body usually merges clean. |
+| `app/services/whatsapp/send_on_whatsapp_service.rb` | `persist_source_id` goes through `Session::Outbound::SourceIdReservation.assign`, and `recipient_id` branches on `channel.session_family?`. |
+| `app/services/conversations/message_window_service.rb` | one line: `session_family?` instead of a provider list. |
+| `app/views/api/v1/models/_inbox.json.jbuilder` | `json.capabilities resource.channel.try(:session_capabilities)` inside the whatsapp block. If upstream restructures this file, re-attach it: the dashboard gates features on it, and a missing key reads as "provider supports nothing". |
+
+`app/services/whatsapp/incoming_message_base_service.rb` is **untouched** by this layer, on
+purpose: it is the worst conflict zone in the repo and the session layer has its own inbound
+path (`Session::Inbound::Dispatcher`). Keep it that way; if a merge tempts you to add a
+session branch there, it belongs in the dispatcher instead.
+
+**The literal trap, and the one check to run after every merge.** `%w[baileys zapi]` used to be
+how the fork asked "is this a paired session?", and the answer is now `channel.session_family?`.
+Upstream does not write those literals, but *our own* older code did, and a merge that resurrects
+one silently gives `native`/`uazapi` a 24-hour messaging window or the wrong recipient id, and no
+spec fails, because the literal is still true for the two legacy providers. After every merge:
+
+```sh
+git grep -nE "%w\[baileys zapi\]|['\"]baileys['\"].{0,40}['\"]zapi['\"]" app/ lib/ \
+  | grep -v "whatsapp/session/" | grep -vE "native|uazapi" | grep -vE ":[0-9]+:\s*#"
+```
+
+It prints nothing on a healthy tree (verified on `wa/08-provider-catalog`). The filters are what
+make it worth running: the session layer's own files name both providers legitimately, the
+canonical `SESSION_PROVIDERS` list names all four, and annotate_rb writes both into the schema
+comment block. Anything that survives all three is a runtime branch that forgot the new
+providers, and it should be `session_family?`, `session_provider?` or a capability check.
+
+Two constants deliberately still name the legacy pair and are **not** hits to fix:
+`Channel::Whatsapp::PROVIDERS` (a declaration, and it concatenates `Whatsapp::Session::PROVIDERS`)
+and `REACTION_SUPPORTED_PROVIDERS` (only reached through `supports_reactions?`, which returns
+early for session providers via the capability list).
+
+**The legacy providers are frozen, not maintained.** `whatsapp_baileys_service.rb`,
+`whatsapp_zapi_service.rb`, `baileys_handlers/**`, `zapi_handlers/**`, `BaileysWhatsapp.vue`,
+`ZapiWhatsapp.vue` and their ~9k lines of specs are a deliberate safety net: do not refactor them
+during a merge, even when a cop or a rename makes it tempting. Take upstream's change only if it
+fixes a real bug in them.
+
+**Pro side.** `Session::Inbound::Dispatcher` and `Session::Outbound::MessageSender` carry
+`prepend_mod_with`, so Pro extends them without editing CE. Before merging CE into Pro, check
+whether Pro overrides `Channel::Whatsapp` or the inbox jbuilder: both are on the touched list above.
+
 ### db/schema.rb
 
 Always conflicts because both sides have different migration versions. Resolution is mechanical but has traps:
@@ -228,9 +310,16 @@ Pro adds `PROTECTED_SUBSCRIPTION_KEYS` constant + `protected_subscription_key_ch
 
 ### i18n files
 
-`config/locales/en.yml` / `pt_BR.yml` and `app/javascript/dashboard/i18n/locale/en/settings.json` / `pt_BR/settings.json` conflict because both sides add keys. Almost always **CO**: merge both key sets under the right parent.
+**This section changed with the i18n split (PR #364). The old advice was to merge both key sets under the right parent; doing that now fails CI.**
 
-When upstream only adds `en.yml` keys and not `pt_BR.yml`, match upstream's scope — do not invent pt_BR translations as part of the merge. Those come in as community PRs or a separate translation pass.
+Upstream's locale files (`config/locales/<locale>.yml`, `app/javascript/dashboard/i18n/locale/**`) no longer carry a single fork key. Everything we translate lives in `app/javascript/dashboard/i18n/fazer-ai/locale/<locale>/` and `config/locales/fazer_ai.<locale>.yml`, deep-merged on top at runtime. So:
+
+- Conflicts in an upstream locale file are **TU**, wholesale. Take upstream's side and do not carry anything of ours across. The `drift` check compares those files byte-for-byte against the tracked tag and fails on any difference.
+- A conflict there at all means the fork side still has a stray key. Resolve as TU, then run `check` to find where it should have lived.
+- Our own files (`fazer_ai.*.yml`, `fazer-ai/locale/**`) are ours alone. Upstream never touches them, so they only conflict on a CE → Pro merge, resolved as **CO** like any other fork file.
+- After the merge, bump `UPSTREAM_BASE` in `scripts/i18n/fork_translations.rb` to the new tag and run `check` and `drift`.
+
+Upstream adding an `en.yml` key without the `pt_BR.yml` counterpart is still upstream's business: match their scope and do not invent translations for their files. Our own three languages are a different rule, and `check` enforces them (see **Fork translations** in `AGENTS.md`).
 
 ### New features from both sides
 
@@ -304,16 +393,39 @@ The subagent panel COMPLEMENTS but never REPLACES the CI gate below — agents r
 
 ### Validate on upstream CI (GitHub Actions) before merging
 
-Local specs cover the resolved files, but the authoritative gate is the fork's own CI. After committing the merge and pushing the `chore/merge-upstream-X.Y.Z` branch, **trigger the CE spec workflow on the branch and wait for green before merging the PR** (the `Run Chatwoot CE spec` workflow, `run_foss_spec.yml`, only fires on tag pushes + `workflow_dispatch`, so a branch push alone does NOT run it):
+Local specs cover the resolved files, but the authoritative gate is the fork's own CI. After committing the merge and pushing the `chore/merge-upstream-X.Y.Z` branch, **trigger the CE spec workflow on the branch and wait for green before merging the PR** (the `Run Chatwoot CE spec` workflow, `run_foss_spec.yml`, fires on pushes to main and tags plus `workflow_dispatch`, so a branch push alone does NOT run it):
 
 ```bash
 git push -u origin chore/merge-upstream-X.Y.Z
-gh workflow run run_foss_spec.yml --ref chore/merge-upstream-X.Y.Z
+gh workflow run run_foss_spec.yml --ref chore/merge-upstream-X.Y.Z -f full=true   # full=true: a sync touches everything, the default dispatch runs only the specs the diff maps to
 gh run list --workflow=run_foss_spec.yml --branch chore/merge-upstream-X.Y.Z --limit 1   # grab the run id
 gh run watch <run-id>                                                                    # or poll with `gh run view <run-id>`
 ```
 
 For a CE→Pro merge, the Pro CI lives in the `chatwoot-pro` repo and is triggered the same way against `chatwoot-pro-main` (push goes to the `chatwoot-pro` remote — see the push-target feedback memory). CI green is a pre-condition for merge, not authorization to merge — still wait for explicit user OK.
+
+## Merging the sync PR: merge commit, NEVER squash
+
+This fork's default PR strategy is `--squash`. **Sync PRs are one of the two exceptions** (the other is a PR already merged into `chatwoot-pro-main` — see **Merge strategy** in `AGENTS.md`), and it is not a style preference: squashing `chore/merge-upstream-X.Y.Z` flattens it into a single-parent commit, so the upstream tag stops being an ancestor of `main` even though every line of it landed. Two consequences, both permanent:
+
+- GitHub shows `main` as "N commits behind chatwoot:develop" forever, and the count only grows with each squashed sync (after the squashed 4.16.2 sync it read 197).
+- The NEXT sync's merge base falls back to the last non-squashed tag, so git replays an entire version's diff and manufactures conflicts on every file the fork changed in between.
+
+```bash
+gh pr merge <n> --merge --admin --repo fazer-ai/chatwoot   # sync PRs ONLY — every other PR stays --squash
+```
+
+Verify the link immediately after merging — this is the check that catches a wrong strategy while it is still cheap to fix:
+
+```bash
+git checkout main && git pull origin main
+git merge-base --is-ancestor vX.Y.Z main && echo "upstream tag is an ancestor: ok"
+git rev-list --count main..vX.Y.Z      # MUST be 0
+```
+
+If it isn't 0, the PR was squashed: repair it right away with the `-s ours` recipe in **Repairing a squashed sync** (using the PR head commit, still reachable via `git fetch origin refs/pull/<n>/head`) rather than leaving it for the next sync.
+
+`git rev-list --count main..upstream/develop` stays non-zero — that's just `develop` moving past the tag we synced, which is expected. What must be zero is the count against the tag we actually merged.
 
 ## Pre-commit pitfalls
 

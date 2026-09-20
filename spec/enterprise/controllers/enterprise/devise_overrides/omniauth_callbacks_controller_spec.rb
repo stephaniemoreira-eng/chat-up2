@@ -18,6 +18,8 @@ RSpec.describe 'Enterprise SAML OmniAuth Callbacks', type: :request do
 
   before do
     allow(ChatwootApp).to receive(:enterprise?).and_return(true)
+    allow(GlobalConfigService).to receive(:load).and_call_original
+    allow(GlobalConfigService).to receive(:load).with('FRONTEND_URL', 'http://localhost:3000').and_return('http://www.example.com')
     account.enable_features!('saml')
     saml_settings
   end
@@ -57,6 +59,17 @@ RSpec.describe 'Enterprise SAML OmniAuth Callbacks', type: :request do
         get "/omniauth/saml/callback?account_id=#{account.id}&RelayState=mobile"
 
         expect(response).to redirect_to(%r{\Achatwootapp://auth/saml\?email=.+&sso_auth_token=.+\z})
+      end
+    end
+
+    it 'redirects to the login error when the assertion cannot produce a valid user' do
+      with_modified_env FRONTEND_URL: 'http://www.example.com' do
+        set_saml_config('broken@example.com')
+        allow(User).to receive(:create!).and_raise(ActiveRecord::RecordInvalid.new(User.new))
+
+        get "/omniauth/saml/callback?account_id=#{account.id}"
+
+        expect(response).to redirect_to('http://www.example.com/app/login?error=saml-authentication-failed')
       end
     end
 

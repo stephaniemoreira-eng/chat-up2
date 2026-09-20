@@ -11,7 +11,7 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
   retry_on_lock_conflict wait: ->(executions) { executions.seconds }, attempts: 3, on_exhaustion: :process_without_lock
 
   # @return [Array] We will support further events like reaction or seen in future
-  SUPPORTED_EVENTS = [:message, :read].freeze
+  SUPPORTED_EVENTS = [:message, :read, :postback].freeze
 
   def perform(entries)
     @entries = entries
@@ -82,11 +82,9 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
   end
 
   def instagram_id(messaging)
-    if agent_message_via_echo?(messaging)
-      messaging[:sender][:id]
-    else
-      messaging[:recipient][:id]
-    end
+    return messaging.dig(:sender, :id) if agent_message_via_echo?(messaging)
+
+    messaging.dig(:recipient, :id)
   end
 
   def ig_account_id
@@ -115,6 +113,10 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
   end
 
   def find_channel(instagram_id)
+    # `channel_facebook_pages.instagram_id` is nullable, so a blank lookup would match an arbitrary
+    # page from any account instead of returning nothing.
+    return if instagram_id.blank?
+
     # There will be chances for the instagram account to be connected to a facebook page,
     # so we need to check for both instagram and facebook page channels
     # priority is for instagram channel which created via instagram login
@@ -125,8 +127,10 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
     channel
   end
 
+  # Resolved per event: a single webhook batch mixes event types, and the job iterates over every
+  # entry and every messaging item within it.
   def event_name(messaging)
-    @event_name ||= SUPPORTED_EVENTS.find { |key| messaging.key?(key) }
+    SUPPORTED_EVENTS.find { |key| messaging[key].present? }
   end
 
   def message(messaging, channel)
@@ -140,6 +144,14 @@ class Webhooks::InstagramEventsJob < MutexApplicationJob
   def read(messaging, channel)
     # Use a single service to handle read status for both channel types since the params are same
     ::Instagram::ReadStatusService.new(params: messaging, channel: channel).perform
+  end
+
+  def postback(messaging, channel)
+    postback_message = {
+      mid: messaging[:postback][:mid],
+      text: messaging[:postback][:title]
+    }
+    message(messaging.merge(message: postback_message), channel)
   end
 
   def messages(entry)

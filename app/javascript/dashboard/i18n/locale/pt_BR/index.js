@@ -1,11 +1,11 @@
 import advancedFilters from './advancedFilters.json';
-import groups from './groups.json';
 import agentBots from './agentBots.json';
 import agentMgmt from './agentMgmt.json';
 import attributesMgmt from './attributesMgmt.json';
 import auditLogs from './auditLogs.json';
 import automation from './automation.json';
 import bulkActions from './bulkActions.json';
+import calls from './calls.json';
 import campaign from './campaign.json';
 import cannedMgmt from './cannedMgmt.json';
 import chatlist from './chatlist.json';
@@ -27,8 +27,6 @@ import inbox from './inbox.json';
 import inboxMgmt from './inboxMgmt.json';
 import integrationApps from './integrationApps.json';
 import integrations from './integrations.json';
-import internalChat from './internalChat.json';
-import kanban from './kanban.json';
 import labelsMgmt from './labelsMgmt.json';
 import login from './login.json';
 import macros from './macros.json';
@@ -47,17 +45,18 @@ import teamsSettings from './teamsSettings.json';
 import upSales from './upSales.json';
 import webhooks from './webhooks.json';
 import whatsappTemplates from './whatsappTemplates.json';
+import whatsappTemplateMgmt from './whatsappTemplateMgmt.json';
 import yearInReview from './yearInReview.json';
 
 export default {
   ...advancedFilters,
-  ...groups,
   ...agentBots,
   ...agentMgmt,
   ...attributesMgmt,
   ...auditLogs,
   ...automation,
   ...bulkActions,
+  ...calls,
   ...campaign,
   ...cannedMgmt,
   ...chatlist,
@@ -79,8 +78,6 @@ export default {
   ...inboxMgmt,
   ...integrationApps,
   ...integrations,
-  ...internalChat,
-  ...kanban,
   ...labelsMgmt,
   ...login,
   ...macros,
@@ -99,5 +96,6 @@ export default {
   ...upSales,
   ...webhooks,
   ...whatsappTemplates,
+  ...whatsappTemplateMgmt,
   ...yearInReview,
 };

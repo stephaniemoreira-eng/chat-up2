@@ -1,7 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { defineComponent, h, nextTick, reactive, ref } from 'vue';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import Whatsapp from '../Whatsapp.vue';
+import WhatsappChannel from 'dashboard/api/channel/whatsappChannel';
+
+// The picker fetches the session catalog on mount. Without this the real module reaches
+// for axios and the composable's own catch swallows it, so every session provider would
+// silently be missing from the picker rather than the test saying so.
+vi.mock('dashboard/api/channel/whatsappChannel', () => ({
+  default: { getSessionProviders: vi.fn() },
+}));
+
+const SESSION_CATALOG = [
+  { key: 'uazapi', creatable: true, beta: true, fields: [] },
+  { key: 'baileys', creatable: true, beta: false, legacy: true, fields: [] },
+];
 
 // Mutable reactive route — tests drive route.query / route.name through it
 // to exercise how the parent reacts to navigation events.
@@ -26,6 +39,8 @@ vi.mock('dashboard/composables/useAccount', () => ({
   useAccount: () => ({
     isCloudFeatureEnabled: () => false,
     isOnChatwootCloud: ref(false),
+    // Meta's incident switch, off: the picker offers the embedded signup as usual.
+    isMetaInboxCreationDisabled: ref(false),
   }),
 }));
 
@@ -56,6 +71,15 @@ const stubComponent = name =>
     template: `<div class="${name}-stub" />`,
   });
 
+const ChannelSelectorStub = defineComponent({
+  name: 'ChannelSelector',
+  // Declared so the assertion can read it back with `props()`. eslint cannot see into a
+  // string template, so it reads the prop as unused.
+  // eslint-disable-next-line vue/no-unused-properties
+  props: { isBeta: { type: Boolean, default: false } },
+  template: '<div class="ChannelSelector-stub" />',
+});
+
 const WhatsappEmbeddedSignupStub = defineComponent({
   name: 'WhatsappEmbeddedSignup',
   // eslint-disable-next-line vue/no-unused-emit-declarations
@@ -63,14 +87,19 @@ const WhatsappEmbeddedSignupStub = defineComponent({
   template: '<div class="WhatsappEmbeddedSignup-stub" />',
 });
 
-const mountWhatsapp = (overrides = {}) => {
+const EMBEDDED_SIGNUP_CONFIG = {
+  whatsappAppId: 'appid',
+  whatsappConfigurationId: 'configid',
+};
+
+const mountWhatsapp = (
+  overrides = {},
+  chatwootConfig = EMBEDDED_SIGNUP_CONFIG
+) => {
   // window.chatwootConfig is read in setup() to decide whether to render the
   // embedded signup component. Force "configured" by default so a provider
   // selection of "whatsapp" routes to the embedded signup branch.
-  window.chatwootConfig = {
-    whatsappAppId: 'appid',
-    whatsappConfigurationId: 'configid',
-  };
+  window.chatwootConfig = chatwootConfig;
 
   return mount(Whatsapp, {
     props: {
@@ -83,8 +112,14 @@ const mountWhatsapp = (overrides = {}) => {
         WhatsappEmbeddedSignup: WhatsappEmbeddedSignupStub,
         Twilio: stubComponent('Twilio'),
         ThreeSixtyDialogWhatsapp: stubComponent('ThreeSixtyDialogWhatsapp'),
+        // Upstream's guided manual setup and its access-request dialog read the Vuex store;
+        // these tests mount without one and never reach either branch.
+        WhatsappManualSetup: stubComponent('WhatsappManualSetup'),
         CloudWhatsapp: stubComponent('CloudWhatsapp'),
-        ChannelSelector: stubComponent('ChannelSelector'),
+        WhatsappAccessRequestDialog: stubComponent(
+          'WhatsappAccessRequestDialog'
+        ),
+        ChannelSelector: ChannelSelectorStub,
         BaileysWhatsapp: stubComponent('BaileysWhatsapp'),
         ZapiWhatsapp: stubComponent('ZapiWhatsapp'),
       },
@@ -105,6 +140,9 @@ describe('Whatsapp.vue (convert mode)', () => {
     originalChatwootConfig = window.chatwootConfig;
     mockPush.mockReset();
     mockReplace.mockReset();
+    WhatsappChannel.getSessionProviders.mockResolvedValue({
+      data: { payload: SESSION_CATALOG },
+    });
     mockRoute = reactive({
       name: 'settings_inbox_convert',
       params: { inboxId: 30 },
@@ -128,6 +166,43 @@ describe('Whatsapp.vue (convert mode)', () => {
     await nextTick();
     expect(wrapper.find('.WhatsappEmbeddedSignup-stub').exists()).toBe(true);
     expect(wrapper.find('.ChannelSelector-stub').exists()).toBe(false);
+  });
+
+  // Upstream's guided manual setup creates a new inbox. Converting an existing one has to reach
+  // the fork's form, which dispatches `inboxes/convertProvider` for the inbox at hand; the
+  // 4.18.0 merge had routed both modes to the guided setup.
+  describe('manual setup without embedded signup configured', () => {
+    it('renders the convert-aware form in convert mode', async () => {
+      setRouteProvider('whatsapp');
+      const wrapper = mountWhatsapp({}, {});
+      await nextTick();
+      expect(wrapper.find('.CloudWhatsapp-stub').exists()).toBe(true);
+      expect(wrapper.find('.WhatsappManualSetup-stub').exists()).toBe(false);
+    });
+
+    it('renders the guided setup in create mode', async () => {
+      setRouteProvider('whatsapp_manual');
+      const wrapper = mountWhatsapp({ mode: 'create', inbox: null }, {});
+      await nextTick();
+      expect(wrapper.find('.WhatsappManualSetup-stub').exists()).toBe(true);
+      expect(wrapper.find('.CloudWhatsapp-stub').exists()).toBe(false);
+    });
+  });
+
+  // The badge is what tells the admin a provider is not settled yet, and it follows the
+  // catalog rather than the label, so a provider leaving beta is a server-side change.
+  it('badges the session providers the catalog reports as beta', async () => {
+    const wrapper = mountWhatsapp();
+    await flushPromises();
+
+    const badged = wrapper
+      .findAllComponents(ChannelSelectorStub)
+      .filter(selector => selector.props('isBeta'));
+
+    expect(
+      wrapper.findAllComponents(ChannelSelectorStub).length
+    ).toBeGreaterThan(badged.length);
+    expect(badged).toHaveLength(1);
   });
 
   // Reproduces the "flash" bug: a successful embedded signup runs

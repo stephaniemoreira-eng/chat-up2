@@ -1,5 +1,10 @@
 import { MESSAGE_TYPE } from 'shared/constants/messages';
-import { applyPageFilters, applyRoleFilter, sortComparator } from './helpers';
+import {
+  applyPageFilters,
+  applyRoleFilter,
+  humanAssignee,
+  sortComparator,
+} from './helpers';
 import filterQueryGenerator from 'dashboard/helper/filterQueryGenerator';
 import { matchesFilters } from './helpers/filterHelpers';
 import {
@@ -14,12 +19,32 @@ export const getSelectedChatConversation = ({
 }) =>
   allConversations.filter(conversation => conversation.id === selectedChatId);
 
+// `conversationPins` is the single source of truth for pinned conversations; conversation objects never
+// carry the flag, so any list built from the store gets the pinned ordering for free.
+const getPinnedAtById = rootGetters =>
+  rootGetters?.['conversationPins/getRecords'] || {};
+
+// The tab getters return filtered copies, so they sort them instead of relying on the order
+// `getAllConversations` happens to have left `allConversations` in.
+const sortConversations = (conversations, { chatSortFilter }, rootGetters) =>
+  conversations.sort((a, b) =>
+    sortComparator(a, b, chatSortFilter, getPinnedAtById(rootGetters))
+  );
+
 const getters = {
-  getAllConversations: ({ allConversations, chatSortFilter: sortKey }) => {
-    return allConversations.sort((a, b) => sortComparator(a, b, sortKey));
+  getAllConversations: (
+    { allConversations, chatSortFilter: sortKey },
+    _,
+    __,
+    rootGetters
+  ) => {
+    const pinnedAtById = getPinnedAtById(rootGetters);
+    return allConversations.sort((a, b) =>
+      sortComparator(a, b, sortKey, pinnedAtById)
+    );
   },
   getFilteredConversations: (
-    { allConversations, chatSortFilter, appliedFilters },
+    { allConversations, chatSortFilter, appliedFilters, appliedFiltersSortBy },
     _,
     __,
     rootGetters
@@ -46,7 +71,14 @@ const getters = {
 
         return matchesFilterResult && allowedForRole;
       })
-      .sort((a, b) => sortComparator(a, b, chatSortFilter));
+      .sort((a, b) =>
+        sortComparator(
+          a,
+          b,
+          appliedFiltersSortBy || chatSortFilter,
+          getPinnedAtById(rootGetters)
+        )
+      );
   },
   getSelectedChat: ({ selectedChatId, allConversations }) => {
     const selectedChat = allConversations.find(
@@ -77,14 +109,19 @@ const getters = {
   getMineChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUserID = rootGetters.getCurrentUser?.id;
 
-    return _state.allConversations.filter(conversation => {
-      const { assignee } = conversation.meta;
+    const chats = _state.allConversations.filter(conversation => {
+      // The human, not whoever holds it: an agent bot's id comes from its own table and
+      // can be the same integer as an agent's, which would put a bot's conversation in
+      // that agent's "Mine".
+      const assignee = humanAssignee(conversation);
       const isAssignedToMe = assignee && assignee.id === currentUserID;
       const shouldFilter = applyPageFilters(conversation, activeFilters);
       const isChatMine = isAssignedToMe && shouldFilter;
 
       return isChatMine;
     });
+
+    return sortConversations(chats, _state, rootGetters);
   },
   getAppliedConversationFiltersV2: _state => {
     // TODO: Replace existing one with V2 after migrating the filters to use camelcase
@@ -93,21 +130,33 @@ const getters = {
   getAppliedConversationFilters: _state => {
     return _state.appliedFilters;
   },
+  getAppliedContactFilter: ({ appliedFilters }) => {
+    const [filter, ...rest] = appliedFilters;
+    if (rest.length || filter?.attribute_key !== 'contact_id') return null;
+
+    return filter.values?.[0] ?? null;
+  },
   getAppliedConversationFiltersQuery: _state => {
     const hasAppliedFilters = _state.appliedFilters.length !== 0;
     return hasAppliedFilters ? filterQueryGenerator(_state.appliedFilters) : [];
   },
-  getUnAssignedChats: _state => activeFilters => {
-    return _state.allConversations.filter(conversation => {
+  getUnAssignedChats: (_state, _, __, rootGetters) => activeFilters => {
+    const chats = _state.allConversations.filter(conversation => {
+      // Any assignee, bot included, which is the server's own answer: `scope :unassigned`
+      // requires `assignee_agent_bot_id` to be null too, and the tab's badge counts the same
+      // way. Asking for a human here put bot-held conversations in a list whose badge did not
+      // count them, and only after a visit to "All" had loaded them into the store.
       const isUnAssigned = !conversation.meta.assignee;
       const shouldFilter = applyPageFilters(conversation, activeFilters);
       return isUnAssigned && shouldFilter;
     });
+
+    return sortConversations(chats, _state, rootGetters);
   },
   getParticipatingChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUserId = rootGetters.getCurrentUser?.id;
     const getWatchers = rootGetters['conversationWatchers/getByConversationId'];
-    return _state.allConversations.filter(conversation => {
+    const chats = _state.allConversations.filter(conversation => {
       const watchers = getWatchers(conversation.id);
       // Watchers are only loaded for the conversation open in the detail
       // panel. If loaded and current user is not in them, filter it out.
@@ -116,6 +165,8 @@ const getters = {
       }
       return applyPageFilters(conversation, activeFilters);
     });
+
+    return sortConversations(chats, _state, rootGetters);
   },
   getAllStatusChats: (_state, _, __, rootGetters) => activeFilters => {
     const currentUser = rootGetters.getCurrentUser;
@@ -125,7 +176,7 @@ const getters = {
     const permissions = getUserPermissions(currentUser, currentAccountId);
     const userRole = getUserRole(currentUser, currentAccountId);
 
-    return _state.allConversations.filter(conversation => {
+    const chats = _state.allConversations.filter(conversation => {
       const shouldFilter = applyPageFilters(conversation, activeFilters);
       const allowedForRole = applyRoleFilter(
         conversation,
@@ -136,6 +187,8 @@ const getters = {
 
       return shouldFilter && allowedForRole;
     });
+
+    return sortConversations(chats, _state, rootGetters);
   },
   getChatListLoadingStatus: ({ listLoadingStatus }) => listLoadingStatus,
   getAllMessagesLoaded(_state) {

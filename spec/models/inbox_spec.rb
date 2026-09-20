@@ -10,6 +10,12 @@ RSpec.describe Inbox do
     it { is_expected.to validate_presence_of(:name) }
   end
 
+  describe 'prevent_assignment_takeover' do
+    it 'is opt-in, so existing inboxes keep the last-write-wins behaviour' do
+      expect(create(:inbox).prevent_assignment_takeover).to be(false)
+    end
+  end
+
   describe 'associations' do
     it { is_expected.to belong_to(:account) }
 
@@ -28,6 +34,10 @@ RSpec.describe Inbox do
     it { is_expected.to have_many(:messages).dependent(:destroy_async) }
 
     it { is_expected.to have_one(:agent_bot_inbox) }
+
+    it { is_expected.to have_many(:agent_bot_observers).dependent(:destroy_async) }
+
+    it { is_expected.to have_many(:observer_agent_bots).through(:agent_bot_observers).source(:agent_bot) }
 
     it { is_expected.to have_many(:webhooks).dependent(:destroy_async) }
 

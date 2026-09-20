@@ -6,6 +6,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useInboxSignatures } from 'dashboard/composables/useInboxSignatures';
 import { useAlert } from 'dashboard/composables';
+import { parseAPIErrorResponse } from 'dashboard/store/utils/api';
 import { ExceptionWithMessage } from 'shared/helpers/CustomErrors';
 import { debounce } from '@chatwoot/utils';
 import { emitter } from 'shared/helpers/mitt';
@@ -152,6 +153,12 @@ const handleSelectedContact = async ({ value, action, ...rest }) => {
       isCreatingContact.value = false;
     } catch (error) {
       isCreatingContact.value = false;
+      const message = parseAPIErrorResponse(error);
+      useAlert(
+        typeof message === 'string'
+          ? message
+          : t('COMPOSE_NEW_CONVERSATION.CONTACT_CREATE.ERROR_MESSAGE')
+      );
       return;
     }
   } else {
@@ -225,12 +232,38 @@ const createGroup = async ({ inboxId, subject, participants }) => {
   }
 };
 
-const createConversation = async ({ payload, isFromWhatsApp }) => {
+// The conversation carries the first attachment; anything else the agent picked follows
+// it as its own message. Only channels that cannot carry more than one per message get
+// here with a non-empty list — see splitAttachmentsForChannel.
+// Chained rather than fired together, so the attachments arrive in the order they were
+// picked: WhatsApp orders by arrival, and a Promise.all reorders them for the contact.
+const sendFollowUpFiles = (conversationId, followUpFiles) =>
+  followUpFiles.reduce(
+    (previous, file) =>
+      previous.then(() =>
+        store.dispatch('createPendingMessageAndSend', {
+          conversationId,
+          files: [
+            directUploadsEnabled.value ? file.blobSignedId : file.resource.file,
+          ],
+          message: '',
+          private: false,
+        })
+      ),
+    Promise.resolve()
+  );
+
+const createConversation = async ({
+  payload,
+  followUpFiles = [],
+  isFromWhatsApp,
+}) => {
   try {
     const data = await store.dispatch('contactConversations/create', {
       params: payload,
       isFromWhatsApp,
     });
+    if (followUpFiles.length) await sendFollowUpFiles(data.id, followUpFiles);
     const action = {
       type: 'link',
       to: `/app/accounts/${data.account_id}/conversations/${data.id}`,
@@ -252,6 +285,9 @@ const createConversation = async ({ payload, isFromWhatsApp }) => {
 const onPopoverShow = () => {
   // Flag to prevent triggering drag n drop while compose is open
   emitter.emit(BUS_EVENTS.NEW_CONVERSATION_MODAL, true);
+  // Cache-aware refetch, so newly synced WhatsApp templates show up here
+  // even if the account-cache-invalidated websocket event was missed.
+  store.dispatch('inboxes/get');
 };
 
 const onPopoverHide = () => {
@@ -316,6 +352,7 @@ onUnmounted(() => {
     ref="popoverRef"
     :align="align"
     :show-content-border="false"
+    :close-on-scroll="false"
     @show="onPopoverShow"
     @hide="onPopoverHide"
   >
