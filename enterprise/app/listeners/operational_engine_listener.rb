@@ -19,7 +19,8 @@ class OperationalEngineListener < BaseListener
 
     log('message_created', account_id: account.id, message_id: message.id)
   rescue StandardError => e
-    ChatwootExceptionTracker.new(e, account: account).capture_exception
+    # TEMP debug: CI is swallowing something here silently, re-raise to see the real error.
+    raise "[DEBUG] #{e.class}: #{e.message}\n#{e.backtrace&.first(10)&.join("\n")}"
   end
 
   def message_updated(event)

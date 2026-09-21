@@ -3,7 +3,10 @@ require 'rails_helper'
 describe OperationalEngineListener do
   let(:listener) { described_class.instance }
   let(:account) { create(:account) }
-  let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
+  # Sem telefone de propósito: os 3 testes genéricos abaixo (só log) não devem ter efeito
+  # colateral no Operational Engine. Os describes de inbound/auto-assume abaixo criam seu
+  # próprio contato com telefone, onde o efeito colateral é exatamente o que está sendo testado.
+  let(:contact) { create(:contact, account: account) }
   let(:conversation) { create(:conversation, account: account, contact: contact) }
   let(:message) { create(:message, conversation: conversation, account: account) }
 
@@ -29,6 +32,8 @@ describe OperationalEngineListener do
   end
 
   describe 'inbound (Fase 3, §11)' do
+    let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
+
     it 'mensagem incoming aciona o InboundProcessor e cria o lead' do
       incoming = create(:message, conversation: conversation, account: account, message_type: 'incoming')
       event = Events::Base.new(:message_created, Time.zone.now, message: incoming)
@@ -38,6 +43,7 @@ describe OperationalEngineListener do
   end
 
   describe 'auto-assume (Fase 3, §18.2, testes 28.20/28.21)' do
+    let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
     let!(:lead) do
       OperationalEngine::LeadRepository.find_or_create_by_telefone(conta_id: account.id, telefone: contact.phone_number)
     end
