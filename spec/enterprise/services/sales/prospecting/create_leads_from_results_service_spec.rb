@@ -34,5 +34,22 @@ RSpec.describe Sales::Prospecting::CreateLeadsFromResultsService do
 
       expect(lead.additional_attributes['auto_contact_enabled']).to be(true)
     end
+
+    it 'importa o lead pro Operational Engine em Backlog (SSOT §10.1)' do
+      described_class.new(account: account, pipeline_id: pipeline.id, sales_stage_id: stage.id, result_ids: [result.id]).perform
+
+      engine_lead = OperationalEngine::Lead.find_by(conta_id: account.id, telefone: '+5513999999999')
+      expect(engine_lead.etapa_prospect).to eq('backlog')
+      expect(engine_lead.origem_lead).to eq('google_scraping')
+    end
+
+    it 'mantem o lead no Kanban mesmo se o Engine estiver fora do ar' do
+      allow(OperationalEngine::ProspectingImporter).to receive(:call).and_raise(StandardError, 'supabase indisponivel')
+
+      leads = described_class.new(account: account, pipeline_id: pipeline.id, sales_stage_id: stage.id,
+                                   result_ids: [result.id]).perform
+
+      expect(leads.first).to be_persisted
+    end
   end
 end
