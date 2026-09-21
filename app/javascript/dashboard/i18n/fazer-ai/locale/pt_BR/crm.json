@@ -171,6 +171,11 @@
     },
     "LEAD": {
       "UNNAMED_CONTACT": "Contato desconhecido",
+      "ENGINE_TAGS": {
+        "LAVINIA": "Lavínia",
+        "HUMANO": "Humano",
+        "CALLBACK": "Callback"
+      },
       "CREATE": {
         "ACTION": "Adicionar negócio",
         "TITLE": "Adicionar negócio",
