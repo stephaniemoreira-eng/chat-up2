@@ -30,6 +30,30 @@ class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts:
     render_tool_result(result, ok_payload: ->(r) { { event_id: r[:event_id] } })
   end
 
+  def update_meeting
+    result = ::OperationalEngine::Tools::UpdateMeetingService.new(
+      account: Current.account,
+      conversation_id: params[:conversation_id],
+      event_id: params[:event_id],
+      summary: params[:summary],
+      starts_at: params[:start],
+      ends_at: params[:end],
+      description: params[:description]
+    ).call
+
+    render_tool_result(result, ok_payload: ->(r) { { event_id: r[:event_id] } })
+  end
+
+  def cancel_meeting
+    result = ::OperationalEngine::Tools::CancelMeetingService.new(
+      account: Current.account,
+      conversation_id: params[:conversation_id],
+      event_id: params[:event_id]
+    ).call
+
+    render_tool_result(result)
+  end
+
   def register_callback
     result = ::OperationalEngine::Tools::RegisterCallbackService.new(
       account: Current.account,

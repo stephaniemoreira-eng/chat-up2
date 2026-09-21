@@ -89,4 +89,26 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
       expect(response.parsed_body).to eq('ok' => false, 'reason' => 'agenda não conectada para esta conta')
     end
   end
+
+  describe 'PATCH schedule_meeting/:event_id' do
+    it 'reflete o resultado do service' do
+      patch "/api/v1/accounts/#{account.id}/operational_engine/tools/schedule_meeting/evt_123",
+            params: { conversation_id: conversation.id, start: '2026-09-23T15:00:00-03:00' },
+            headers: valid_headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'este lead não tem uma reunião confirmada com esse event_id')
+    end
+  end
+
+  describe 'DELETE schedule_meeting/:event_id' do
+    it 'reflete o resultado do service' do
+      delete "/api/v1/accounts/#{account.id}/operational_engine/tools/schedule_meeting/evt_123",
+             params: { conversation_id: conversation.id },
+             headers: valid_headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'este lead não tem uma reunião confirmada com esse event_id')
+    end
+  end
 end
