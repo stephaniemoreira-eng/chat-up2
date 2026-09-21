@@ -41,4 +41,19 @@ RSpec.describe OperationalEngine::LeadRepository do
 
     expect(lead.nome).to eq('Original')
   end
+
+  describe '.find_by_telefone' do
+    it 'nao cria nada quando o lead nao existe' do
+      expect(described_class.find_by_telefone(conta_id: 1, telefone: '+5513991234567')).to be_nil
+      expect(OperationalEngine::Lead.count).to eq(0)
+    end
+
+    it 'acha um lead existente mesmo com o telefone de busca em formato bruto/nao normalizado' do
+      lead = described_class.find_or_create_by_telefone(conta_id: 1, telefone: '+5513991234567')
+
+      found = described_class.find_by_telefone(conta_id: 1, telefone: '+55 (13) 99123-4567')
+
+      expect(found&.lead_id).to eq(lead.lead_id)
+    end
+  end
 end
