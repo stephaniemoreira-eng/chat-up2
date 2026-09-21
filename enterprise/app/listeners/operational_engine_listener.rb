@@ -1,7 +1,8 @@
-# Fase 3 do Marco 1: message_created agora aciona de fato o Engine (inbound + auto-assume, §11 e
-# §18.2). message_updated e assignee_changed continuam só logando -- confirmação de envio real
-# (source_id) é Fase 6, e ASSIGNEE_CHANGED nativo do Chatwoot não é o gatilho do Assumir/Devolver
-# do SSOT (esse é por mensagem pública humana, não por reatribuição de conversa).
+# Fase 3 do Marco 1: message_created aciona o Engine (inbound + auto-assume, §11 e §18.2).
+# message_updated agora também aciona -- confirmação de envio real via source_id (§10.6, Fase 6,
+# S-7) -- e assignee_changed continua só logando: ASSIGNEE_CHANGED nativo do Chatwoot não é o
+# gatilho do Assumir/Devolver do SSOT (esse é por mensagem pública humana, não por reatribuição de
+# conversa).
 #
 # Nunca deixa uma falha aqui derrubar o dispatch: um bug no Engine não pode impedir o Chatwoot de
 # salvar a mensagem que disparou o evento (mesmo padrão de Reporting::EventListener).
@@ -28,8 +29,13 @@ class OperationalEngineListener < BaseListener
 
   def message_updated(event)
     message, account = extract_message_and_account(event)
-    log('message_updated', account_id: account.id, message_id: message.id,
-                            previous_changes: event.data[:previous_changes]&.keys)
+    previous_changes = event.data[:previous_changes] || {}
+
+    OperationalEngine::ConfirmOutboundSendService.call(message: message) if source_id_just_confirmed?(message, previous_changes)
+
+    log('message_updated', account_id: account.id, message_id: message.id, previous_changes: previous_changes.keys)
+  rescue StandardError => e
+    ChatwootExceptionTracker.new(e, account: account).capture_exception
   end
 
   def assignee_changed(event)
@@ -50,6 +56,17 @@ class OperationalEngineListener < BaseListener
     return if lead.nil?
 
     OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id)
+  end
+
+  # Risco §14.1 do plano: só a transição de branco pra presente confirma o envio real -- não
+  # basta source_id estar presente agora (isso é verdade em qualquer message_updated depois do
+  # primeiro), e mensagem de atividade/nota do sistema nunca passa por aqui, mesmo que ganhe
+  # algum id por outro motivo.
+  def source_id_just_confirmed?(message, previous_changes)
+    return false unless message.outgoing? || message.template?
+
+    old_value, new_value = previous_changes['source_id']
+    old_value.blank? && new_value.present?
   end
 
   def log(event_name, **payload)
