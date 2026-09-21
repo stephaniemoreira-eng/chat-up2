@@ -171,6 +171,11 @@
     },
     "LEAD": {
       "UNNAMED_CONTACT": "Unknown contact",
+      "ENGINE_TAGS": {
+        "LAVINIA": "Lavínia",
+        "HUMANO": "Human",
+        "CALLBACK": "Callback"
+      },
       "CREATE": {
         "ACTION": "Add lead",
         "TITLE": "Add lead",

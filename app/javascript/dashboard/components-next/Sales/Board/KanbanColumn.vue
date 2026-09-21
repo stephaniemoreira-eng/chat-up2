@@ -85,6 +85,7 @@ const onDragEnd = event => {
           :scan-score="lead.scan_score"
           :scan-faixa="lead.scan_faixa"
           :scan-status="lead.scan_status"
+          :engine-tags="lead.custom_attributes?.engine_tags || []"
           @click="emit('clickLead', lead.id)"
         />
       </template>

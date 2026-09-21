@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 import { scanFaixaClass } from 'dashboard/components-next/Sales/scanVisuals.js';
+import { engineTagClass } from 'dashboard/components-next/Sales/engineTagVisuals.js';
 
 const props = defineProps({
   id: { type: Number, required: true },
@@ -15,6 +16,7 @@ const props = defineProps({
   scanScore: { type: Number, default: null },
   scanFaixa: { type: String, default: '' },
   scanStatus: { type: String, default: null },
+  engineTags: { type: Array, default: () => [] },
 });
 
 defineEmits(['click']);
@@ -42,6 +44,20 @@ const showScanBadge = computed(
 // Sem isso o card fica identico a um lead sem Scan enquanto o pre-score roda em background (o
 // PageSpeed sozinho pode levar quase um minuto), e parece que o recurso nao existe.
 const isScanPending = computed(() => props.scanStatus === 'pendente');
+
+// engineTags vem de custom_attributes.engine_tags (OperationalEngine::SalesProjectionSync,
+// §20.1) -- só existe pra leads no pipeline Prospecção sincronizado com o Engine; um lead
+// criado a mão ou de outro pipeline chega aqui com array vazio, e a linha de chips some.
+//
+// Chaves de i18n escritas por extenso (não interpoladas) de propósito: a regra
+// @intlify/vue-i18n/no-dynamic-keys precisa ver a string literal pra extrair/validar contra
+// os arquivos de locale.
+const ENGINE_TAG_LABEL_KEYS = {
+  lavinia: () => t('CRM.LEAD.ENGINE_TAGS.LAVINIA'),
+  humano: () => t('CRM.LEAD.ENGINE_TAGS.HUMANO'),
+  callback: () => t('CRM.LEAD.ENGINE_TAGS.CALLBACK'),
+};
+const engineTagLabel = tag => ENGINE_TAG_LABEL_KEYS[tag]?.() ?? tag;
 </script>
 
 <template>
@@ -68,6 +84,16 @@ const isScanPending = computed(() => props.scanStatus === 'pendente');
         :title="t('CRM.LEAD.DETAIL.SCAN.CALCULATING')"
       >
         <Spinner :size="10" />
+      </span>
+    </div>
+    <div v-if="engineTags.length" class="flex items-center gap-1 flex-wrap">
+      <span
+        v-for="tag in engineTags"
+        :key="tag"
+        class="text-[10px] font-medium rounded-full px-1.5 py-0.5"
+        :class="engineTagClass(tag)"
+      >
+        {{ engineTagLabel(tag) }}
       </span>
     </div>
     <div class="flex items-center justify-between gap-2 min-w-0">
