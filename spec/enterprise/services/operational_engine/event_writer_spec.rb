@@ -4,7 +4,7 @@ RSpec.describe OperationalEngine::EventWriter do
   let(:lead) { OperationalEngine::Lead.create!(conta_id: 1, telefone: "+551399#{rand(1_000_000..9_999_999)}") }
 
   def write(**overrides)
-    described_class.call({
+    described_class.call(**{
       lead: lead, event_type: 'lead_criado', source: 'system',
       external_source: 'chatwoot', external_id: 'evt-1', metadata: {}
     }.merge(overrides))
