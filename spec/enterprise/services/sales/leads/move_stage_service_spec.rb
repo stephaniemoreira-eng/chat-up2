@@ -99,4 +99,32 @@ RSpec.describe Sales::Leads::MoveStageService do
       described_class.new(lead: lead, stage: lost_stage).perform
     end
   end
+
+  describe 'proteção do Agendado (SSOT §21.2)' do
+    let(:agendado_stage) { create(:sales_stage, pipeline: pipeline, engine_stage_key: 'agendado') }
+
+    it 'bloqueia quando um usuario (humano) tenta mover manualmente pra Agendado' do
+      expect { described_class.new(lead: lead, stage: agendado_stage, user: user).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
+      expect(lead.reload.sales_stage_id).to eq(open_stage.id)
+    end
+
+    it 'permite quando e o sistema (user nil) refletindo um agendamento_status confirmado real' do
+      moved = described_class.new(lead: lead, stage: agendado_stage, user: nil).perform
+
+      expect(moved.stage).to eq(agendado_stage)
+    end
+
+    it 'nao bloqueia mover PRA FORA do Agendado por um humano' do
+      described_class.new(lead: lead, stage: agendado_stage, user: nil).perform
+
+      moved = described_class.new(lead: lead, stage: open_stage, user: user).perform
+
+      expect(moved.stage).to eq(open_stage)
+    end
+
+    it 'nao bloqueia um stage comum sem engine_stage_key, mesmo por um humano' do
+      expect { described_class.new(lead: lead, stage: won_stage, user: user).perform }.not_to raise_error
+    end
+  end
 end

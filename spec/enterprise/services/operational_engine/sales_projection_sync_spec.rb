@@ -6,7 +6,8 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
 
   def build_lead(**overrides)
     OperationalEngine::Lead.create!({
-      conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id
+      conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id,
+      etapa_prospect: 'backlog'
     }.merge(overrides))
   end
 
@@ -46,5 +47,114 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
     other_contact = create(:contact, account: account)
     lead_sem_nome = build_lead(empresa: nil, nome: nil, upsales_contact_id: other_contact.id)
     expect(described_class.call(lead_sem_nome).title).to eq(lead_sem_nome.telefone)
+  end
+
+  describe 'pipeline e stage dedicados (Fase 5, §8.1)' do
+    it 'cria o card no pipeline Prospecção, nao no Comercial generico' do
+      lead = build_lead
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.pipeline.engine_kind).to eq('prospect')
+      expect(sales_lead.pipeline.name).to eq('Prospecção')
+    end
+
+    it 'coloca o card na stage que corresponde ao etapa_prospect atual' do
+      lead = build_lead(etapa_prospect: 'qualificado')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.stage.engine_stage_key).to eq('qualificado')
+    end
+
+    it 'move o card quando etapa_prospect muda entre sincronizacoes' do
+      lead = build_lead(etapa_prospect: 'backlog')
+      sales_lead = described_class.call(lead)
+      expect(sales_lead.stage.engine_stage_key).to eq('backlog')
+
+      lead.update!(etapa_prospect: 'em_conversa')
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.reload.stage.engine_stage_key).to eq('em_conversa')
+    end
+
+    it 'registra a transicao (Sales::StageTransition) quando o card muda de etapa, com user nil (sistema)' do
+      lead = build_lead(etapa_prospect: 'backlog')
+      sales_lead = described_class.call(lead)
+
+      lead.update!(etapa_prospect: 'contatado')
+      described_class.call(lead)
+
+      transition = sales_lead.stage_transitions.first
+      expect(transition.to_stage.engine_stage_key).to eq('contatado')
+      expect(transition.user).to be_nil
+    end
+
+    it 'sincroniza ate Agendado (permitido porque e o sistema refletindo o Engine, nao um drag humano)' do
+      lead = build_lead(etapa_prospect: 'agendado')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.stage.engine_stage_key).to eq('agendado')
+    end
+
+    it 'nao mexe num Sales::Lead que o contato tem em OUTRO pipeline (ex.: importado pela tela de busca)' do
+      other_pipeline = create(:sales_pipeline, account: account)
+      manual_card = create(:sales_lead, account: account, contact: contact, pipeline: other_pipeline, stage: create(:sales_stage, pipeline: other_pipeline), title: 'Card manual')
+      lead = build_lead
+
+      described_class.call(lead)
+
+      expect(manual_card.reload.title).to eq('Card manual')
+      expect(Sales::Lead.where(contact_id: contact.id).count).to eq(2)
+    end
+  end
+
+  describe 'tags computadas (§20.1)' do
+    it 'marca lavinia quando modo_atendimento e lavinia' do
+      lead = build_lead(modo_atendimento: 'lavinia')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['engine_tags']).to eq(['lavinia'])
+    end
+
+    it 'marca humano quando modo_atendimento e humano' do
+      lead = build_lead(modo_atendimento: 'humano')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['engine_tags']).to eq(['humano'])
+    end
+
+    it 'adiciona callback quando agendamento_status e callback_registrado' do
+      lead = build_lead(modo_atendimento: 'humano', agendamento_status: 'callback_registrado')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['engine_tags']).to contain_exactly('humano', 'callback')
+    end
+
+    it 'atualiza as tags numa sincronizacao seguinte sem duplicar' do
+      lead = build_lead(modo_atendimento: 'lavinia')
+      described_class.call(lead)
+
+      lead.update!(modo_atendimento: 'humano')
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['engine_tags']).to eq(['humano'])
+    end
+
+    it 'nao apaga outras chaves de custom_attributes ja existentes no card' do
+      lead = build_lead
+      sales_lead = described_class.call(lead)
+      sales_lead.update!(custom_attributes: sales_lead.custom_attributes.merge('nota_manual' => 'vip'))
+
+      lead.update!(modo_atendimento: 'humano')
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['nota_manual']).to eq('vip')
+      expect(sales_lead.custom_attributes['engine_tags']).to eq(['humano'])
+    end
   end
 end

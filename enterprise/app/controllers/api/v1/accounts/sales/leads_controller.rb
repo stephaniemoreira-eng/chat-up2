@@ -2,6 +2,8 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   before_action -> { check_authorization(Sales::Lead) }
   before_action :set_lead, only: [:show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary]
 
+  rescue_from Sales::Leads::MoveStageService::ProtectedTransitionError, with: :render_protected_transition_error
+
   def index
     @leads = filtered_leads.ordered
   end
@@ -60,6 +62,10 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   end
 
   private
+
+  def render_protected_transition_error(exception)
+    render json: { error: exception.message }, status: :unprocessable_entity
+  end
 
   def filtered_leads
     leads = Current.account.sales_leads.includes(:prospecting_result)

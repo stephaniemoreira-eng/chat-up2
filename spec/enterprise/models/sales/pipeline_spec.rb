@@ -26,6 +26,22 @@ RSpec.describe Sales::Pipeline, type: :model do
 
       expect(other_account_pipeline).to be_valid
     end
+
+    it { is_expected.to validate_inclusion_of(:engine_kind).in_array(Sales::Pipeline::ENGINE_KINDS).allow_nil }
+
+    it 'allows only one pipeline per engine_kind per account' do
+      create(:sales_pipeline, account: account, engine_kind: 'prospect')
+      second = build(:sales_pipeline, account: account, engine_kind: 'prospect')
+
+      expect(second).not_to be_valid
+    end
+
+    it 'allows several pipelines with engine_kind nil (not every pipeline is engine-managed)' do
+      create(:sales_pipeline, account: account)
+      second = build(:sales_pipeline, account: account)
+
+      expect(second).to be_valid
+    end
   end
 
   describe 'associations' do

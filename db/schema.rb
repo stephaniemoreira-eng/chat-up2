@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_17_180000) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_21_120000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1738,6 +1738,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_17_180000) do
     t.boolean "is_default", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "engine_kind"
+    t.index ["account_id", "engine_kind"], name: "index_sales_pipelines_on_account_id_and_engine_kind", unique: true, where: "(engine_kind IS NOT NULL)"
     t.index ["account_id", "position"], name: "index_sales_pipelines_on_account_id_and_position"
     t.index ["account_id"], name: "index_sales_pipelines_on_account_id"
     t.index ["account_id"], name: "index_sales_pipelines_on_account_id_and_default", unique: true, where: "(is_default = true)"
@@ -1841,7 +1843,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_17_180000) do
     t.integer "stale_after_hours"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "engine_stage_key"
     t.index ["account_id"], name: "index_sales_stages_on_account_id"
+    t.index ["sales_pipeline_id", "engine_stage_key"], name: "index_sales_stages_on_pipeline_id_and_engine_stage_key", unique: true, where: "(engine_stage_key IS NOT NULL)"
     t.index ["sales_pipeline_id", "position"], name: "index_sales_stages_on_sales_pipeline_id_and_position"
     t.index ["sales_pipeline_id"], name: "index_sales_stages_on_sales_pipeline_id"
   end

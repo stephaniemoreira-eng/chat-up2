@@ -1,4 +1,13 @@
 class Sales::Leads::MoveStageService
+  # SSOT §21.2: "Agendado só pode existir por reunião real. Arrastar manualmente um card para
+  # Agendado sem evento de Calendar deve ser bloqueado." `user` é o mesmo parâmetro que já
+  # distingue as duas origens possíveis desta chamada: o controller (Sales::LeadsController#move)
+  # sempre passa `user: Current.user`, presente porque é uma ação humana via API; a sincronização
+  # do Operational Engine (OperationalEngine::SalesProjectionSync) passa `user: nil`, porque é o
+  # sistema refletindo um `agendamento_status: confirmado` já gravado no Supabase (§5.6). Não
+  # criamos uma flag nova pra isso -- reaproveitamos a fronteira de confiança que já existe.
+  class ProtectedTransitionError < StandardError; end
+
   def initialize(lead:, stage:, position: nil, user: nil)
     @lead = lead
     @stage = stage
@@ -8,6 +17,7 @@ class Sales::Leads::MoveStageService
 
   def perform
     raise ArgumentError, 'stage must belong to the lead pipeline' if @stage.sales_pipeline_id != @lead.sales_pipeline_id
+    raise ProtectedTransitionError, 'Agendado só pode ser definido por uma reunião real confirmada' if blocked_manual_agendamento?
     return @lead if @stage.id == @lead.sales_stage_id
 
     from_stage = @lead.stage
@@ -23,6 +33,10 @@ class Sales::Leads::MoveStageService
   end
 
   private
+
+  def blocked_manual_agendamento?
+    @user.present? && @stage.id != @lead.sales_stage_id && @stage.engine_stage_key == 'agendado'
+  end
 
   def move_lead
     @lead.update!(

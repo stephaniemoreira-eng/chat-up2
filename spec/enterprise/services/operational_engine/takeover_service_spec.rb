@@ -100,6 +100,43 @@ RSpec.describe OperationalEngine::TakeoverService do
     end
   end
 
+  describe 'sincronizacao visual do Kanban (Fase 5, §20.1)' do
+    let(:account) { create(:account) }
+    let(:contact) { create(:contact, account: account) }
+
+    def build_linked_lead(**overrides)
+      OperationalEngine::Lead.create!({
+        conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id
+      }.merge(overrides))
+    end
+
+    it 'assumir! troca a tag do card de lavinia pra humano imediatamente' do
+      lead = build_linked_lead(modo_atendimento: 'lavinia')
+      OperationalEngine::SalesProjectionSync.call(lead)
+
+      described_class.assumir!(lead: lead, user_id: 42)
+
+      sales_lead = Sales::Lead.find_by(contact_id: contact.id)
+      expect(sales_lead.custom_attributes['engine_tags']).to eq(['humano'])
+    end
+
+    it 'devolver! troca a tag do card de volta pra lavinia' do
+      lead = build_linked_lead(modo_atendimento: 'humano', responsavel_atual_id: 42)
+      OperationalEngine::SalesProjectionSync.call(lead)
+
+      described_class.devolver!(lead: lead)
+
+      sales_lead = Sales::Lead.find_by(contact_id: contact.id)
+      expect(sales_lead.custom_attributes['engine_tags']).to eq(['lavinia'])
+    end
+
+    it 'assumir! num lead ja humano (no-op) nao levanta erro mesmo sem card ainda' do
+      lead = build_linked_lead(modo_atendimento: 'humano', responsavel_atual_id: 42)
+
+      expect { described_class.assumir!(lead: lead, user_id: 99) }.not_to raise_error
+    end
+  end
+
   describe 'concorrencia (teste 28.23)' do
     # Prova o mecanismo (row lock via with_lock), não a corrida em si: um teste com Threads reais
     # contra o pool de conexões de teste é flaky por natureza (timing, tamanho do pool) e não há
