@@ -72,7 +72,7 @@ describe OperationalEngineListener do
 
     it 'mensagem de bot/AgentBot nao assume' do
       bot_reply = create(:message, conversation: conversation, account: account,
-                                    message_type: 'outgoing', sender: nil, sender_type: 'AgentBot')
+                                    message_type: 'outgoing', sender: create(:agent_bot))
       event = Events::Base.new(:message_created, Time.zone.now, message: bot_reply)
 
       listener.message_created(event)
