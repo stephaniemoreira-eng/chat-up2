@@ -1,6 +1,6 @@
 {
   "CRM": {
-    "HEADER": "CRM",
+    "HEADER": "Pipeline",
     "LOADING": "Carregando funil...",
     "EMPTY_STATE": {
       "TITLE": "Nenhum negócio ainda",
