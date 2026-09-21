@@ -31,7 +31,10 @@ RSpec.describe Sales::Prospecting::RunConfigService do
 
     it 'skips creating a duplicate lead for a place already turned into a lead in a previous run' do
       previous_search = account.sales_prospecting_searches.create!(business_type: 'x', city: 'Santos', state: 'SP')
-      existing_lead = create(:sales_lead, account: account)
+      pipeline = create(:sales_pipeline, account: account)
+      existing_lead = create(
+        :sales_lead, account: account, pipeline: pipeline, stage: create(:sales_stage, pipeline: pipeline)
+      )
       previous_search.results.create!(account: account, place_id: 'p1', name: 'Clinica X (ja e lead)', lead: existing_lead)
 
       stub_places_search([{ place_id: 'p1', name: 'Clinica X', phone_number: '+5513999999999', address: 'Rua X' }])
