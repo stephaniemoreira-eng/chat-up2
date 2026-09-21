@@ -15,3 +15,8 @@ patch 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_en
 delete 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_engine/tools#cancel_meeting'
 post 'operational_engine/tools/register_callback', to: 'operational_engine/tools#register_callback'
 get 'operational_engine/tools/availability', to: 'operational_engine/tools#availability'
+
+# S-4: health + Snapshot (SSOT §12.3), pedidos por docs/agent-runtime-v1.md (up2-agents) para
+# destravar o modo agent. Mesma autenticação servidor-a-servidor do Contrato B acima.
+get 'operational_engine/health', to: 'operational_engine/snapshot#health'
+get 'operational_engine/snapshot', to: 'operational_engine/snapshot#show'
