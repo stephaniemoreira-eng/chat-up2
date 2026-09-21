@@ -27,6 +27,32 @@ RSpec.describe Sales::Lead, type: :model do
     end
   end
 
+  describe 'protected Engine stages' do
+    it 'does not allow a CRM card to be born in Agendado without an Engine projection' do
+      agendado = create(:sales_stage, pipeline: pipeline, engine_stage_key: 'agendado')
+
+      lead = build(:sales_lead, account: account, contact: contact, pipeline: pipeline, stage: agendado)
+
+      expect(lead).not_to be_valid
+      expect(lead.errors[:sales_stage_id]).to include('protected stages require an Operational Engine projection')
+    end
+
+    it 'accepts a protected stage when it is the mapped Engine projection' do
+      agendado = create(:sales_stage, pipeline: pipeline, engine_stage_key: 'agendado')
+      lead = build(
+        :sales_lead,
+        account: account,
+        contact: contact,
+        pipeline: pipeline,
+        stage: agendado,
+        source: 'operational_engine',
+        operational_lead_id: SecureRandom.uuid
+      )
+
+      expect(lead).to be_valid
+    end
+  end
+
   describe 'associations' do
     it { is_expected.to belong_to(:contact) }
     it { is_expected.to belong_to(:assignee).class_name('User').optional }

@@ -4,8 +4,6 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
   let(:account) { create(:account) }
   let(:admin) { create(:user, account: account, role: :administrator) }
   let(:agent) { create(:user, account: account, role: :agent) }
-  let(:pipeline) { create(:sales_pipeline, account: account) }
-
   before { account.enable_features!(:sales_pipeline) }
 
   describe 'GET /api/v1/accounts/{account.id}/crm/prospecting/configs' do
@@ -15,9 +13,8 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
     end
 
     it 'returns the account configs' do
-      config = account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP', pipeline: pipeline)
-      create(:account).sales_prospecting_configs.create!(business_type: 'x', city: 'y', state: 'SP',
-                                                           pipeline: create(:sales_pipeline))
+      config = account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP')
+      create(:account).sales_prospecting_configs.create!(business_type: 'x', city: 'y', state: 'SP')
 
       get "/api/v1/accounts/#{account.id}/crm/prospecting/configs", headers: admin.create_new_auth_token, as: :json
 
@@ -27,7 +24,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
   end
 
   describe 'POST /api/v1/accounts/{account.id}/crm/prospecting/configs' do
-    let(:valid_params) { { business_type: 'academia', city: 'Santos', state: 'SP', pipeline_id: pipeline.id } }
+    let(:valid_params) { { business_type: 'academia', city: 'Santos', state: 'SP' } }
 
     it 'creates a config when the user is an agent' do
       expect do
@@ -41,7 +38,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
 
     it 'returns unprocessable_entity for invalid params' do
       post "/api/v1/accounts/#{account.id}/crm/prospecting/configs",
-           params: { business_type: '', city: 'Santos', state: 'SP', pipeline_id: pipeline.id },
+           params: { business_type: '', city: 'Santos', state: 'SP' },
            headers: admin.create_new_auth_token, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -49,7 +46,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
   end
 
   describe 'PATCH /api/v1/accounts/{account.id}/crm/prospecting/configs/{id}' do
-    let(:config) { account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP', pipeline: pipeline) }
+    let(:config) { account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP') }
 
     it 'toggles active without touching the other fields' do
       patch "/api/v1/accounts/#{account.id}/crm/prospecting/configs/#{config.id}",
@@ -94,7 +91,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::ProspectingConfigs', type: :request do
   end
 
   describe 'DELETE /api/v1/accounts/{account.id}/crm/prospecting/configs/{id}' do
-    let!(:config) { account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP', pipeline: pipeline) }
+    let!(:config) { account.sales_prospecting_configs.create!(business_type: 'academia', city: 'Santos', state: 'SP') }
 
     it 'destroys the config when the user is an administrator' do
       expect do

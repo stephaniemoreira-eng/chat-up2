@@ -4,11 +4,9 @@
 # criava lead no Engine era o inbound (Fase 3) -- um lead achado na busca existia só como
 # Sales::Lead, card no Kanban, invisível pro funil operacional.
 #
-# Não chama SalesProjectionSync de propósito: quem chama este importador
-# (Sales::Prospecting::CreateLeadsFromResultsService) já criou o Sales::Lead no pipeline/coluna
-# que a pessoa escolheu na tela da busca. Rodar a projeção aqui não acrescentaria card nenhum e
-# ainda arriscaria renomear um Sales::Lead anterior do mesmo contato -- e o mapa
-# etapa_prospect -> stage do Kanban é decisão da Fase 5 (§32).
+# A criação deste serviço termina no Engine. O chamador só pode criar o card depois, usando
+# SalesProjectionSync, que aponta para o pipeline canônico de Prospecção. Inverter essa ordem
+# faria existir um Sales::Lead sem estado de negócio no Supabase (§3.3/§4).
 module OperationalEngine
   class ProspectingImporter
     EXTERNAL_SOURCE = 'upsales_prospecting'.freeze
@@ -31,12 +29,16 @@ module OperationalEngine
       # Sales::ProspectingResult não pode virar um `nova_entrada` dizendo que o lead foi achado
       # outra vez; a ocorrência nova de verdade (a mesma empresa reencontrada numa busca
       # posterior) chega com outro id de resultado e passa direto por aqui.
-      OperationalEngine::IdempotencyGuard.call(
+      lead = OperationalEngine::IdempotencyGuard.call(
         conta_id: conta_id,
         event_type: 'busca_importada',
         external_source: EXTERNAL_SOURCE,
         external_id: @result.id.to_s
       ) { importar }
+
+      # Uma nova tentativa depois de o Engine já ter persistido o fato não deve parecer "vazia"
+      # para o chamador: ele ainda pode (e deve) reparar a projeção visual que tenha falhado.
+      lead || OperationalEngine::LeadRepository.find_by_telefone(conta_id: conta_id, telefone: telefone)
     end
 
     private
@@ -47,7 +49,9 @@ module OperationalEngine
       # pode ser escrito pra um lead que já existia.
       lead = OperationalEngine::LeadRepository.find_by_telefone(conta_id: conta_id, telefone: telefone)
 
-      lead ? registrar_nova_ocorrencia(lead) : criar_em_backlog
+      return criar_em_backlog unless lead
+
+      imported_by_this_result?(lead) ? registrar_criacao_interrompida(lead) : registrar_nova_ocorrencia(lead)
     end
 
     def criar_em_backlog
@@ -98,6 +102,13 @@ module OperationalEngine
       lead
     end
 
+    # Se a primeira execução criou a linha `leads`, mas caiu antes de gravar seu evento, o retry
+    # deve terminar o fato original `lead_criado`, não inventar uma segunda entrada de origem.
+    def registrar_criacao_interrompida(lead)
+      write_event(lead, 'lead_criado')
+      lead
+    end
+
     # external_id é o id do Sales::ProspectingResult, não o place_id: cada execução da busca grava
     # sua própria linha de resultado, então reprocessar o MESMO resultado é idempotente (28.9),
     # enquanto a mesma empresa reencontrada numa busca posterior é uma ocorrência nova de verdade
@@ -119,8 +130,8 @@ module OperationalEngine
 
     # Contact#phone_number já vem em E.164 (a busca normaliza antes de criar o contato), mas
     # resultado do Places sem telefone vira contato sem telefone -- e sem telefone não há lead no
-    # Engine: `leads.telefone` é NOT NULL e é a própria chave de dedupe (§5.1). O card no Kanban
-    # continua existindo e pode ser enriquecido depois.
+    # Engine: `leads.telefone` é NOT NULL e é a própria chave de dedupe (§5.1). Sem estado no
+    # Engine não se cria card no CRM; o resultado pode ser enriquecido e reprocessado depois.
     def telefone
       @telefone ||= Sales::Prospecting::PhoneNormalizer.normalize(@contact.phone_number)
     end
@@ -156,6 +167,10 @@ module OperationalEngine
         auto_contact_enabled: @auto_contact_enabled,
         contact_tag: @contact_tag
       }.compact
+    end
+
+    def imported_by_this_result?(lead)
+      lead.dados_origem['prospecting_result_id'].to_s == @result.id.to_s
     end
   end
 end

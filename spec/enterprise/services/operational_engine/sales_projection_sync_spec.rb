@@ -90,12 +90,21 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
       expect(transition.user).to be_nil
     end
 
-    it 'sincroniza ate Agendado (permitido porque e o sistema refletindo o Engine, nao um drag humano)' do
-      lead = build_lead(etapa_prospect: 'agendado')
+    it 'sincroniza ate Agendado apenas quando o Calendar confirmou uma reuniao real' do
+      lead = build_lead(
+        etapa_prospect: 'agendado', agendamento_status: 'confirmado',
+        calendar_event_id: 'calendar-evt-1', agendado_em: Time.current
+      )
 
       sales_lead = described_class.call(lead)
 
       expect(sales_lead.stage.engine_stage_key).to eq('agendado')
+    end
+
+    it 'nao aceita projetar Agendado sem confirmacao real do Calendar' do
+      expect do
+        build_lead(etapa_prospect: 'agendado')
+      end.to raise_error(ActiveRecord::RecordInvalid, /confirmed Calendar event/)
     end
 
     it 'nao mexe num Sales::Lead que o contato tem em OUTRO pipeline (ex.: importado pela tela de busca)' do
@@ -107,6 +116,18 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
 
       expect(manual_card.reload.title).to eq('Card manual')
       expect(Sales::Lead.where(contact_id: contact.id).count).to eq(2)
+    end
+
+    it 'vincula a projeção ao lead do Engine, sem confundir dois leads do mesmo contato' do
+      first = build_lead(telefone: '+5513991000001')
+      second = build_lead(telefone: '+5513991000002')
+
+      first_card = described_class.call(first)
+      second_card = described_class.call(second)
+
+      expect(first_card.operational_lead_id).to eq(first.lead_id)
+      expect(second_card.operational_lead_id).to eq(second.lead_id)
+      expect(first_card.id).not_to eq(second_card.id)
     end
   end
 

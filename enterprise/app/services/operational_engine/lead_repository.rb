@@ -35,7 +35,7 @@ module OperationalEngine
 
     def create(conta_id, telefone, attributes)
       OperationalEngine::Lead.create!(attributes.merge(conta_id: conta_id, telefone: telefone))
-    rescue ActiveRecord::RecordInvalid
+    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
       # Corrida perdida: outro processo criou o lead entre o find e o create acima. A
       # uniqueness de (conta_id, telefone) já garantiu que não há dois -- só falta pegar o que
       # ganhou a corrida.

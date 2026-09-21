@@ -10,6 +10,10 @@ RSpec.describe Sales::Leads::MoveStageService do
   let(:lead) { create(:sales_lead, account: account, contact: contact, pipeline: pipeline, stage: open_stage) }
   let(:user) { create(:user, account: account) }
 
+  def mark_as_engine_projection!
+    lead.update!(source: 'operational_engine', operational_lead_id: SecureRandom.uuid)
+  end
+
   describe '#perform' do
     it 'raises when the stage does not belong to the lead pipeline' do
       other_stage = create(:sales_stage, pipeline: create(:sales_pipeline, account: account))
@@ -109,14 +113,24 @@ RSpec.describe Sales::Leads::MoveStageService do
       expect(lead.reload.sales_stage_id).to eq(open_stage.id)
     end
 
-    it 'permite quando e o sistema (user nil) refletindo um agendamento_status confirmado real' do
-      moved = described_class.new(lead: lead, stage: agendado_stage, user: nil).perform
+    it 'bloqueia qualquer arraste humano dentro de um pipeline gerenciado pelo Engine' do
+      pipeline.update!(engine_kind: 'prospect')
+      contatado_stage = create(:sales_stage, pipeline: pipeline, engine_stage_key: 'contatado')
+
+      expect { described_class.new(lead: lead, stage: contatado_stage, user: user).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
+    end
+
+    it 'permite somente a projeção declarada do Operational Engine' do
+      mark_as_engine_projection!
+      moved = described_class.new(lead: lead, stage: agendado_stage, system_source: :operational_engine).perform
 
       expect(moved.stage).to eq(agendado_stage)
     end
 
     it 'nao bloqueia mover PRA FORA do Agendado por um humano' do
-      described_class.new(lead: lead, stage: agendado_stage, user: nil).perform
+      mark_as_engine_projection!
+      described_class.new(lead: lead, stage: agendado_stage, system_source: :operational_engine).perform
 
       moved = described_class.new(lead: lead, stage: open_stage, user: user).perform
 
@@ -142,8 +156,9 @@ RSpec.describe Sales::Leads::MoveStageService do
         .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
     end
 
-    it 'permite quando e o sistema (user nil) refletindo um resultado_comercial real' do
-      moved = described_class.new(lead: lead, stage: ganho_stage, user: nil).perform
+    it 'permite somente a projeção declarada do Operational Engine' do
+      mark_as_engine_projection!
+      moved = described_class.new(lead: lead, stage: ganho_stage, system_source: :operational_engine).perform
 
       expect(moved.stage).to eq(ganho_stage)
       expect(moved).to be_won

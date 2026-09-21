@@ -4,8 +4,6 @@ import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import ProspectingAPI from 'dashboard/api/sales/prospecting';
 import LabelsAPI from 'dashboard/api/labels';
-import { useSalesPipelinesStore } from 'dashboard/stores/sales/pipelines';
-import { useSalesStagesStore } from 'dashboard/stores/sales/stages';
 
 import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
@@ -85,9 +83,6 @@ const localToUtc = (hour, minute) => {
 
 const { t } = useI18n();
 
-const pipelinesStore = useSalesPipelinesStore();
-const stagesStore = useSalesStagesStore();
-
 const configs = ref([]);
 const isLoading = ref(false);
 const isSaving = ref(false);
@@ -101,51 +96,18 @@ const form = reactive({
   desiredCount: 20,
   requirePhone: false,
   requireWebsite: false,
-  pipelineId: null,
-  stageId: null,
   scheduledHour: 6,
   scheduledMinute: 0,
   autoContactEnabled: false,
   contactTag: '',
 });
 
-const pipelines = computed(() => pipelinesStore.getPipelines);
-const pipelineOptions = computed(() =>
-  pipelines.value.map(pipeline => ({
-    value: pipeline.id,
-    label: pipeline.name,
-  }))
-);
-const formStages = computed(() =>
-  form.pipelineId ? stagesStore.getStagesByPipeline(form.pipelineId) : []
-);
-const formStageOptions = computed(() =>
-  formStages.value.map(stage => ({ value: stage.id, label: stage.name }))
-);
-
 const canSave = computed(
   () =>
     form.businessType.trim() &&
     form.city.trim() &&
-    form.state &&
-    form.pipelineId
+    form.state
 );
-
-const onSelectFormPipeline = id => {
-  form.pipelineId = id;
-  form.stageId = null;
-  stagesStore.get(id);
-};
-
-const stageName = config => {
-  const stages =
-    stagesStore.getStagesByPipeline(config.sales_pipeline_id) || [];
-  return stages.find(stage => stage.id === config.sales_stage_id)?.name || '—';
-};
-
-const pipelineName = config =>
-  pipelines.value.find(pipeline => pipeline.id === config.sales_pipeline_id)
-    ?.name || '—';
 
 const locationLabel = config =>
   [config.neighborhood, config.city, config.state].filter(Boolean).join(', ');
@@ -195,8 +157,6 @@ const onCreate = async () => {
       desired_count: form.desiredCount,
       require_phone: form.requirePhone,
       require_website: form.requireWebsite,
-      pipeline_id: form.pipelineId,
-      sales_stage_id: form.stageId || undefined,
       scheduled_hour: utc.hour,
       scheduled_minute: utc.minute,
       auto_contact_enabled: form.autoContactEnabled,
@@ -308,10 +268,6 @@ const onDelete = async config => {
 };
 
 onMounted(async () => {
-  await pipelinesStore.get();
-  await Promise.all(
-    pipelines.value.map(pipeline => stagesStore.get(pipeline.id))
-  );
   await loadConfigs();
   await loadExistingLabels();
 });
@@ -353,29 +309,6 @@ onMounted(async () => {
             :options="stateOptions"
             :placeholder="t('CRM.PROSPECTING.FORM.STATE_PLACEHOLDER')"
             @update:model-value="value => (form.state = value)"
-          />
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium text-n-slate-12">
-            {{ t('CRM.PIPELINE_SWITCHER.PLACEHOLDER') }}
-          </label>
-          <ComboBox
-            :model-value="form.pipelineId"
-            :options="pipelineOptions"
-            @update:model-value="onSelectFormPipeline"
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium text-n-slate-12">
-            {{ t('CRM.PROSPECTING.CREATE.STAGE_PLACEHOLDER') }}
-          </label>
-          <ComboBox
-            :model-value="form.stageId"
-            :options="formStageOptions"
-            @update:model-value="value => (form.stageId = value)"
           />
         </div>
       </div>
@@ -500,14 +433,6 @@ onMounted(async () => {
             <span class="text-xs text-n-slate-11">{{
               locationLabel(config)
             }}</span>
-            <span class="text-xs text-n-slate-11">
-              {{
-                t('CRM.PROSPECTING.AUTO_SEARCH.PIPELINE_STAGE', {
-                  pipeline: pipelineName(config),
-                  stage: stageName(config),
-                })
-              }}
-            </span>
             <span class="text-xs text-n-slate-10">
               {{
                 t('CRM.PROSPECTING.AUTO_SEARCH.LAST_RUN_AT', {

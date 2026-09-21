@@ -47,11 +47,22 @@ module OperationalEngine
 
     validates :conta_id, presence: true
     validates :telefone, presence: true, uniqueness: { scope: :conta_id }
+    validate :agendado_requires_confirmed_calendar
 
     private
 
     def normalize_telefone
       self.telefone = Sales::Prospecting::PhoneNormalizer.normalize(telefone) || telefone
+    end
+
+    # §16.1/§21.2: "Agendado" é a projeção de uma reunião real, nunca um estado que a UI ou
+    # qualquer chamador interno pode fabricar. A migration equivalente protege o mesmo contrato
+    # no Supabase para escrituras fora do Rails.
+    def agendado_requires_confirmed_calendar
+      return unless etapa_prospect_agendado?
+      return if agendamento_status_confirmado? && calendar_event_id.present? && agendado_em.present?
+
+      errors.add(:etapa_prospect, 'agendado requires a confirmed Calendar event and scheduling timestamp')
     end
   end
 end

@@ -5,15 +5,16 @@
 # "Comercial" genérico) sincronizado com `etapa_prospect`, as tags LAVÍNIA/HUMANO/CALLBACK
 # derivadas de `modo_atendimento`/`agendamento_status`, e os sete campos que alimentam os
 # filtros do Kanban (§21.1) em `custom_attributes['engine_filters']`. Mover etapa passa por
-# Sales::Leads::MoveStageService com `user: nil` de propósito -- é o mesmo sinal que o serviço
-# usa pra permitir a única forma legítima de um card chegar em Agendado (§21.2, ver o comentário
-# em move_stage_service.rb), e dá de graça o registro em Sales::StageTransition + os eventos
-# SALES_LEAD_STAGE_CHANGED que um `save!` direto no card não geraria.
+# Sales::Leads::MoveStageService com `system_source: :operational_engine` de propósito. Antes de
+# chegar aqui, OperationalEngine::Lead e a constraint no Supabase já validam que Agendado tem
+# Calendar confirmado, id real e timestamp (§16.1/§21.2). Isso mantém o caminho privilegiado
+# restrito à projeção de um fato persistido e ainda gera Sales::StageTransition.
 #
 # `etapa_comercial` (Kanban Comercial, §8.4) fica fora daqui de propósito -- board e pipeline
 # separados, ver OperationalEngine::ComercialProjectionSync.
 module OperationalEngine
   class SalesProjectionSync
+    class ProjectionIntegrityError < StandardError; end
     def self.call(lead)
       new(lead).call
     end
@@ -31,22 +32,59 @@ module OperationalEngine
     private
 
     def existing
-      @existing ||= Sales::Lead.find_by(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id, sales_pipeline_id: pipeline.id)
+      @existing ||= begin
+        mapped = mapped_projection_scope.find_by(operational_lead_id: @lead.lead_id)
+        if mapped
+          mapped
+        else
+          # Cards das versões anteriores não carregavam o vínculo técnico. Podemos adotá-los só
+          # quando há exatamente um candidato no pipeline canônico; com dois cards a escolha seria
+          # arbitrária e criaria uma projeção que não corresponde a um fato do Engine.
+          legacy_cards = projection_scope.where(operational_lead_id: nil).limit(2).to_a
+          if legacy_cards.empty?
+            nil
+          else
+            raise ProjectionIntegrityError, "ambiguous prospect projection for lead #{@lead.lead_id}" if legacy_cards.size > 1
+
+            legacy_cards.first.tap do |card|
+              card.update!(operational_lead_id: @lead.lead_id, source: 'operational_engine')
+            end
+          end
+        end
+      end
     end
 
     def create
-      sales_lead = Sales::Lead.new(contact: contact, pipeline: pipeline, stage: target_stage, title: title)
+      sales_lead = Sales::Lead.new(
+        contact: contact,
+        pipeline: pipeline,
+        stage: target_stage,
+        title: title,
+        source: 'operational_engine',
+        operational_lead_id: @lead.lead_id
+      )
       sales_lead.custom_attributes = sales_lead.custom_attributes.merge(projection_attributes)
       sales_lead.save!
       sales_lead
+    rescue ActiveRecord::RecordNotUnique
+      # Duas tentativas podem chegar depois de a fonte já ter persistido o mesmo fato. O índice
+      # técnico decide a corrida; a perdedora só relê e sincroniza a projeção vencedora.
+      mapped = mapped_projection_scope.find_by!(operational_lead_id: @lead.lead_id)
+      sync(mapped)
     end
 
     def sync(sales_lead)
       if sales_lead.sales_stage_id != target_stage.id
-        Sales::Leads::MoveStageService.new(lead: sales_lead, stage: target_stage, user: nil).perform
+        Sales::Leads::MoveStageService.new(
+          lead: sales_lead, stage: target_stage, user: nil, system_source: :operational_engine
+        ).perform
       end
 
-      sales_lead.update!(title: title, custom_attributes: sales_lead.custom_attributes.merge(projection_attributes))
+      sales_lead.update!(
+        contact: contact,
+        title: title,
+        custom_attributes: sales_lead.custom_attributes.merge(projection_attributes)
+      )
       sales_lead
     end
 
@@ -63,6 +101,18 @@ module OperationalEngine
 
     def pipeline
       @pipeline ||= Sales::Pipelines::SeedProspectPipelineService.new(account: account).perform
+    end
+
+    def projection_scope
+      Sales::Lead.where(
+        account_id: @lead.conta_id,
+        contact_id: @lead.upsales_contact_id,
+        sales_pipeline_id: pipeline.id
+      )
+    end
+
+    def mapped_projection_scope
+      Sales::Lead.where(account_id: @lead.conta_id, sales_pipeline_id: pipeline.id)
     end
 
     # §20.1: LAVÍNIA/HUMANO são mutuamente exclusivas (o card sempre tem uma das duas); CALLBACK é

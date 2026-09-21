@@ -22,8 +22,6 @@
 #  created_at        :datetime         not null
 #  updated_at        :datetime         not null
 #  account_id        :bigint           not null
-#  sales_pipeline_id :bigint           not null
-#  sales_stage_id    :bigint
 #
 # Indexes
 #
@@ -57,9 +55,6 @@ class Sales::ProspectingConfig < ApplicationRecord
   self.table_name = 'sales_prospecting_configs'
 
   belongs_to :account
-  belongs_to :pipeline, class_name: 'Sales::Pipeline', foreign_key: :sales_pipeline_id, inverse_of: false
-  belongs_to :stage, class_name: 'Sales::Stage', foreign_key: :sales_stage_id, optional: true, inverse_of: false
-
   SCHEDULED_MINUTES = (0..55).step(5).to_a.freeze
 
   validates :business_type, :city, :state, presence: true

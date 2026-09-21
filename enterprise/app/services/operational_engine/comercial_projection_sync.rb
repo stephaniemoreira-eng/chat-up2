@@ -18,6 +18,7 @@
 # sincronização já funciona sem precisar lembrar de encontrar todo ponto de disparo depois.
 module OperationalEngine
   class ComercialProjectionSync
+    class ProjectionIntegrityError < StandardError; end
     def self.call(lead)
       new(lead).call
     end
@@ -36,7 +37,23 @@ module OperationalEngine
     private
 
     def existing
-      @existing ||= Sales::Lead.find_by(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id, sales_pipeline_id: pipeline.id)
+      @existing ||= begin
+        mapped = mapped_projection_scope.find_by(operational_lead_id: @lead.lead_id)
+        if mapped
+          mapped
+        else
+          legacy_cards = legacy_projection_scope.limit(2).to_a
+          if legacy_cards.empty?
+            nil
+          else
+            raise ProjectionIntegrityError, "ambiguous commercial projection for lead #{@lead.lead_id}" if legacy_cards.size > 1
+
+            legacy_cards.first.tap do |card|
+              card.update!(operational_lead_id: @lead.lead_id, source: 'operational_engine')
+            end
+          end
+        end
+      end
     end
 
     # status/closed_at setados a mão (não só stage:) porque um lead pode chegar ao Engine já
@@ -47,20 +64,29 @@ module OperationalEngine
     def create
       sales_lead = Sales::Lead.new(
         contact: contact, pipeline: pipeline, stage: target_stage, title: title,
+        source: 'operational_engine', operational_lead_id: @lead.lead_id,
         status: Sales::Leads::MoveStageService.status_for(target_stage),
         closed_at: target_stage.open? ? nil : Time.current
       )
       sales_lead.custom_attributes = sales_lead.custom_attributes.merge('engine_tags' => computed_tags)
       sales_lead.save!
       sales_lead
+    rescue ActiveRecord::RecordNotUnique
+      sync(mapped_projection_scope.find_by!(operational_lead_id: @lead.lead_id))
     end
 
     def sync(sales_lead)
       if sales_lead.sales_stage_id != target_stage.id
-        Sales::Leads::MoveStageService.new(lead: sales_lead, stage: target_stage, user: nil).perform
+        Sales::Leads::MoveStageService.new(
+          lead: sales_lead, stage: target_stage, user: nil, system_source: :operational_engine
+        ).perform
       end
 
-      sales_lead.update!(title: title, custom_attributes: sales_lead.custom_attributes.merge('engine_tags' => computed_tags))
+      sales_lead.update!(
+        contact: contact,
+        title: title,
+        custom_attributes: sales_lead.custom_attributes.merge('engine_tags' => computed_tags)
+      )
       sales_lead
     end
 
@@ -73,6 +99,14 @@ module OperationalEngine
 
     def pipeline
       @pipeline ||= Sales::Pipelines::SeedComercialPipelineService.new(account: account).perform
+    end
+
+    def mapped_projection_scope
+      Sales::Lead.where(account_id: @lead.conta_id, sales_pipeline_id: pipeline.id)
+    end
+
+    def legacy_projection_scope
+      mapped_projection_scope.where(contact_id: @lead.upsales_contact_id, operational_lead_id: nil)
     end
 
     # §20.2/§20.3: propensão é classificação manual (nao_classificado não vira tag -- é "ainda

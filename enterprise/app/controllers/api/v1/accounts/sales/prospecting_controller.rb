@@ -12,8 +12,6 @@ class Api::V1::Accounts::Sales::ProspectingController < Api::V1::Accounts::Sales
   def create_leads
     @leads = Sales::Prospecting::CreateLeadsFromResultsService.new(
       account: Current.account,
-      pipeline_id: params.require(:pipeline_id),
-      sales_stage_id: params[:sales_stage_id],
       result_ids: params.require(:result_ids)
     ).perform
   end

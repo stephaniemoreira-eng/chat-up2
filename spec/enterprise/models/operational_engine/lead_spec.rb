@@ -59,6 +59,22 @@ RSpec.describe OperationalEngine::Lead do
     end
   end
 
+  describe 'Agendado' do
+    it 'exige confirmacao, identificador e data reais do Calendar' do
+      expect { build_lead(etapa_prospect: 'agendado') }
+        .to raise_error(ActiveRecord::RecordInvalid, /confirmed Calendar event/)
+    end
+
+    it 'aceita Agendado quando o Calendar confirmou o evento' do
+      lead = build_lead(
+        etapa_prospect: 'agendado', agendamento_status: 'confirmado',
+        calendar_event_id: 'calendar-event-1', agendado_em: Time.current
+      )
+
+      expect(lead.etapa_prospect).to eq('agendado')
+    end
+  end
+
   describe 'campos write-once (SSOT §6.3)' do
     it 'nao deixa reescrever origem_lead depois de definido' do
       lead = build_lead(origem_lead: 'scan')

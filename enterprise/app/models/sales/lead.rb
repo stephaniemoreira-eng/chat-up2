@@ -9,6 +9,7 @@
 #  expected_close_date   :date
 #  last_activity_at      :datetime
 #  notes                 :text
+#  operational_lead_id   :uuid
 #  position              :decimal(20, 10)  not null
 #  probability           :integer
 #  source                :string
@@ -31,6 +32,7 @@
 #  index_sales_leads_on_account_pipeline_stage_position  (account_id,sales_pipeline_id,sales_stage_id,position)
 #  index_sales_leads_on_assignee_id                      (assignee_id)
 #  index_sales_leads_on_contact_id                       (contact_id)
+#  index_sales_leads_on_engine_projection                 (account_id,sales_pipeline_id,operational_lead_id) UNIQUE WHERE (operational_lead_id IS NOT NULL)
 #
 class Sales::Lead < ApplicationRecord
   self.table_name = 'sales_leads'
@@ -57,8 +59,10 @@ class Sales::Lead < ApplicationRecord
 
   validates :account_id, presence: true
   validates :title, presence: true
+  validates :operational_lead_id, uniqueness: { scope: %i[account_id sales_pipeline_id] }, allow_nil: true
   validate :pipeline_belongs_to_account
   validate :stage_belongs_to_pipeline
+  validate :protected_stage_requires_operational_projection
 
   before_validation :assign_account_from_pipeline
   before_create :assign_position
@@ -85,6 +89,16 @@ class Sales::Lead < ApplicationRecord
     return if stage.nil? || pipeline.nil?
 
     errors.add(:sales_stage_id, 'must belong to the lead pipeline') if stage.sales_pipeline_id != pipeline.id
+  end
+
+  # Uma etapa protegida não pode ser criada diretamente pelo CRUD do CRM. O único criador é a
+  # projeção do Engine, que já persistiu e validou o fato de negócio no Supabase (§16.1/§17.4).
+  def protected_stage_requires_operational_projection
+    return if stage.blank?
+    return unless Sales::Stage::PROTECTED_ENGINE_STAGE_KEYS.include?(stage.engine_stage_key)
+    return if operational_lead_id.present? && source == 'operational_engine'
+
+    errors.add(:sales_stage_id, 'protected stages require an Operational Engine projection')
   end
 
   def assign_position

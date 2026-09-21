@@ -34,6 +34,7 @@ class Sales::Stage < ApplicationRecord
     backlog contatado em_conversa qualificado agendado
     oportunidade em_acompanhamento ganho perdido
   ].freeze
+  PROTECTED_ENGINE_STAGE_KEYS = %w[agendado ganho perdido].freeze
 
   belongs_to :account
   belongs_to :pipeline, class_name: 'Sales::Pipeline', foreign_key: :sales_pipeline_id, inverse_of: :stages

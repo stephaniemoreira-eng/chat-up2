@@ -1,10 +1,8 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import ProspectingAPI from 'dashboard/api/sales/prospecting';
-import { useSalesPipelinesStore } from 'dashboard/stores/sales/pipelines';
-import { useSalesStagesStore } from 'dashboard/stores/sales/stages';
 
 import Button from 'dashboard/components-next/button/Button.vue';
 import Input from 'dashboard/components-next/input/Input.vue';
@@ -47,8 +45,6 @@ const { t } = useI18n();
 
 const activeTab = ref('manual');
 
-const pipelinesStore = useSalesPipelinesStore();
-const stagesStore = useSalesStagesStore();
 
 const businessType = ref('');
 const neighborhood = ref('');
@@ -68,31 +64,14 @@ const results = ref([]);
 const selectedIds = ref(new Set());
 const hasSearched = ref(false);
 
-const pipelineId = ref(null);
-const stageId = ref(null);
-
 const stateOptions = BRAZILIAN_STATES.map(uf => ({ value: uf, label: uf }));
 const yesNoOptions = computed(() => [
   { value: 'yes', label: t('CRM.PROSPECTING.FORM.YES') },
   { value: 'no', label: t('CRM.PROSPECTING.FORM.NO') },
 ]);
 
-const pipelines = computed(() => pipelinesStore.getPipelines);
-const pipelineOptions = computed(() =>
-  pipelines.value.map(pipeline => ({
-    value: pipeline.id,
-    label: pipeline.name,
-  }))
-);
-const stages = computed(() =>
-  pipelineId.value ? stagesStore.getStagesByPipeline(pipelineId.value) : []
-);
-const stageOptions = computed(() =>
-  stages.value.map(stage => ({ value: stage.id, label: stage.name }))
-);
-
 const selectedCount = computed(() => selectedIds.value.size);
-const canAddLeads = computed(() => selectedCount.value > 0 && pipelineId.value);
+const canAddLeads = computed(() => selectedCount.value > 0);
 const canSearch = computed(
   () => businessType.value.trim() && city.value.trim() && state.value
 );
@@ -117,12 +96,6 @@ const toggleResult = resultId => {
     next.add(resultId);
   }
   selectedIds.value = next;
-};
-
-const onSelectPipeline = id => {
-  pipelineId.value = id;
-  stageId.value = null;
-  stagesStore.get(id);
 };
 
 const onSearch = async () => {
@@ -159,8 +132,6 @@ const onAddLeads = async () => {
   const requestedCount = selectedCount.value;
   try {
     const { data } = await ProspectingAPI.createLeads({
-      pipelineId: pipelineId.value,
-      salesStageId: stageId.value,
       resultIds: Array.from(selectedIds.value),
     });
     // The backend skips (and logs) any result that fails to become a valid Contact/Lead instead
@@ -201,12 +172,6 @@ const onAddLeads = async () => {
   }
 };
 
-onMounted(async () => {
-  await pipelinesStore.get();
-  const defaultPipeline =
-    pipelines.value.find(pipeline => pipeline.is_default) || pipelines.value[0];
-  if (defaultPipeline) onSelectPipeline(defaultPipeline.id);
-});
 </script>
 
 <template>
@@ -390,20 +355,6 @@ onMounted(async () => {
 
       <template v-else>
         <div class="flex items-center gap-3 flex-wrap">
-          <ComboBox
-            :model-value="pipelineId"
-            :options="pipelineOptions"
-            :placeholder="t('CRM.PIPELINE_SWITCHER.PLACEHOLDER')"
-            class="w-56"
-            @update:model-value="onSelectPipeline"
-          />
-          <ComboBox
-            :model-value="stageId"
-            :options="stageOptions"
-            :placeholder="t('CRM.PROSPECTING.CREATE.STAGE_PLACEHOLDER')"
-            class="w-56"
-            @update:model-value="value => (stageId = value)"
-          />
           <Button
             :label="t('CRM.PROSPECTING.CREATE.ACTION', { n: selectedCount })"
             :disabled="!canAddLeads"

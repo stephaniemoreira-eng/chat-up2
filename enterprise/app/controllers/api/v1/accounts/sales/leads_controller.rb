@@ -1,6 +1,7 @@
 class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::BaseController
   before_action -> { check_authorization(Sales::Lead) }
   before_action :set_lead, only: [:show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary]
+  before_action :ensure_not_engine_managed, only: %i[update destroy]
 
   rescue_from Sales::Leads::MoveStageService::ProtectedTransitionError, with: :render_protected_transition_error
 
@@ -15,7 +16,7 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     render json: {
       leads_count: leads.count,
       deals_won_count: leads.won.count,
-      last_search_at: leads.where(source: 'busca_prospeccao').maximum(:created_at)
+      last_search_at: Current.account.sales_prospecting_results.where.not(sales_lead_id: nil).maximum(:created_at)
     }
   end
 
@@ -78,6 +79,12 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
 
   def set_lead
     @lead = Current.account.sales_leads.find(params[:id])
+  end
+
+  def ensure_not_engine_managed
+    return unless @lead.pipeline.engine_kind.present?
+
+    raise Sales::Leads::MoveStageService::EngineManagedLeadError, 'lead is managed by the Operational Engine'
   end
 
   def lead_params

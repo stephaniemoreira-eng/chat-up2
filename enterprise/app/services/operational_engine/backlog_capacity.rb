@@ -47,7 +47,7 @@ module OperationalEngine
     end
 
     def janela_atual
-      JANELAS.find { |j| minuto_do_dia.between?(j[:inicio_min], j[:fim_min]) }
+      JANELAS.find { |j| minuto_do_dia >= j[:inicio_min] && minuto_do_dia < j[:fim_min] }
     end
 
     def minuto_do_dia
@@ -71,7 +71,7 @@ module OperationalEngine
     # §10.6: primeiro_contato_em só é gravado quando o provedor confirma envio real -- essa é a
     # definição operacional de "ativação", não a criação do lead nem uma tentativa qualquer.
     def ativados_entre(inicio, fim)
-      OperationalEngine::Lead.where(conta_id: @conta_id, primeiro_contato_em: inicio..fim).count
+      OperationalEngine::Lead.where(conta_id: @conta_id, primeiro_contato_em: inicio...fim).count
     end
   end
 end

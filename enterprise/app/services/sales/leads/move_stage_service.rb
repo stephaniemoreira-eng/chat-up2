@@ -5,15 +5,13 @@ class Sales::Leads::MoveStageService
   # resultado comercial registrado), nunca de um drag solto que não passou pelo serviço que
   # valida e grava o resto do estado junto (ganho_em, motivo_perda, relacao_atual...).
   #
-  # `user` é o mesmo parâmetro que já distingue as duas origens possíveis desta chamada: o
-  # controller (Sales::LeadsController#move) sempre passa `user: Current.user`, presente porque é
-  # uma ação humana via API; a sincronização do Operational Engine (OperationalEngine::
-  # SalesProjectionSync/ComercialProjectionSync) passa `user: nil`, porque é o sistema refletindo
-  # um fato já gravado no Supabase. Não criamos uma flag nova pra isso -- reaproveitamos a
-  # fronteira de confiança que já existe.
-  PROTECTED_STAGE_KEYS = %w[agendado ganho perdido].freeze
+  # `user` identifica a ação humana no controller. A única exceção é a projeção do Operational
+  # Engine, que precisa declarar `system_source: :operational_engine`; `user: nil` por si só não
+  # é uma autorização para fabricar uma etapa protegida.
+  PROTECTED_STAGE_KEYS = Sales::Stage::PROTECTED_ENGINE_STAGE_KEYS
 
   class ProtectedTransitionError < StandardError; end
+  class EngineManagedLeadError < ProtectedTransitionError; end
 
   # Exposto como class method (não só a lógica privada de instância) porque um card recém-criado
   # já direto numa stage won/lost (ex.: ComercialProjectionSync#create, um lead que chega no
@@ -26,16 +24,17 @@ class Sales::Leads::MoveStageService
     'open'
   end
 
-  def initialize(lead:, stage:, position: nil, user: nil)
+  def initialize(lead:, stage:, position: nil, user: nil, system_source: nil)
     @lead = lead
     @stage = stage
     @position = position
     @user = user
+    @system_source = system_source
   end
 
   def perform
     raise ArgumentError, 'stage must belong to the lead pipeline' if @stage.sales_pipeline_id != @lead.sales_pipeline_id
-    raise ProtectedTransitionError, "#{@stage.engine_stage_key} só pode ser definido por uma ação real de negócio" if blocked_manual_transition?
+    raise ProtectedTransitionError, blocked_transition_message if blocked_manual_transition?
     return @lead if @stage.id == @lead.sales_stage_id
 
     from_stage = @lead.stage
@@ -53,7 +52,17 @@ class Sales::Leads::MoveStageService
   private
 
   def blocked_manual_transition?
-    @user.present? && @stage.id != @lead.sales_stage_id && PROTECTED_STAGE_KEYS.include?(@stage.engine_stage_key)
+    return true if @stage.id != @lead.sales_stage_id && @lead.pipeline.engine_kind.present? && @system_source != :operational_engine
+
+    @stage.id != @lead.sales_stage_id &&
+      PROTECTED_STAGE_KEYS.include?(@stage.engine_stage_key) &&
+      @system_source != :operational_engine
+  end
+
+  def blocked_transition_message
+    return 'pipeline is managed by the Operational Engine' if @lead.pipeline.engine_kind.present? && @system_source != :operational_engine
+
+    "#{@stage.engine_stage_key} só pode ser definido por uma ação real de negócio"
   end
 
   def move_lead

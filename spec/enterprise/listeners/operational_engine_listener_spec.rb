@@ -87,6 +87,7 @@ describe OperationalEngineListener do
     allow(OperationalEngine::InboundProcessor).to receive(:call).and_raise('boom')
 
     expect(ChatwootExceptionTracker).to receive(:new).and_call_original
-    expect { listener.message_created(event) }.not_to raise_error
+    expect { listener.message_created(event) }
+      .to have_enqueued_job(OperationalEngine::ProcessMessageJob).with(incoming.id)
   end
 end

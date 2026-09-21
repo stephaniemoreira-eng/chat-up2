@@ -30,6 +30,11 @@ RSpec.describe OperationalEngine::BacklogCapacity do
     it 'e zero depois das 16h' do
       expect(disponivel('2026-09-21 16:01')).to eq(0)
     end
+
+    it 'fecha exatamente no fim de cada janela' do
+      expect(disponivel('2026-09-21 11:00')).to eq(0)
+      expect(disponivel('2026-09-21 16:00')).to eq(0)
+    end
   end
 
   describe 'dentro de uma janela, sem ativacoes ainda' do

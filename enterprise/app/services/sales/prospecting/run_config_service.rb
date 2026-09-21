@@ -51,8 +51,6 @@ class Sales::Prospecting::RunConfigService
   def create_leads(result_ids)
     Sales::Prospecting::CreateLeadsFromResultsService.new(
       account: @config.account,
-      pipeline_id: @config.sales_pipeline_id,
-      sales_stage_id: @config.sales_stage_id,
       result_ids: result_ids,
       auto_contact_enabled: @config.auto_contact_enabled,
       contact_tag: @config.contact_tag

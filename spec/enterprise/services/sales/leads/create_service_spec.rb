@@ -41,5 +41,16 @@ RSpec.describe Sales::Leads::CreateService do
         described_class.new(account: account, params: { contact_id: other_contact.id, pipeline_id: pipeline.id, title: 'x' }).perform
       end.to raise_error(ActiveRecord::RecordNotFound)
     end
+
+    it 'does not allow manual cards in an Engine-managed pipeline' do
+      engine_pipeline = Sales::Pipelines::SeedProspectPipelineService.new(account: account).perform
+
+      expect do
+        described_class.new(
+          account: account,
+          params: { contact_id: contact.id, pipeline_id: engine_pipeline.id, title: 'Card manual' }
+        ).perform
+      end.to raise_error(Sales::Leads::CreateService::EngineManagedPipelineError)
+    end
   end
 end

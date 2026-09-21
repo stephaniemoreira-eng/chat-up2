@@ -47,4 +47,25 @@ RSpec.describe OperationalEngine::IdempotencyGuard do
     expect(record.status).to eq('error')
     expect(record.error_message).to eq('falhou')
   end
+
+  it 'reprocessa uma falha transitória de forma limitada e preserva a mesma correlação' do
+    expect { call { raise 'falhou' } }.to raise_error('falhou')
+    first_correlation = OperationalEngine::IdempotencyRecord.find_by(external_id: 'evt-1').correlation_id
+
+    result = call { |correlation_id| "recuperado:#{correlation_id}" }
+
+    record = OperationalEngine::IdempotencyRecord.find_by(external_id: 'evt-1')
+    expect(result).to eq("recuperado:#{first_correlation}")
+    expect(record.status).to eq('processed')
+    expect(record.attempts).to eq(2)
+  end
+
+  it 'para de reabrir depois do limite de tentativas' do
+    3.times do
+      expect { call { raise 'falhou' } }.to raise_error('falhou')
+    end
+
+    expect(call { 'nao executa' }).to be_nil
+    expect(OperationalEngine::IdempotencyRecord.find_by(external_id: 'evt-1').attempts).to eq(3)
+  end
 end

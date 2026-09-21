@@ -2,11 +2,9 @@ require 'rails_helper'
 
 RSpec.describe Sales::Prospecting::RunConfigService do
   let(:account) { create(:account) }
-  let(:pipeline) { create(:sales_pipeline, account: account) }
-  let(:stage) { create(:sales_stage, pipeline: pipeline) }
   let(:config) do
     account.sales_prospecting_configs.create!(
-      business_type: 'clinica estetica', city: 'Santos', state: 'SP', pipeline: pipeline, stage: stage
+      business_type: 'clinica estetica', city: 'Santos', state: 'SP'
     )
   end
 
@@ -33,7 +31,7 @@ RSpec.describe Sales::Prospecting::RunConfigService do
 
     it 'skips creating a duplicate lead for a place already turned into a lead in a previous run' do
       previous_search = account.sales_prospecting_searches.create!(business_type: 'x', city: 'Santos', state: 'SP')
-      existing_lead = create(:sales_lead, account: account, pipeline: pipeline, stage: stage)
+      existing_lead = create(:sales_lead, account: account)
       previous_search.results.create!(account: account, place_id: 'p1', name: 'Clinica X (ja e lead)', lead: existing_lead)
 
       stub_places_search([{ place_id: 'p1', name: 'Clinica X', phone_number: '+5513999999999', address: 'Rua X' }])

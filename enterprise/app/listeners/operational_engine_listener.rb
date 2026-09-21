@@ -11,18 +11,11 @@ class OperationalEngineListener < BaseListener
   def message_created(event)
     message, account = extract_message_and_account(event)
 
-    if message.incoming?
-      OperationalEngine::InboundProcessor.call(message: message)
-    # human_response? is private on Message (native, not ours to change per ADR-0001) -- `send`
-    # is the deliberate bridge, not an oversight. Confirmed here the hard way: calling it with an
-    # explicit receiver raises NoMethodError, which this method's own rescue below was silently
-    # swallowing, masking the bug as "auto-assume just didn't happen".
-    elsif message.send(:human_response?) && !message.private?
-      auto_assumir(message, account)
-    end
+    OperationalEngine::MessageProcessor.call(message)
 
     log('message_created', account_id: account.id, message_id: message.id)
   rescue StandardError => e
+    OperationalEngine::ProcessMessageJob.perform_later(message.id) if message&.persisted?
     ChatwootExceptionTracker.new(e, account: account).capture_exception
   end
 
@@ -38,19 +31,6 @@ class OperationalEngineListener < BaseListener
   end
 
   private
-
-  # §18.2: "mensagem pública humana deve auto-assumir". O lead precisa já existir -- uma resposta
-  # nossa pressupõe uma conversa que já tem um lead por trás (criado pelo inbound, ou por outro
-  # caminho fora de Fase 3); não fabricamos um lead a partir só de uma mensagem de saída.
-  def auto_assumir(message, account)
-    phone = message.conversation.contact&.phone_number
-    return if phone.blank?
-
-    lead = OperationalEngine::LeadRepository.find_by_telefone(conta_id: account.id, telefone: phone)
-    return if lead.nil?
-
-    OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id)
-  end
 
   def log(event_name, **payload)
     Rails.logger.info("[OperationalEngine] #{event_name} #{payload.to_json}")
