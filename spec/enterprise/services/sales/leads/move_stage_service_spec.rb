@@ -127,4 +127,26 @@ RSpec.describe Sales::Leads::MoveStageService do
       expect { described_class.new(lead: lead, stage: won_stage, user: user).perform }.not_to raise_error
     end
   end
+
+  describe 'proteção do Ganho/Perdido (SSOT §17.4)' do
+    let(:ganho_stage) { create(:sales_stage, :won, pipeline: pipeline, engine_stage_key: 'ganho') }
+    let(:perdido_stage) { create(:sales_stage, :lost, pipeline: pipeline, engine_stage_key: 'perdido') }
+
+    it 'bloqueia quando um usuario (humano) tenta mover manualmente pra Ganho' do
+      expect { described_class.new(lead: lead, stage: ganho_stage, user: user).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
+    end
+
+    it 'bloqueia quando um usuario (humano) tenta mover manualmente pra Perdido' do
+      expect { described_class.new(lead: lead, stage: perdido_stage, user: user).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
+    end
+
+    it 'permite quando e o sistema (user nil) refletindo um resultado_comercial real' do
+      moved = described_class.new(lead: lead, stage: ganho_stage, user: nil).perform
+
+      expect(moved.stage).to eq(ganho_stage)
+      expect(moved).to be_won
+    end
+  end
 end

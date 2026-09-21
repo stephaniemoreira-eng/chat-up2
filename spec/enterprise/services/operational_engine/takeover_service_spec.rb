@@ -135,6 +135,15 @@ RSpec.describe OperationalEngine::TakeoverService do
 
       expect { described_class.assumir!(lead: lead, user_id: 99) }.not_to raise_error
     end
+
+    it 'tambem sincroniza o card Comercial (Fase 9) quando ja existe oportunidade' do
+      lead = build_linked_lead(modo_atendimento: 'lavinia', etapa_comercial: 'oportunidade')
+
+      described_class.assumir!(lead: lead, user_id: 42)
+
+      comercial_card = Sales::Lead.joins(:pipeline).find_by(contact_id: contact.id, sales_pipelines: { engine_kind: 'comercial' })
+      expect(comercial_card).to be_present
+    end
   end
 
   describe 'concorrencia (teste 28.23)' do

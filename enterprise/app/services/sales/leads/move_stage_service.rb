@@ -1,12 +1,30 @@
 class Sales::Leads::MoveStageService
   # SSOT §21.2: "Agendado só pode existir por reunião real. Arrastar manualmente um card para
-  # Agendado sem evento de Calendar deve ser bloqueado." `user` é o mesmo parâmetro que já
-  # distingue as duas origens possíveis desta chamada: o controller (Sales::LeadsController#move)
-  # sempre passa `user: Current.user`, presente porque é uma ação humana via API; a sincronização
-  # do Operational Engine (OperationalEngine::SalesProjectionSync) passa `user: nil`, porque é o
-  # sistema refletindo um `agendamento_status: confirmado` já gravado no Supabase (§5.6). Não
-  # criamos uma flag nova pra isso -- reaproveitamos a fronteira de confiança que já existe.
+  # Agendado sem evento de Calendar deve ser bloqueado." O mesmo raciocínio vale pra Ganho/Perdido
+  # (§17.4): são fatos que só podem nascer de uma ação real de negócio (Calendar confirmado;
+  # resultado comercial registrado), nunca de um drag solto que não passou pelo serviço que
+  # valida e grava o resto do estado junto (ganho_em, motivo_perda, relacao_atual...).
+  #
+  # `user` é o mesmo parâmetro que já distingue as duas origens possíveis desta chamada: o
+  # controller (Sales::LeadsController#move) sempre passa `user: Current.user`, presente porque é
+  # uma ação humana via API; a sincronização do Operational Engine (OperationalEngine::
+  # SalesProjectionSync/ComercialProjectionSync) passa `user: nil`, porque é o sistema refletindo
+  # um fato já gravado no Supabase. Não criamos uma flag nova pra isso -- reaproveitamos a
+  # fronteira de confiança que já existe.
+  PROTECTED_STAGE_KEYS = %w[agendado ganho perdido].freeze
+
   class ProtectedTransitionError < StandardError; end
+
+  # Exposto como class method (não só a lógica privada de instância) porque um card recém-criado
+  # já direto numa stage won/lost (ex.: ComercialProjectionSync#create, um lead que chega no
+  # Engine já como 'ganho') nunca passa por #perform -- não existe "mover" um card que ainda não
+  # tinha stage nenhuma -- mas ainda precisa do mesmo status/closed_at corretos desde o início.
+  def self.status_for(stage)
+    return 'won' if stage.won?
+    return 'lost' if stage.lost?
+
+    'open'
+  end
 
   def initialize(lead:, stage:, position: nil, user: nil)
     @lead = lead
@@ -17,7 +35,7 @@ class Sales::Leads::MoveStageService
 
   def perform
     raise ArgumentError, 'stage must belong to the lead pipeline' if @stage.sales_pipeline_id != @lead.sales_pipeline_id
-    raise ProtectedTransitionError, 'Agendado só pode ser definido por uma reunião real confirmada' if blocked_manual_agendamento?
+    raise ProtectedTransitionError, "#{@stage.engine_stage_key} só pode ser definido por uma ação real de negócio" if blocked_manual_transition?
     return @lead if @stage.id == @lead.sales_stage_id
 
     from_stage = @lead.stage
@@ -34,8 +52,8 @@ class Sales::Leads::MoveStageService
 
   private
 
-  def blocked_manual_agendamento?
-    @user.present? && @stage.id != @lead.sales_stage_id && @stage.engine_stage_key == 'agendado'
+  def blocked_manual_transition?
+    @user.present? && @stage.id != @lead.sales_stage_id && PROTECTED_STAGE_KEYS.include?(@stage.engine_stage_key)
   end
 
   def move_lead
@@ -43,7 +61,7 @@ class Sales::Leads::MoveStageService
       stage: @stage,
       position: @position || next_position,
       stage_changed_at: Time.current,
-      status: status_for(@stage),
+      status: self.class.status_for(@stage),
       closed_at: @stage.open? ? nil : Time.current
     )
   end
@@ -61,13 +79,6 @@ class Sales::Leads::MoveStageService
 
   def next_position
     (Sales::Lead.where(sales_stage_id: @stage.id).maximum(:position) || -1) + 1
-  end
-
-  def status_for(stage)
-    return 'won' if stage.won?
-    return 'lost' if stage.lost?
-
-    'open'
   end
 
   def dispatch_events(from_stage)

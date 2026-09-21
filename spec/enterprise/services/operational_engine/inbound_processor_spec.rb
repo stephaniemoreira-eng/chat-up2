@@ -101,5 +101,15 @@ RSpec.describe OperationalEngine::InboundProcessor do
       expect { described_class.call(message: message) }.not_to change(OperationalEngine::LeadEvent, :count)
       expect(lead.reload.ultima_interacao_em).to be_within(1.second).of(message.created_at)
     end
+
+    it 'tambem sincroniza o card Comercial (Fase 9) quando o lead ja e uma oportunidade' do
+      lead.update!(etapa_comercial: 'oportunidade')
+      message = build_message
+
+      described_class.call(message: message)
+
+      comercial_card = Sales::Lead.joins(:pipeline).find_by(contact_id: contact.id, sales_pipelines: { engine_kind: 'comercial' })
+      expect(comercial_card).to be_present
+    end
   end
 end

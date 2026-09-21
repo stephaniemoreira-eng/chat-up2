@@ -25,10 +25,15 @@
 class Sales::Stage < ApplicationRecord
   self.table_name = 'sales_stages'
 
-  # Espelha o enum `etapa_prospect` do OperationalEngine::Lead (§6.2 do SSOT). Igual a
-  # Sales::Pipeline::ENGINE_KINDS: nunca setado pela UI (StageDialog.vue só edita name/color),
-  # só por Sales::Pipelines::SeedProspectPipelineService.
-  ENGINE_STAGE_KEYS = %w[backlog contatado em_conversa qualificado agendado].freeze
+  # Espelha os enums `etapa_prospect` e `etapa_comercial` do OperationalEngine::Lead (§6.2 do
+  # SSOT) -- uma lista só, porque a unicidade já é escopada por pipeline (ver a validação
+  # abaixo), então não há risco de colisão entre os dois funis. Igual a
+  # Sales::Pipeline::ENGINE_KINDS: nunca setado pela UI (StageDialog.vue só edita name/color), só
+  # pelos seed services (SeedProspectPipelineService / SeedComercialPipelineService).
+  ENGINE_STAGE_KEYS = %w[
+    backlog contatado em_conversa qualificado agendado
+    oportunidade em_acompanhamento ganho perdido
+  ].freeze
 
   belongs_to :account
   belongs_to :pipeline, class_name: 'Sales::Pipeline', foreign_key: :sales_pipeline_id, inverse_of: :stages

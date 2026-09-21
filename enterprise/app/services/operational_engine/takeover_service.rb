@@ -44,7 +44,10 @@ module OperationalEngine
         # Fora do with_lock de propósito: a sincronização visual toca o Postgres nativo, um banco
         # diferente do Supabase -- não vale segurar o lock de linha do Engine pela viagem de rede
         # extra. Só quando muda de verdade (§20.1: a tag HUMANO/LAVÍNIA no card depende disso).
-        OperationalEngine::SalesProjectionSync.call(@lead) if changed
+        next unless changed
+
+        OperationalEngine::SalesProjectionSync.call(@lead)
+        OperationalEngine::ComercialProjectionSync.call(@lead)
       end
     end
 
@@ -67,7 +70,10 @@ module OperationalEngine
         changed = true
         @lead
       end.tap do
-        OperationalEngine::SalesProjectionSync.call(@lead) if changed
+        next unless changed
+
+        OperationalEngine::SalesProjectionSync.call(@lead)
+        OperationalEngine::ComercialProjectionSync.call(@lead)
       end
     end
 
