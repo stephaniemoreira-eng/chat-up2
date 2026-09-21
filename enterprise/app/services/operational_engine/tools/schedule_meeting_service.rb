@@ -57,13 +57,18 @@ module OperationalEngine
       # desperdiçado. Aceito por ora: a Lavínia processa uma conversa por vez, então essa corrida
       # exige um cenário que a arquitetura atual não produz (mesmo desvio consciente do §5.9).
       def persist_confirmation(lead, event_id)
+        # Um só Time.current, reaproveitado nos dois campos: conversao_em = agendado_em quando é
+        # a reunião que converte (SSOT §16.3, "conversao_em = min(agendado_em, ...)"). Duas
+        # chamadas separadas produziriam dois instantes com microssegundos diferentes -- quebraria
+        # essa igualdade por um detalhe de timing, não por regra de negócio.
+        now = Time.current
         lead.with_lock do
           lead.update!(
             calendar_event_id: event_id,
             agendamento_status: 'confirmado',
-            agendado_em: Time.current,
+            agendado_em: now,
             etapa_prospect: 'agendado',
-            **(lead.conversao_em.nil? ? { conversao_em: Time.current, tipo_conversao: 'agendamento' } : {})
+            **(lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'agendamento' } : {})
           )
           OperationalEngine::LeadEvent.create!(
             lead: lead,

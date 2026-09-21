@@ -7,7 +7,9 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
   let!(:agent_tenant) do
     create(:up_sales_agent_tenant, account: account, calendar_integration_instance_id: 'instance-1')
   end
-  let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number) }
+  let!(:lead) do
+    OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, upsales_contact_id: contact.id)
+  end
 
   def perform(**overrides)
     described_class.new(

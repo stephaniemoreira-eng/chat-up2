@@ -30,6 +30,7 @@ RSpec.describe OperationalEngine::Tools::AvailabilityService do
 
     it 'repassa o erro quando o up2-agents falha' do
       stub_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')
+        .with(query: hash_including('timeMin' => '2026-09-22T00:00:00-03:00'))
         .to_return(status: 500, body: { error: 'Google indisponível' }.to_json, headers: { 'Content-Type' => 'application/json' })
 
       result = perform

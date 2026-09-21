@@ -4,7 +4,9 @@ RSpec.describe OperationalEngine::Tools::RegisterCallbackService do
   let(:account) { create(:account) }
   let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
   let(:conversation) { create(:conversation, account: account, contact: contact) }
-  let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number) }
+  let!(:lead) do
+    OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, upsales_contact_id: contact.id)
+  end
 
   def perform
     described_class.new(account: account, conversation_id: conversation.id).call
