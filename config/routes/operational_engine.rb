@@ -16,7 +16,20 @@ delete 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_e
 post 'operational_engine/tools/register_callback', to: 'operational_engine/tools#register_callback'
 get 'operational_engine/tools/availability', to: 'operational_engine/tools#availability'
 
-# S-4: health + Snapshot (SSOT §12.3), pedidos por docs/agent-runtime-v1.md (up2-agents) para
-# destravar o modo agent. Mesma autenticação servidor-a-servidor do Contrato B acima.
+# S-4 parte 1: health + Snapshot (SSOT §12.3), pedidos por docs/agent-runtime-v1.md (up2-agents)
+# para destravar o modo agent. Mesma autenticação servidor-a-servidor do Contrato B acima.
 get 'operational_engine/health', to: 'operational_engine/snapshot#health'
 get 'operational_engine/snapshot', to: 'operational_engine/snapshot#show'
+
+# S-4 parte 2: um endpoint por acao_sugerida operacional (SSOT §12.4) -- o aplicador de ações
+# despachado pelo ActionDispatcher do up2-agents depois que a saída do modelo já passou pela
+# validação Zod. Nomes em português batendo 1:1 com o enum ACAO_SUGERIDA de lá, de propósito --
+# não é o mesmo path de operational_engine/tools/* (Contrato B/modo prompt), mesmo quando convergem
+# no mesmo service por baixo (registrar_callback).
+post 'operational_engine/actions/iniciar_orcamento', to: 'operational_engine/actions#iniciar_orcamento'
+post 'operational_engine/actions/iniciar_agendamento', to: 'operational_engine/actions#iniciar_agendamento'
+post 'operational_engine/actions/registrar_callback', to: 'operational_engine/actions#registrar_callback'
+post 'operational_engine/actions/handoff_comercial', to: 'operational_engine/actions#handoff_comercial'
+post 'operational_engine/actions/encerrar_sem_interesse', to: 'operational_engine/actions#encerrar_sem_interesse'
+post 'operational_engine/actions/encerrar_nao_qualificado', to: 'operational_engine/actions#encerrar_nao_qualificado'
+post 'operational_engine/actions/ativar_nao_contatar', to: 'operational_engine/actions#ativar_nao_contatar'
