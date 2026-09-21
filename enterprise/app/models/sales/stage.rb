@@ -72,6 +72,7 @@ class Sales::Stage < ApplicationRecord
   end
 
   def single_stage_per_engine_stage_key_per_pipeline
+    return if pipeline.nil?
     return unless pipeline.stages.where(engine_stage_key: engine_stage_key).where.not(id: id).exists?
 
     errors.add(:engine_stage_key, 'already assigned to another stage in this pipeline')

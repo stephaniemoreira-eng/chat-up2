@@ -68,6 +68,7 @@ class Sales::Pipeline < ApplicationRecord
   end
 
   def single_pipeline_per_engine_kind_per_account
+    return if account.nil?
     return unless account.sales_pipelines.where(engine_kind: engine_kind).where.not(id: id).exists?
 
     errors.add(:engine_kind, 'already assigned to another pipeline for this account')
