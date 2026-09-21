@@ -81,6 +81,47 @@ describe OperationalEngineListener do
     end
   end
 
+  describe 'confirmação de envio (Fase 6, §10.6, S-7)' do
+    let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
+    let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog') }
+
+    it 'source_id saindo de nulo pra presente numa mensagem outgoing aciona a confirmação' do
+      outgoing = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      event = Events::Base.new(:message_updated, Time.zone.now, message: outgoing, previous_changes: { 'source_id' => [nil, 'wamid.abc'] })
+
+      listener.message_updated(event)
+
+      expect(lead.reload.primeiro_contato_em).to be_present
+    end
+
+    it 'source_id já preenchido antes não é "acabou de confirmar" -- não aciona de novo' do
+      outgoing = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      event = Events::Base.new(:message_updated, Time.zone.now, message: outgoing, previous_changes: { 'source_id' => %w[wamid.old wamid.abc] })
+
+      listener.message_updated(event)
+
+      expect(lead.reload.primeiro_contato_em).to be_nil
+    end
+
+    it 'mudança que não é source_id não aciona a confirmação' do
+      outgoing = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      event = Events::Base.new(:message_updated, Time.zone.now, message: outgoing, previous_changes: { 'status' => %w[sent delivered] })
+
+      listener.message_updated(event)
+
+      expect(lead.reload.primeiro_contato_em).to be_nil
+    end
+
+    it 'mensagem incoming ganhando source_id não aciona -- confirmação é só pro nosso envio' do
+      incoming = create(:message, conversation: conversation, account: account, message_type: 'incoming', source_id: 'wamid.abc')
+      event = Events::Base.new(:message_updated, Time.zone.now, message: incoming, previous_changes: { 'source_id' => [nil, 'wamid.abc'] })
+
+      listener.message_updated(event)
+
+      expect(lead.reload.primeiro_contato_em).to be_nil
+    end
+  end
+
   it 'nao deixa uma falha do Engine derrubar o dispatch' do
     incoming = create(:message, conversation: conversation, account: account, message_type: 'incoming')
     event = Events::Base.new(:message_created, Time.zone.now, message: incoming)
@@ -88,5 +129,16 @@ describe OperationalEngineListener do
 
     expect(ChatwootExceptionTracker).to receive(:new).and_call_original
     expect { listener.message_created(event) }.not_to raise_error
+  end
+
+  it 'nao deixa uma falha na confirmação de envio derrubar o dispatch' do
+    contact_com_telefone = create(:contact, account: account, phone_number: '+5513991234567')
+    conversa = create(:conversation, account: account, contact: contact_com_telefone)
+    outgoing = create(:message, conversation: conversa, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+    event = Events::Base.new(:message_updated, Time.zone.now, message: outgoing, previous_changes: { 'source_id' => [nil, 'wamid.abc'] })
+    allow(OperationalEngine::ConfirmOutboundSendService).to receive(:call).and_raise('boom')
+
+    expect(ChatwootExceptionTracker).to receive(:new).and_call_original
+    expect { listener.message_updated(event) }.not_to raise_error
   end
 end
