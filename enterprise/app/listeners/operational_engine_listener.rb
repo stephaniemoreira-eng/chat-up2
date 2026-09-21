@@ -13,14 +13,17 @@ class OperationalEngineListener < BaseListener
 
     if message.incoming?
       OperationalEngine::InboundProcessor.call(message: message)
-    elsif message.human_response? && !message.private?
+    # human_response? is private on Message (native, not ours to change per ADR-0001) -- `send`
+    # is the deliberate bridge, not an oversight. Confirmed here the hard way: calling it with an
+    # explicit receiver raises NoMethodError, which this method's own rescue below was silently
+    # swallowing, masking the bug as "auto-assume just didn't happen".
+    elsif message.send(:human_response?) && !message.private?
       auto_assumir(message, account)
     end
 
     log('message_created', account_id: account.id, message_id: message.id)
   rescue StandardError => e
-    # TEMP debug: CI is swallowing something here silently, re-raise to see the real error.
-    raise "[DEBUG] #{e.class}: #{e.message}\n#{e.backtrace&.first(10)&.join("\n")}"
+    ChatwootExceptionTracker.new(e, account: account).capture_exception
   end
 
   def message_updated(event)
