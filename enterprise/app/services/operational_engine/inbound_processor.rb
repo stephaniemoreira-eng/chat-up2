@@ -34,6 +34,7 @@ module OperationalEngine
       lead = lead ? handle_existing(lead) : handle_new(telefone)
 
       OperationalEngine::SalesProjectionSync.call(lead)
+      OperationalEngine::ComercialProjectionSync.call(lead)
       lead
     end
 

@@ -10,8 +10,8 @@
 # em move_stage_service.rb), e dá de graça o registro em Sales::StageTransition + os eventos
 # SALES_LEAD_STAGE_CHANGED que um `save!` direto no card não geraria.
 #
-# `frente_operacional`/etapa_comercial (Kanban Comercial, §8.4) ficam fora daqui -- Fase 9, board
-# e pipeline separados.
+# `etapa_comercial` (Kanban Comercial, §8.4) fica fora daqui de propósito -- board e pipeline
+# separados, ver OperationalEngine::ComercialProjectionSync.
 module OperationalEngine
   class SalesProjectionSync
     def self.call(lead)

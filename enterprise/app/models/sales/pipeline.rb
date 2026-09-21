@@ -23,10 +23,10 @@
 class Sales::Pipeline < ApplicationRecord
   self.table_name = 'sales_pipelines'
 
-  # Pipelines geridos pelo Operational Engine (Fase 5: 'prospect'; Fase 9 futuramente: 'comercial')
-  # -- nunca setado pela UI, só pelos seed services em enterprise/app/services/sales/pipelines/.
-  # Existe pra não depender de `name`/`is_default`, que um usuário pode editar/reatribuir livremente.
-  ENGINE_KINDS = %w[prospect].freeze
+  # Pipelines geridos pelo Operational Engine (Fase 5: 'prospect'; Fase 9: 'comercial') -- nunca
+  # setado pela UI, só pelos seed services em enterprise/app/services/sales/pipelines/. Existe
+  # pra não depender de `name`/`is_default`, que um usuário pode editar/reatribuir livremente.
+  ENGINE_KINDS = %w[prospect comercial].freeze
 
   belongs_to :account
   has_many :stages, -> { order(:position) }, class_name: 'Sales::Stage', foreign_key: :sales_pipeline_id, dependent: :destroy, inverse_of: :pipeline
