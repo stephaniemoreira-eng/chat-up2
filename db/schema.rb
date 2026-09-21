@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_21_120000) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_21_130000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1976,6 +1976,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_21_120000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "calendar_integration_instance_id"
+    t.string "engine_api_key"
     t.index ["account_id"], name: "index_up_sales_agent_tenants_on_account_id", unique: true
   end
 

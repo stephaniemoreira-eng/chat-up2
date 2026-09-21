@@ -37,6 +37,7 @@ env:
     spec/enterprise/policies/sales
     spec/enterprise/services/sales
     spec/enterprise/controllers/api/v1/accounts/sales
+    spec/enterprise/controllers/api/v1/accounts/operational_engine
     spec/enterprise/models/operational_engine
     spec/enterprise/services/operational_engine
     spec/enterprise/listeners/operational_engine_listener_spec.rb
