@@ -65,6 +65,25 @@ RSpec.describe OperationalEngine::ComercialProjectionSync do
 
       expect(sales_lead.stage.engine_stage_key).to eq('ganho')
       expect(sales_lead).to be_won
+      expect(sales_lead.closed_at).to be_present
+    end
+
+    it 'nasce com status/closed_at corretos mesmo na primeira sincronizacao ja em Perdido' do
+      lead = build_lead(etapa_comercial: 'perdido')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead).to be_lost
+      expect(sales_lead.closed_at).to be_present
+    end
+
+    it 'nasce aberto (sem closed_at) quando a etapa e uma etapa aberta' do
+      lead = build_lead(etapa_comercial: 'oportunidade')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead).to be_open
+      expect(sales_lead.closed_at).to be_nil
     end
 
     it 'registra a transicao com user nil (sistema)' do

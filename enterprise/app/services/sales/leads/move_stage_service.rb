@@ -15,6 +15,17 @@ class Sales::Leads::MoveStageService
 
   class ProtectedTransitionError < StandardError; end
 
+  # Exposto como class method (não só a lógica privada de instância) porque um card recém-criado
+  # já direto numa stage won/lost (ex.: ComercialProjectionSync#create, um lead que chega no
+  # Engine já como 'ganho') nunca passa por #perform -- não existe "mover" um card que ainda não
+  # tinha stage nenhuma -- mas ainda precisa do mesmo status/closed_at corretos desde o início.
+  def self.status_for(stage)
+    return 'won' if stage.won?
+    return 'lost' if stage.lost?
+
+    'open'
+  end
+
   def initialize(lead:, stage:, position: nil, user: nil)
     @lead = lead
     @stage = stage
@@ -50,7 +61,7 @@ class Sales::Leads::MoveStageService
       stage: @stage,
       position: @position || next_position,
       stage_changed_at: Time.current,
-      status: status_for(@stage),
+      status: self.class.status_for(@stage),
       closed_at: @stage.open? ? nil : Time.current
     )
   end
@@ -68,13 +79,6 @@ class Sales::Leads::MoveStageService
 
   def next_position
     (Sales::Lead.where(sales_stage_id: @stage.id).maximum(:position) || -1) + 1
-  end
-
-  def status_for(stage)
-    return 'won' if stage.won?
-    return 'lost' if stage.lost?
-
-    'open'
   end
 
   def dispatch_events(from_stage)

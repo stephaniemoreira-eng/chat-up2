@@ -39,8 +39,17 @@ module OperationalEngine
       @existing ||= Sales::Lead.find_by(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id, sales_pipeline_id: pipeline.id)
     end
 
+    # status/closed_at setados a mão (não só stage:) porque um lead pode chegar ao Engine já
+    # 'ganho'/'perdido' na primeíssima sincronização -- não existe #perform do MoveStageService
+    # pra chamar aqui (não há "mover" um card que ainda não tinha stage nenhuma), mas o card
+    # precisa nascer com o mesmo status que #perform derivaria, não com o default 'open' da
+    # coluna.
     def create
-      sales_lead = Sales::Lead.new(contact: contact, pipeline: pipeline, stage: target_stage, title: title)
+      sales_lead = Sales::Lead.new(
+        contact: contact, pipeline: pipeline, stage: target_stage, title: title,
+        status: Sales::Leads::MoveStageService.status_for(target_stage),
+        closed_at: target_stage.open? ? nil : Time.current
+      )
       sales_lead.custom_attributes = sales_lead.custom_attributes.merge('engine_tags' => computed_tags)
       sales_lead.save!
       sales_lead
