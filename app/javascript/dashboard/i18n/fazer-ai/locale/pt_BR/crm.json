@@ -169,6 +169,34 @@
         "ERROR": "Não foi possível excluir o Kanban. Mova ou exclua os negócios dentro dele antes de tentar de novo."
       }
     },
+    "FILTERS": {
+      "ALL": "Todos",
+      "CLEAR": "Limpar filtros",
+      "SEGMENTO_LABEL": "Segmento",
+      "INBOX_LABEL": "Inbox atual",
+      "MODO_ATENDIMENTO_LABEL": "Atendimento",
+      "RESPONSAVEL_LABEL": "Responsável",
+      "MODO_ENTRADA": {
+        "LABEL": "Modo de entrada",
+        "OUTBOUND": "Outbound",
+        "INBOUND": "Inbound"
+      },
+      "ORIGEM_LEAD": {
+        "LABEL": "Origem",
+        "GOOGLE_SCRAPING": "Busca (Google)",
+        "CNAE": "CNAE",
+        "CSV": "CSV",
+        "GOOGLE_ADS": "Google Ads",
+        "SITE": "Site",
+        "INBOUND_DIRETO": "Inbound direto",
+        "OUTRO": "Outro"
+      },
+      "RECUPERACAO_STATUS": {
+        "LABEL": "Recovery",
+        "INATIVA": "Inativa",
+        "ATIVA": "Ativa"
+      }
+    },
     "LEAD": {
       "UNNAMED_CONTACT": "Contato desconhecido",
       "ENGINE_TAGS": {

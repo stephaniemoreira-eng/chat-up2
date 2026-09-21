@@ -2,8 +2,9 @@
 # permitida (Supabase → Sales::*). Nunca chame isto a partir de um controller/tela do UpSales.
 #
 # Fase 5 (§8.1, §20.1, §21.1): mantém o card no pipeline dedicado do funil Prospect (não o
-# "Comercial" genérico) sincronizado com `etapa_prospect`, e as tags LAVÍNIA/HUMANO/CALLBACK
-# derivadas de `modo_atendimento`/`agendamento_status`. Mover etapa passa por
+# "Comercial" genérico) sincronizado com `etapa_prospect`, as tags LAVÍNIA/HUMANO/CALLBACK
+# derivadas de `modo_atendimento`/`agendamento_status`, e os sete campos que alimentam os
+# filtros do Kanban (§21.1) em `custom_attributes['engine_filters']`. Mover etapa passa por
 # Sales::Leads::MoveStageService com `user: nil` de propósito -- é o mesmo sinal que o serviço
 # usa pra permitir a única forma legítima de um card chegar em Agendado (§21.2, ver o comentário
 # em move_stage_service.rb), e dá de graça o registro em Sales::StageTransition + os eventos
@@ -35,7 +36,7 @@ module OperationalEngine
 
     def create
       sales_lead = Sales::Lead.new(contact: contact, pipeline: pipeline, stage: target_stage, title: title)
-      sales_lead.custom_attributes = sales_lead.custom_attributes.merge('engine_tags' => computed_tags)
+      sales_lead.custom_attributes = sales_lead.custom_attributes.merge(projection_attributes)
       sales_lead.save!
       sales_lead
     end
@@ -45,8 +46,12 @@ module OperationalEngine
         Sales::Leads::MoveStageService.new(lead: sales_lead, stage: target_stage, user: nil).perform
       end
 
-      sales_lead.update!(title: title, custom_attributes: sales_lead.custom_attributes.merge('engine_tags' => computed_tags))
+      sales_lead.update!(title: title, custom_attributes: sales_lead.custom_attributes.merge(projection_attributes))
       sales_lead
+    end
+
+    def projection_attributes
+      { 'engine_tags' => computed_tags, 'engine_filters' => computed_filters }
     end
 
     # bang de propósito: as cinco stages nascem juntas em SeedProspectPipelineService, então uma
@@ -67,6 +72,22 @@ module OperationalEngine
       tags = [@lead.modo_atendimento == 'humano' ? 'humano' : 'lavinia']
       tags << 'callback' if @lead.agendamento_status == 'callback_registrado'
       tags
+    end
+
+    # §21.1: os sete filtros do Kanban Prospect. Gravados aqui (não consultados ao vivo no
+    # Supabase a cada troca de filtro) pelo mesmo motivo dos tags: Sales::* é uma projeção
+    # autossuficiente, a tela não deveria precisar de uma segunda viagem de rede pro Engine só
+    # pra filtrar o que já teria vindo junto no card.
+    def computed_filters
+      {
+        'modo_entrada' => @lead.modo_entrada,
+        'origem_lead' => @lead.origem_lead,
+        'segmento' => @lead.segmento,
+        'inbox_atual_id' => @lead.inbox_atual_id,
+        'modo_atendimento' => @lead.modo_atendimento,
+        'responsavel_atual_id' => @lead.responsavel_atual_id,
+        'recuperacao_status' => @lead.recuperacao_status
+      }
     end
 
     def title
