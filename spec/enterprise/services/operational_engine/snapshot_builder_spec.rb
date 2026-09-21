@@ -82,7 +82,10 @@ RSpec.describe OperationalEngine::SnapshotBuilder do
       continuidade: {
         ultimo_ponto: 'aguardando confirmação de horário',
         resumo_oportunidade: 'quer trocar de fornecedor',
-        ultima_interacao_em: '2026-09-21T10:00:00-03:00',
+        # Mesmo instante que o create! acima, mas via lead.iso8601 -- não um literal escrito à
+        # mão -- porque o Time.zone efetivo no ambiente do teste decide se ele sai em -03:00 ou
+        # em Z (UTC), e isso não é o que este teste quer travar.
+        ultima_interacao_em: lead.ultima_interacao_em.iso8601,
         contexto_execucao: 'conversa'
       },
       source: 'engine'

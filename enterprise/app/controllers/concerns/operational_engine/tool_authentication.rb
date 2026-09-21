@@ -3,7 +3,14 @@
 # navegador. Extraído do ToolsController original (S-5) porque o SnapshotController (S-4) precisa
 # da mesma verificação -- duplicar autenticação é o tipo de divergência que não aparece em teste
 # isolado.
-module OperationalEngine::ToolAuthentication
+#
+# `Concerns::` no nome, não `OperationalEngine::` puro: `config/application.rb` monta
+# eager_load_paths com `Dir["enterprise/app/**"]` (um nível só, não recursivo -- "**" sem "/"
+# final não desce mais que isso), então a raiz do Zeitwerk pra este arquivo é
+# `enterprise/app/controllers`, e `concerns/` entra como segmento de namespace real -- ao
+# contrário do `app/controllers/concerns` do Rails puro, que É colapsado por convenção. Mesmo
+# padrão já em uso por `Concerns::Agentable` (enterprise/app/models/concerns/agentable.rb).
+module Concerns::OperationalEngine::ToolAuthentication
   extend ActiveSupport::Concern
 
   included do

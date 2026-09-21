@@ -11,9 +11,10 @@
 # `OperationalEngine` de verdade (raiz, `enterprise/app/models/operational_engine/`) -- sem o
 # `::`, uma referência futura que dependa de nesting lexical (ex. um `module` aninhado em vez de
 # `class A::B::C`) resolveria pro namespace errado. Autenticação compartilhada com
-# SnapshotController (S-4) via `::OperationalEngine::ToolAuthentication`.
+# SnapshotController (S-4) via `Concerns::OperationalEngine::ToolAuthentication` -- ver o
+# comentário nesse arquivo sobre por que o nome carrega o prefixo `Concerns::`.
 class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts::BaseController
-  include ::OperationalEngine::ToolAuthentication
+  include ::Concerns::OperationalEngine::ToolAuthentication
 
   def schedule_meeting
     result = ::OperationalEngine::Tools::ScheduleMeetingService.new(

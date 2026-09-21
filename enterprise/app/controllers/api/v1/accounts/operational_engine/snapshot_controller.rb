@@ -6,7 +6,7 @@
 # `::OperationalEngine::*` com `::` explícito: mesmo motivo do ToolsController (colisão de nome
 # entre o namespace da rota `Api::V1::Accounts::OperationalEngine` e o módulo de domínio raiz).
 class Api::V1::Accounts::OperationalEngine::SnapshotController < Api::V1::Accounts::BaseController
-  include ::OperationalEngine::ToolAuthentication
+  include ::Concerns::OperationalEngine::ToolAuthentication
 
   # Vira uma checagem real (não uma constante fixa) do lado up2-agents assim que este endpoint
   # existir: autenticação já provou que a conta e a chave são válidas; falta só provar que o
