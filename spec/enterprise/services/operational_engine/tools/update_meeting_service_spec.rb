@@ -38,7 +38,7 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
   end
 
   it 'retorna erro quando a reunião não está confirmada (mesmo com o event_id certo)' do
-    lead.update!(agendamento_status: 'em_andamento')
+    lead.update!(agendamento_status: 'em_andamento', etapa_prospect: 'qualificado')
 
     result = perform
 
