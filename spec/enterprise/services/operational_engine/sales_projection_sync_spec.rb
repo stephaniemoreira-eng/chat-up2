@@ -157,4 +157,31 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
       expect(sales_lead.custom_attributes['engine_tags']).to eq(['humano'])
     end
   end
+
+  describe 'filtros do Kanban (§21.1)' do
+    it 'grava os sete campos de filtro em custom_attributes.engine_filters' do
+      lead = build_lead(
+        modo_entrada: 'outbound', origem_lead: 'google_scraping', segmento: 'cafeteria',
+        inbox_atual_id: 7, modo_atendimento: 'humano', responsavel_atual_id: 42, recuperacao_status: 'ativa'
+      )
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['engine_filters']).to eq(
+        'modo_entrada' => 'outbound', 'origem_lead' => 'google_scraping', 'segmento' => 'cafeteria',
+        'inbox_atual_id' => 7, 'modo_atendimento' => 'humano', 'responsavel_atual_id' => 42,
+        'recuperacao_status' => 'ativa'
+      )
+    end
+
+    it 'atualiza os filtros numa sincronizacao seguinte' do
+      lead = build_lead(recuperacao_status: 'inativa')
+      described_class.call(lead)
+
+      lead.update!(recuperacao_status: 'ativa')
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.custom_attributes['engine_filters']['recuperacao_status']).to eq('ativa')
+    end
+  end
 end

@@ -9,6 +9,9 @@ import { useSalesLeadsStore } from 'dashboard/stores/sales/leads';
 
 import PipelineSwitcher from 'dashboard/components-next/Sales/PipelineSwitcher.vue';
 import KanbanBoard from 'dashboard/components-next/Sales/Board/KanbanBoard.vue';
+import KanbanFilters, {
+  EMPTY_FILTERS,
+} from 'dashboard/components-next/Sales/Board/KanbanFilters.vue';
 import BoardEmptyState from 'dashboard/components-next/Sales/Board/BoardEmptyState.vue';
 import LeadCreateDialog from 'dashboard/components-next/Sales/LeadCreateDialog.vue';
 import LeadDetailDialog from 'dashboard/components-next/Sales/LeadDetail/LeadDetailDialog.vue';
@@ -72,7 +75,47 @@ const activeStages = computed(() =>
     : []
 );
 
-const getLeadsForStage = stageId => leadsStore.getLeadsByStage(stageId);
+// Filtros do Kanban Prospect (§21.1) -- inteiramente client-side sobre os leads já carregados
+// pro pipeline atual. Ver KanbanFilters.vue pro porquê disso não ir ao servidor a cada troca.
+const filters = ref({ ...EMPTY_FILTERS });
+
+const matchesFilters = lead => {
+  const engineFilters = lead.custom_attributes?.engine_filters || {};
+  const active = filters.value;
+
+  if (active.modoEntrada && engineFilters.modo_entrada !== active.modoEntrada)
+    return false;
+  if (active.origemLead && engineFilters.origem_lead !== active.origemLead)
+    return false;
+  if (active.segmento && engineFilters.segmento !== active.segmento)
+    return false;
+  if (
+    active.inboxAtualId &&
+    String(engineFilters.inbox_atual_id) !== String(active.inboxAtualId)
+  )
+    return false;
+  if (
+    active.modoAtendimento &&
+    engineFilters.modo_atendimento !== active.modoAtendimento
+  )
+    return false;
+  if (
+    active.responsavelAtualId &&
+    String(engineFilters.responsavel_atual_id) !==
+      String(active.responsavelAtualId)
+  )
+    return false;
+  if (
+    active.recuperacaoStatus &&
+    engineFilters.recuperacao_status !== active.recuperacaoStatus
+  )
+    return false;
+
+  return true;
+};
+
+const getLeadsForStage = stageId =>
+  leadsStore.getLeadsByStage(stageId).filter(matchesFilters);
 
 const loadBoard = async pipelineId => {
   if (!pipelineId) return;
@@ -291,12 +334,17 @@ onMounted(async () => {
       <span class="text-n-slate-11 text-base">{{ t('CRM.LOADING') }}</span>
     </div>
     <BoardEmptyState v-else-if="!activePipelineId" />
-    <div v-else class="flex-1 min-h-0">
-      <div v-if="isFetchingBoard" class="flex items-center justify-center p-8">
+    <div v-else class="flex-1 min-h-0 flex flex-col">
+      <KanbanFilters v-model="filters" :leads="leadsStore.records" />
+      <div
+        v-if="isFetchingBoard"
+        class="flex-1 min-h-0 flex items-center justify-center p-8"
+      >
         <span class="text-n-slate-11 text-base">{{ t('CRM.LOADING') }}</span>
       </div>
       <KanbanBoard
         v-else
+        class="flex-1 min-h-0"
         :stages="activeStages"
         :get-leads-for-stage="getLeadsForStage"
         @move-lead="onMoveLead"

@@ -169,6 +169,34 @@
         "ERROR": "Could not delete the pipeline. Move or delete the deals inside it first."
       }
     },
+    "FILTERS": {
+      "ALL": "All",
+      "CLEAR": "Clear filters",
+      "SEGMENTO_LABEL": "Segment",
+      "INBOX_LABEL": "Current inbox",
+      "MODO_ATENDIMENTO_LABEL": "Handled by",
+      "RESPONSAVEL_LABEL": "Assigned to",
+      "MODO_ENTRADA": {
+        "LABEL": "Entry mode",
+        "OUTBOUND": "Outbound",
+        "INBOUND": "Inbound"
+      },
+      "ORIGEM_LEAD": {
+        "LABEL": "Source",
+        "GOOGLE_SCRAPING": "Search (Google)",
+        "CNAE": "CNAE",
+        "CSV": "CSV",
+        "GOOGLE_ADS": "Google Ads",
+        "SITE": "Website",
+        "INBOUND_DIRETO": "Direct inbound",
+        "OUTRO": "Other"
+      },
+      "RECUPERACAO_STATUS": {
+        "LABEL": "Recovery",
+        "INATIVA": "Inactive",
+        "ATIVA": "Active"
+      }
+    },
     "LEAD": {
       "UNNAMED_CONTACT": "Unknown contact",
       "ENGINE_TAGS": {
