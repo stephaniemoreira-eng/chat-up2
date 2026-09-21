@@ -21,6 +21,8 @@ module OperationalEngine
     end
 
     def assumir!(user_id)
+      changed = false
+
       @lead.with_lock do
         next @lead if @lead.modo_atendimento_humano?
 
@@ -36,11 +38,19 @@ module OperationalEngine
           proxima_recuperacao_em: nil
         )
         write_event('intervencao_humana_iniciada', responsavel_atual_id: user_id)
+        changed = true
         @lead
+      end.tap do
+        # Fora do with_lock de propósito: a sincronização visual toca o Postgres nativo, um banco
+        # diferente do Supabase -- não vale segurar o lock de linha do Engine pela viagem de rede
+        # extra. Só quando muda de verdade (§20.1: a tag HUMANO/LAVÍNIA no card depende disso).
+        OperationalEngine::SalesProjectionSync.call(@lead) if changed
       end
     end
 
     def devolver!
+      changed = false
+
       @lead.with_lock do
         next @lead if @lead.modo_atendimento_lavinia?
 
@@ -54,7 +64,10 @@ module OperationalEngine
         # propósito. Um novo timer, quando existir (Fase 7), nasce do estado atual do lead, não
         # de um valor congelado antes do humano assumir.
         write_event('intervencao_humana_encerrada', responsavel_atual_id: previous_responsavel)
+        changed = true
         @lead
+      end.tap do
+        OperationalEngine::SalesProjectionSync.call(@lead) if changed
       end
     end
 

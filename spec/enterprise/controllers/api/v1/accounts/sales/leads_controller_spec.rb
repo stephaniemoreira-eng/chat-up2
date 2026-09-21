@@ -212,6 +212,18 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
 
       expect(response).to have_http_status(:not_found)
     end
+
+    it 'blocks a manual drag into a stage marked engine_stage_key agendado (SSOT §21.2)' do
+      agendado_stage = create(:sales_stage, pipeline: pipeline, engine_stage_key: 'agendado')
+
+      post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/move",
+           params: { sales_stage_id: agendado_stage.id },
+           headers: admin.create_new_auth_token,
+           as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(lead.reload.sales_stage_id).to eq(stage.id)
+    end
   end
 
   describe 'POST /api/v1/accounts/{account.id}/crm/leads/{id}/link_conversation' do

@@ -5,6 +5,7 @@
 #  id                :bigint           not null, primary key
 #  category          :integer          default("open"), not null
 #  color             :string
+#  engine_stage_key  :string
 #  name              :string           not null
 #  position          :integer          not null
 #  probability       :integer
@@ -16,12 +17,18 @@
 #
 # Indexes
 #
-#  index_sales_stages_on_account_id                      (account_id)
-#  index_sales_stages_on_sales_pipeline_id               (sales_pipeline_id)
-#  index_sales_stages_on_sales_pipeline_id_and_position  (sales_pipeline_id,position)
+#  index_sales_stages_on_account_id                          (account_id)
+#  index_sales_stages_on_pipeline_id_and_engine_stage_key      (sales_pipeline_id,engine_stage_key) UNIQUE WHERE (engine_stage_key IS NOT NULL)
+#  index_sales_stages_on_sales_pipeline_id                   (sales_pipeline_id)
+#  index_sales_stages_on_sales_pipeline_id_and_position      (sales_pipeline_id,position)
 #
 class Sales::Stage < ApplicationRecord
   self.table_name = 'sales_stages'
+
+  # Espelha o enum `etapa_prospect` do OperationalEngine::Lead (§6.2 do SSOT). Igual a
+  # Sales::Pipeline::ENGINE_KINDS: nunca setado pela UI (StageDialog.vue só edita name/color),
+  # só por Sales::Pipelines::SeedProspectPipelineService.
+  ENGINE_STAGE_KEYS = %w[backlog contatado em_conversa qualificado agendado].freeze
 
   belongs_to :account
   belongs_to :pipeline, class_name: 'Sales::Pipeline', foreign_key: :sales_pipeline_id, inverse_of: :stages
@@ -33,6 +40,8 @@ class Sales::Stage < ApplicationRecord
   validates :name, presence: true
   validates :probability, numericality: { only_integer: true, greater_than_or_equal_to: 0, less_than_or_equal_to: 100 }, allow_nil: true
   validates :stale_after_hours, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
+  validates :engine_stage_key, inclusion: { in: ENGINE_STAGE_KEYS }, allow_nil: true
+  validate :single_stage_per_engine_stage_key_per_pipeline, if: :engine_stage_key?
 
   before_validation :assign_account_from_pipeline
   before_create :assign_position
@@ -60,6 +69,12 @@ class Sales::Stage < ApplicationRecord
     return if position.present?
 
     self.position = (pipeline.stages.maximum(:position) || -1) + 1
+  end
+
+  def single_stage_per_engine_stage_key_per_pipeline
+    return unless pipeline.stages.where(engine_stage_key: engine_stage_key).where.not(id: id).exists?
+
+    errors.add(:engine_stage_key, 'already assigned to another stage in this pipeline')
   end
 
   # A pipeline with zero stages breaks every consumer that assumes one exists (Follow-up sync's

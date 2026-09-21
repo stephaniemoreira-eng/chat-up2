@@ -14,6 +14,22 @@ RSpec.describe Sales::Stage, type: :model do
       stage = build(:sales_stage, pipeline: nil)
       expect(stage).not_to be_valid
     end
+
+    it { is_expected.to validate_inclusion_of(:engine_stage_key).in_array(Sales::Stage::ENGINE_STAGE_KEYS).allow_nil }
+
+    it 'allows only one stage per engine_stage_key per pipeline' do
+      create(:sales_stage, pipeline: pipeline, engine_stage_key: 'backlog')
+      second = build(:sales_stage, pipeline: pipeline, engine_stage_key: 'backlog')
+
+      expect(second).not_to be_valid
+    end
+
+    it 'allows the same engine_stage_key in a DIFFERENT pipeline' do
+      create(:sales_stage, pipeline: pipeline, engine_stage_key: 'backlog')
+      other_pipeline_stage = build(:sales_stage, pipeline: create(:sales_pipeline, account: account), engine_stage_key: 'backlog')
+
+      expect(other_pipeline_stage).to be_valid
+    end
   end
 
   describe 'associations' do
