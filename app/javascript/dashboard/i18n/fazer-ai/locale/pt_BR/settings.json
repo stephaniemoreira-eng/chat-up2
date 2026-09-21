@@ -50,12 +50,11 @@
   },
   "SIDEBAR": {
     "APPS": "Apps",
-    "CRM": "CRM",
+    "CRM": "Pipeline",
     "PROSPECTING": "Busca",
     "FOLLOW_UP": "Follow-up",
     "AGENDA": "Agenda",
-    "INTERNAL_CHAT": "Chat Interno",
-    "KANBAN": "Kanban"
+    "INTERNAL_CHAT": "Chat Interno"
   },
   "KEYBOARD_SHORTCUTS": {
     "TITLE": {

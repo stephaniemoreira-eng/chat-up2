@@ -1,6 +1,6 @@
 {
   "CRM": {
-    "HEADER": "CRM",
+    "HEADER": "Pipeline",
     "LOADING": "Loading pipeline...",
     "EMPTY_STATE": {
       "TITLE": "No leads yet",

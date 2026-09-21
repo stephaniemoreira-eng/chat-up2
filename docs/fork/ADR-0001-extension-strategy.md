@@ -125,7 +125,7 @@ flag nativa — a store diferente é um detalhe de implementação invisível pa
 
 | Arquivo | Edição |
 |---|---|
-| `config/routes.rb` | 1 linha (`draw :sales`) + resources `up_sales_agent_config(s)` dentro de `namespace :super_admin` (ADR-0004, Super Admin de agente) |
+| `config/routes.rb` | 1 linha (`draw :sales`) + resources `up_sales_agent_config(s)` dentro de `namespace :super_admin` (ADR-0004, Super Admin de agente) + 1 linha (`draw :operational_engine`, tools do Engine pra Lavínia -- S-5, plano do Marco 1) |
 | `config/features.yml` | **nenhuma** — permanece byte-idêntico ao upstream (seção 4) |
 | `app/models/concerns/featurable.rb` | **nenhuma** |
 | `db/schema.rb` | regenerado (nunca editado à mão) |

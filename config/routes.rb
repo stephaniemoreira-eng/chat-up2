@@ -538,6 +538,10 @@ Rails.application.routes.draw do
           # Fork-owned routes live in config/routes/sales.rb so this file stays a single-line
           # touchpoint for the fork. See docs/fork/ADR-0001-extension-strategy.md.
           draw :sales
+          # Operational Engine tool endpoints (S-5, plano do Marco 1) -- namespace conceitualmente
+          # separado de Sales::/CRM (visual), por isso um arquivo próprio em vez de crescer
+          # config/routes/sales.rb com rotas que não são do módulo Sales::.
+          draw :operational_engine
         end
       end
       # end of account scoped api routes
