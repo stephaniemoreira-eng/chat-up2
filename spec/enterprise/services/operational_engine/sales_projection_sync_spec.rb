@@ -91,7 +91,7 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
     end
 
     it 'sincroniza ate Agendado (permitido porque e o sistema refletindo o Engine, nao um drag humano)' do
-      lead = build_lead(etapa_prospect: 'agendado')
+      lead = build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
 
       sales_lead = described_class.call(lead)
 
@@ -102,7 +102,7 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
       lead = build_lead(etapa_prospect: 'qualificado')
       described_class.call(lead)
 
-      lead.update!(etapa_prospect: 'agendado')
+      lead.update!(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
       sales_lead = described_class.call(lead)
 
       expect(sales_lead.reload.stage.engine_stage_key).to eq('agendado')

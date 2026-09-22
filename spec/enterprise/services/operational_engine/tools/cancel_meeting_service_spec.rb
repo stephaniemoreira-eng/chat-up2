@@ -10,7 +10,8 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
   let!(:lead) do
     OperationalEngine::Lead.create!(
       conta_id: account.id, telefone: contact.phone_number, upsales_contact_id: contact.id,
-      agendamento_status: 'confirmado', etapa_prospect: 'agendado', calendar_event_id: 'evt_123'
+      agendamento_status: 'confirmado', etapa_prospect: 'agendado', calendar_event_id: 'evt_123',
+      agendado_em: Time.current
     )
   end
 
