@@ -119,7 +119,7 @@ const onRegisterResultado = resultado => {
           />
           <Button
             size="sm"
-            color="green"
+            color="teal"
             :label="t('CRM.LEAD.DETAIL.COMMERCIAL.MARK_WON')"
             :disabled="isSaving"
             @click="onRegisterResultado('ganho')"

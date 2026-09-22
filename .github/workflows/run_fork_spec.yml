@@ -196,3 +196,4 @@ jobs:
           TZ=UTC pnpm exec vitest --no-watch --no-cache --no-coverage
           app/javascript/dashboard/api/sales
           app/javascript/dashboard/stores/sales
+          app/javascript/dashboard/components-next/Sales
