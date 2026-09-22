@@ -39,6 +39,22 @@ class Sales::LeadPolicy < ApplicationPolicy
     true
   end
 
+  def register_callback_realizado?
+    true
+  end
+
+  def register_no_show?
+    true
+  end
+
+  def set_propensao?
+    true
+  end
+
+  def register_resultado_comercial?
+    true
+  end
+
   def search?
     true
   end

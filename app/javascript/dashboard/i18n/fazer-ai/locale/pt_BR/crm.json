@@ -202,7 +202,11 @@
       "ENGINE_TAGS": {
         "LAVINIA": "Lavínia",
         "HUMANO": "Humano",
-        "CALLBACK": "Callback"
+        "CALLBACK": "Callback",
+        "NO_SHOW": "No-show",
+        "FRIO": "Frio",
+        "MORNO": "Morno",
+        "QUENTE": "Quente"
       },
       "CREATE": {
         "ACTION": "Adicionar negócio",
@@ -260,6 +264,25 @@
           "STAGE_TRANSITION": "Movido de {from} para {to}",
           "STAGE_TRANSITION_FIRST": "Movido para {to}",
           "SUMMARY_UPDATED": "Resumo atualizado"
+        },
+        "COMMERCIAL": {
+          "TITLE": "Ações comerciais",
+          "RESOLVED_WON": "Oportunidade ganha.",
+          "RESOLVED_LOST": "Oportunidade perdida.",
+          "PROPENSAO": {
+            "LABEL": "Propensão de fechamento",
+            "FRIO": "Frio",
+            "MORNO": "Morno",
+            "QUENTE": "Quente"
+          },
+          "CALLBACK_REALIZADO": "Registrar callback realizado",
+          "NO_SHOW": "Registrar no-show",
+          "MOTIVO_PERDA_PLACEHOLDER": "Motivo da perda (opcional)",
+          "MARK_WON": "Marcar Ganho",
+          "MARK_LOST": "Marcar Perdido",
+          "MESSAGES": {
+            "ERROR": "Não foi possível concluir essa ação. Tente novamente."
+          }
         }
       }
     }

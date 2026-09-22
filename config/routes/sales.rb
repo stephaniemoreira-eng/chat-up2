@@ -33,6 +33,11 @@ resources :leads, module: :sales, path: 'crm/leads' do
     delete :unlink_conversation
     get :timeline
     patch :update_summary
+    # Fase 9 (§21.2): ações humanas do Kanban Comercial.
+    post :register_callback_realizado
+    post :register_no_show
+    post :set_propensao
+    post :register_resultado_comercial
   end
   collection do
     get :summary

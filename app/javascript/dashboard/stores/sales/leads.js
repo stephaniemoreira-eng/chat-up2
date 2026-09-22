@@ -92,5 +92,41 @@ export const useSalesLeadsStore = createStore({
       if (index !== -1) this.records[index] = updated;
       return updated;
     },
+
+    // Fase 9 (§21.2) -- ações humanas do Kanban Comercial. As quatro seguem o mesmo formato de
+    // updateSummary: o backend já devolve o card totalmente re-sincronizado (tags, coluna),
+    // então só substituímos o registro local pela resposta.
+    async replaceRecord(id, promise) {
+      const { data } = await promise;
+      const updated = data.payload || data;
+      const index = this.records.findIndex(lead => lead.id === id);
+      if (index !== -1) this.records[index] = updated;
+      return updated;
+    },
+
+    registerCallbackRealizado({ id }) {
+      return this.replaceRecord(id, SalesLeadsAPI.registerCallbackRealizado(id));
+    },
+
+    registerNoShow({ id }) {
+      return this.replaceRecord(id, SalesLeadsAPI.registerNoShow(id));
+    },
+
+    setPropensao({ id, propensaoFechamento }) {
+      return this.replaceRecord(
+        id,
+        SalesLeadsAPI.setPropensao(id, propensaoFechamento)
+      );
+    },
+
+    registerResultadoComercial({ id, resultadoComercial, motivoPerda }) {
+      return this.replaceRecord(
+        id,
+        SalesLeadsAPI.registerResultadoComercial(id, {
+          resultadoComercial,
+          motivoPerda,
+        })
+      );
+    },
   }),
 });

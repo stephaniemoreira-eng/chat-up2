@@ -13,6 +13,10 @@ describe('#SalesLeadsAPI', () => {
     expect(salesLeadsAPI).toHaveProperty('unlinkConversation');
     expect(salesLeadsAPI).toHaveProperty('timeline');
     expect(salesLeadsAPI).toHaveProperty('updateSummary');
+    expect(salesLeadsAPI).toHaveProperty('registerCallbackRealizado');
+    expect(salesLeadsAPI).toHaveProperty('registerNoShow');
+    expect(salesLeadsAPI).toHaveProperty('setPropensao');
+    expect(salesLeadsAPI).toHaveProperty('registerResultadoComercial');
   });
 
   describe('API calls', () => {
@@ -89,6 +93,39 @@ describe('#SalesLeadsAPI', () => {
       expect(axiosMock.patch).toHaveBeenCalledWith(
         '/api/v1/crm/leads/1/update_summary',
         { summary: 'Novo resumo' }
+      );
+    });
+
+    it('#registerCallbackRealizado posts with no body', () => {
+      salesLeadsAPI.registerCallbackRealizado(1);
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/register_callback_realizado'
+      );
+    });
+
+    it('#registerNoShow posts with no body', () => {
+      salesLeadsAPI.registerNoShow(1);
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/register_no_show'
+      );
+    });
+
+    it('#setPropensao posts the classification', () => {
+      salesLeadsAPI.setPropensao(1, 'quente');
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/set_propensao',
+        { propensao_fechamento: 'quente' }
+      );
+    });
+
+    it('#registerResultadoComercial posts the result and optional loss reason', () => {
+      salesLeadsAPI.registerResultadoComercial(1, {
+        resultadoComercial: 'perdido',
+        motivoPerda: 'sem orcamento',
+      });
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/register_resultado_comercial',
+        { resultado_comercial: 'perdido', motivo_perda: 'sem orcamento' }
       );
     });
   });

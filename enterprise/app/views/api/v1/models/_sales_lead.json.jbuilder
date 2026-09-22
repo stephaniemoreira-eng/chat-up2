@@ -18,6 +18,7 @@ json.contact_name resource.name
 json.contact_email resource.email
 json.sales_pipeline_id resource.sales_pipeline_id
 json.sales_stage_id resource.sales_stage_id
+json.operational_lead_id resource.operational_lead_id
 json.assignee_id resource.assignee_id
 json.assignee_name resource.assignee&.name
 json.label_list resource.label_list
