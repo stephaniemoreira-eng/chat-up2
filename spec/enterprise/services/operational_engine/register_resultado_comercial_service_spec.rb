@@ -11,6 +11,14 @@ RSpec.describe OperationalEngine::RegisterResultadoComercialService do
     }.merge(overrides))
   end
 
+  # O serviço também sincroniza SalesProjectionSync (etapa_prospect tem default 'backlog', então
+  # sempre existe um card Prospect também) -- sem escopar pelo pipeline Comercial, find_by(
+  # operational_lead_id:) é ambíguo entre os dois cards do mesmo lead.
+  def comercial_sales_lead(lead)
+    pipeline = Sales::Pipelines::SeedComercialPipelineService.new(account: account).perform
+    Sales::Lead.find_by(operational_lead_id: lead.lead_id, sales_pipeline_id: pipeline.id)
+  end
+
   describe 'ganho' do
     it 'grava resultado_comercial, etapa_comercial, ganho_em e relacao_atual (§17.4)' do
       lead = build_lead
@@ -30,7 +38,7 @@ RSpec.describe OperationalEngine::RegisterResultadoComercialService do
 
       described_class.call!(lead: lead, resultado: 'ganho', user_id: 9)
 
-      sales_lead = Sales::Lead.find_by(operational_lead_id: lead.lead_id)
+      sales_lead = comercial_sales_lead(lead)
       expect(sales_lead.stage.engine_stage_key).to eq('ganho')
       expect(sales_lead).to be_won
     end

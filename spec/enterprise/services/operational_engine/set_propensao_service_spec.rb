@@ -11,6 +11,14 @@ RSpec.describe OperationalEngine::SetPropensaoService do
     }.merge(overrides))
   end
 
+  # O serviço também sincroniza SalesProjectionSync (etapa_prospect tem default 'backlog', então
+  # sempre existe um card Prospect também) -- sem escopar pelo pipeline Comercial, find_by(
+  # operational_lead_id:) é ambíguo entre os dois cards do mesmo lead.
+  def comercial_sales_lead(lead)
+    pipeline = Sales::Pipelines::SeedComercialPipelineService.new(account: account).perform
+    Sales::Lead.find_by(operational_lead_id: lead.lead_id, sales_pipeline_id: pipeline.id)
+  end
+
   it 'grava a propensao e registra o evento' do
     lead = build_lead
 
@@ -26,7 +34,7 @@ RSpec.describe OperationalEngine::SetPropensaoService do
 
     described_class.call!(lead: lead, propensao: 'frio', user_id: 3)
 
-    sales_lead = Sales::Lead.find_by(operational_lead_id: lead.lead_id)
+    sales_lead = comercial_sales_lead(lead)
     expect(sales_lead.custom_attributes['engine_tags']).to include('frio')
   end
 
