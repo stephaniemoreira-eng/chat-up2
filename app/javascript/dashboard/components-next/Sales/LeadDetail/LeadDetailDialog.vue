@@ -10,6 +10,7 @@ import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import SummaryPanel from 'dashboard/components-next/Sales/LeadDetail/SummaryPanel.vue';
 import ScanPanel from 'dashboard/components-next/Sales/LeadDetail/ScanPanel.vue';
 import CommercialActionsPanel from 'dashboard/components-next/Sales/LeadDetail/CommercialActionsPanel.vue';
+import ProspectActionsPanel from 'dashboard/components-next/Sales/LeadDetail/ProspectActionsPanel.vue';
 import Timeline from 'dashboard/components-next/Sales/LeadDetail/Timeline.vue';
 
 const { t } = useI18n();
@@ -23,7 +24,7 @@ const entries = ref([]);
 const nextBefore = ref(null);
 const isLoadingTimeline = ref(false);
 const isSavingSummary = ref(false);
-const isSavingCommercialAction = ref(false);
+const isSavingLeadAction = ref(false);
 
 const lead = computed(() =>
   leadId.value ? leadsStore.getRecord(leadId.value) : null
@@ -41,6 +42,11 @@ const isCommercialLead = computed(() => {
   const pipeline = stage && pipelinesStore.getRecord(stage.sales_pipeline_id);
   return pipeline?.engine_kind === 'comercial';
 });
+
+// Fase 3 (§21.2): Assumir/Devolver -- diferente da Fase 9, não é exclusivo do pipeline Comercial;
+// o SSOT trata como ação do Kanban Prospect, mas o modo_atendimento (e portanto a tag
+// humano/lavinia) existe em qualquer lead vinculado ao Engine, então basta ter operational_lead_id.
+const isProspectLead = computed(() => Boolean(lead.value?.operational_lead_id));
 
 const engineTags = computed(() => lead.value?.custom_attributes?.engine_tags || []);
 const engineStageKey = computed(
@@ -86,39 +92,39 @@ const onSaveSummary = async summary => {
   }
 };
 
-const runCommercialAction = async (action, errorKey) => {
-  isSavingCommercialAction.value = true;
+const runLeadAction = async (action, errorKey) => {
+  isSavingLeadAction.value = true;
   try {
     await action();
     await loadTimeline();
   } catch {
     useAlert(t(errorKey));
   } finally {
-    isSavingCommercialAction.value = false;
+    isSavingLeadAction.value = false;
   }
 };
 
 const onRegisterCallbackRealizado = () =>
-  runCommercialAction(
+  runLeadAction(
     () => leadsStore.registerCallbackRealizado({ id: leadId.value }),
     'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
   );
 
 const onRegisterNoShow = () =>
-  runCommercialAction(
+  runLeadAction(
     () => leadsStore.registerNoShow({ id: leadId.value }),
     'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
   );
 
 const onSetPropensao = propensaoFechamento =>
-  runCommercialAction(
+  runLeadAction(
     () =>
       leadsStore.setPropensao({ id: leadId.value, propensaoFechamento }),
     'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
   );
 
 const onRegisterResultado = ({ resultado, motivoPerda }) =>
-  runCommercialAction(
+  runLeadAction(
     () =>
       leadsStore.registerResultadoComercial({
         id: leadId.value,
@@ -126,6 +132,18 @@ const onRegisterResultado = ({ resultado, motivoPerda }) =>
         motivoPerda,
       }),
     'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
+const onAssumir = () =>
+  runLeadAction(
+    () => leadsStore.assumir({ id: leadId.value }),
+    'CRM.LEAD.DETAIL.PROSPECT.MESSAGES.ERROR'
+  );
+
+const onDevolver = () =>
+  runLeadAction(
+    () => leadsStore.devolver({ id: leadId.value }),
+    'CRM.LEAD.DETAIL.PROSPECT.MESSAGES.ERROR'
   );
 
 defineExpose({ open });
@@ -155,11 +173,18 @@ defineExpose({ open });
         :is-saving="isSavingSummary"
         @save="onSaveSummary"
       />
+      <ProspectActionsPanel
+        v-if="isProspectLead"
+        :engine-tags="engineTags"
+        :is-saving="isSavingLeadAction"
+        @assumir="onAssumir"
+        @devolver="onDevolver"
+      />
       <CommercialActionsPanel
         v-if="isCommercialLead"
         :engine-tags="engineTags"
         :engine-stage-key="engineStageKey"
-        :is-saving="isSavingCommercialAction"
+        :is-saving="isSavingLeadAction"
         @register-callback-realizado="onRegisterCallbackRealizado"
         @register-no-show="onRegisterNoShow"
         @set-propensao="onSetPropensao"

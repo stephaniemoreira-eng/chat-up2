@@ -17,6 +17,8 @@ describe('#SalesLeadsAPI', () => {
     expect(salesLeadsAPI).toHaveProperty('registerNoShow');
     expect(salesLeadsAPI).toHaveProperty('setPropensao');
     expect(salesLeadsAPI).toHaveProperty('registerResultadoComercial');
+    expect(salesLeadsAPI).toHaveProperty('assumir');
+    expect(salesLeadsAPI).toHaveProperty('devolver');
   });
 
   describe('API calls', () => {
@@ -127,6 +129,16 @@ describe('#SalesLeadsAPI', () => {
         '/api/v1/crm/leads/1/register_resultado_comercial',
         { resultado_comercial: 'perdido', motivo_perda: 'sem orcamento' }
       );
+    });
+
+    it('#assumir posts with no body', () => {
+      salesLeadsAPI.assumir(1);
+      expect(axiosMock.post).toHaveBeenCalledWith('/api/v1/crm/leads/1/assumir');
+    });
+
+    it('#devolver posts with no body', () => {
+      salesLeadsAPI.devolver(1);
+      expect(axiosMock.post).toHaveBeenCalledWith('/api/v1/crm/leads/1/devolver');
     });
   });
 });

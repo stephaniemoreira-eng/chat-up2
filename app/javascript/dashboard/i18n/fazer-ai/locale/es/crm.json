@@ -283,6 +283,15 @@
           "MESSAGES": {
             "ERROR": "Could not complete this action. Please try again."
           }
+        },
+        "PROSPECT": {
+          "CURRENT_MODE_HUMANO": "Currently handled by a human",
+          "CURRENT_MODE_LAVINIA": "Currently handled by Lavínia",
+          "ASSUMIR": "Take over conversation",
+          "DEVOLVER": "Return to Lavínia",
+          "MESSAGES": {
+            "ERROR": "Could not complete this action. Please try again."
+          }
         }
       }
     }
