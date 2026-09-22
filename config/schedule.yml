@@ -100,3 +100,13 @@ sales_prospecting_auto_search_job:
   cron: '*/5 * * * *'
   class: 'Sales::Prospecting::AutoSearchJob'
   queue: scheduled_jobs
+
+# executed every 5 minutes
+# Up Sales — Fase 6 dispatcher (SSOT §10.5): origina o primeiro contato pros proximos leads
+# elegiveis do Backlog, por conta configurada (UpSales::AgentTenant#dispatcher_ready?).
+# OperationalEngine::BacklogCapacity ja decide quanto pode sair AGORA (janela/teto do dia); este
+# job so precisa rodar com frequencia suficiente pra nao deixar capacidade liberada parada.
+operational_engine_dispatcher_job:
+  cron: '*/5 * * * *'
+  class: 'OperationalEngine::DispatcherJob'
+  queue: scheduled_jobs
