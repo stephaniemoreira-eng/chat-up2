@@ -91,11 +91,21 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
     end
 
     it 'sincroniza ate Agendado (permitido porque e o sistema refletindo o Engine, nao um drag humano)' do
-      lead = build_lead(etapa_prospect: 'agendado')
+      lead = build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
 
       sales_lead = described_class.call(lead)
 
       expect(sales_lead.stage.engine_stage_key).to eq('agendado')
+    end
+
+    it 'move um card JA EXISTENTE ate Agendado via MoveStageService, nao so na criacao' do
+      lead = build_lead(etapa_prospect: 'qualificado')
+      described_class.call(lead)
+
+      lead.update!(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.reload.stage.engine_stage_key).to eq('agendado')
     end
 
     it 'nao mexe num Sales::Lead que o contato tem em OUTRO pipeline (ex.: importado pela tela de busca)' do
@@ -106,6 +116,52 @@ RSpec.describe OperationalEngine::SalesProjectionSync do
       described_class.call(lead)
 
       expect(manual_card.reload.title).to eq('Card manual')
+      expect(Sales::Lead.where(contact_id: contact.id).count).to eq(2)
+    end
+  end
+
+  describe 'casamento por operational_lead_id, nao so contact_id+pipeline' do
+    it 'grava operational_lead_id na criacao' do
+      lead = build_lead
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.operational_lead_id).to eq(lead.lead_id)
+      expect(sales_lead.source).to eq('operational_engine')
+    end
+
+    it 'adota um card legado (sem operational_lead_id) quando ha exatamente um candidato no pipeline' do
+      prospect_pipeline = Sales::Pipelines::SeedProspectPipelineService.new(account: account).perform
+      backlog_stage = prospect_pipeline.stages.find_by!(engine_stage_key: 'backlog')
+      legacy_card = create(:sales_lead, account: account, contact: contact, pipeline: prospect_pipeline,
+                                         stage: backlog_stage, title: 'Card de antes do operational_lead_id existir')
+      lead = build_lead(etapa_prospect: 'qualificado')
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.id).to eq(legacy_card.id)
+      expect(sales_lead.reload.operational_lead_id).to eq(lead.lead_id)
+    end
+
+    it 'recusa adivinhar (levanta ProjectionIntegrityError) quando ha MAIS de um card legado ambiguo no pipeline' do
+      prospect_pipeline = Sales::Pipelines::SeedProspectPipelineService.new(account: account).perform
+      backlog_stage = prospect_pipeline.stages.find_by!(engine_stage_key: 'backlog')
+      create(:sales_lead, account: account, contact: contact, pipeline: prospect_pipeline, stage: backlog_stage, title: 'Card A')
+      create(:sales_lead, account: account, contact: contact, pipeline: prospect_pipeline, stage: backlog_stage, title: 'Card B')
+      lead = build_lead
+
+      expect { described_class.call(lead) }.to raise_error(OperationalEngine::SalesProjectionSync::ProjectionIntegrityError)
+    end
+
+    it 'nao adota de novo um card que ja tem operational_lead_id de OUTRO lead' do
+      other_lead = build_lead
+      described_class.call(other_lead)
+
+      lead = build_lead
+
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.operational_lead_id).to eq(lead.lead_id)
       expect(Sales::Lead.where(contact_id: contact.id).count).to eq(2)
     end
   end

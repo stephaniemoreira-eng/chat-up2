@@ -98,7 +98,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
   end
 
   it 'é idempotente: uma segunda chamada num lead já confirmado não cria outro evento' do
-    lead.update!(agendamento_status: 'confirmado', calendar_event_id: 'evt_already', etapa_prospect: 'agendado')
+    lead.update!(agendamento_status: 'confirmado', calendar_event_id: 'evt_already', etapa_prospect: 'agendado', agendado_em: Time.current)
 
     result = perform
 

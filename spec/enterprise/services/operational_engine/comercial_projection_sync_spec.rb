@@ -68,6 +68,17 @@ RSpec.describe OperationalEngine::ComercialProjectionSync do
       expect(sales_lead.closed_at).to be_present
     end
 
+    it 'move um card JA EXISTENTE ate Ganho via MoveStageService (nao so na criacao) -- §17.4/§21.2' do
+      lead = build_lead(etapa_comercial: 'oportunidade')
+      described_class.call(lead)
+
+      lead.update!(etapa_comercial: 'ganho')
+      sales_lead = described_class.call(lead)
+
+      expect(sales_lead.reload.stage.engine_stage_key).to eq('ganho')
+      expect(sales_lead).to be_won
+    end
+
     it 'nasce com status/closed_at corretos mesmo na primeira sincronizacao ja em Perdido' do
       lead = build_lead(etapa_comercial: 'perdido')
 

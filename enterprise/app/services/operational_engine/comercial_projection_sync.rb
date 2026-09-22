@@ -57,7 +57,9 @@ module OperationalEngine
 
     def sync(sales_lead)
       if sales_lead.sales_stage_id != target_stage.id
-        Sales::Leads::MoveStageService.new(lead: sales_lead, stage: target_stage, user: nil).perform
+        Sales::Leads::MoveStageService.new(
+          lead: sales_lead, stage: target_stage, user: nil, system_source: :operational_engine
+        ).perform
       end
 
       sales_lead.update!(title: title, custom_attributes: sales_lead.custom_attributes.merge('engine_tags' => computed_tags))

@@ -109,14 +109,20 @@ RSpec.describe Sales::Leads::MoveStageService do
       expect(lead.reload.sales_stage_id).to eq(open_stage.id)
     end
 
-    it 'permite quando e o sistema (user nil) refletindo um agendamento_status confirmado real' do
-      moved = described_class.new(lead: lead, stage: agendado_stage, user: nil).perform
+    it 'permite quando e o sistema (system_source: :operational_engine) refletindo um agendamento_status confirmado real' do
+      moved = described_class.new(lead: lead, stage: agendado_stage, user: nil, system_source: :operational_engine).perform
 
       expect(moved.stage).to eq(agendado_stage)
     end
 
+    it 'bloqueia mesmo com user: nil quando system_source nao e declarado -- ausencia de user nao e autorizacao' do
+      expect { described_class.new(lead: lead, stage: agendado_stage, user: nil).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
+      expect(lead.reload.sales_stage_id).to eq(open_stage.id)
+    end
+
     it 'nao bloqueia mover PRA FORA do Agendado por um humano' do
-      described_class.new(lead: lead, stage: agendado_stage, user: nil).perform
+      described_class.new(lead: lead, stage: agendado_stage, user: nil, system_source: :operational_engine).perform
 
       moved = described_class.new(lead: lead, stage: open_stage, user: user).perform
 
@@ -142,8 +148,8 @@ RSpec.describe Sales::Leads::MoveStageService do
         .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
     end
 
-    it 'permite quando e o sistema (user nil) refletindo um resultado_comercial real' do
-      moved = described_class.new(lead: lead, stage: ganho_stage, user: nil).perform
+    it 'permite quando e o sistema (system_source: :operational_engine) refletindo um resultado_comercial real' do
+      moved = described_class.new(lead: lead, stage: ganho_stage, user: nil, system_source: :operational_engine).perform
 
       expect(moved.stage).to eq(ganho_stage)
       expect(moved).to be_won

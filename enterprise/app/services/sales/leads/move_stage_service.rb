@@ -5,12 +5,12 @@ class Sales::Leads::MoveStageService
   # resultado comercial registrado), nunca de um drag solto que não passou pelo serviço que
   # valida e grava o resto do estado junto (ganho_em, motivo_perda, relacao_atual...).
   #
-  # `user` é o mesmo parâmetro que já distingue as duas origens possíveis desta chamada: o
-  # controller (Sales::LeadsController#move) sempre passa `user: Current.user`, presente porque é
-  # uma ação humana via API; a sincronização do Operational Engine (OperationalEngine::
-  # SalesProjectionSync/ComercialProjectionSync) passa `user: nil`, porque é o sistema refletindo
-  # um fato já gravado no Supabase. Não criamos uma flag nova pra isso -- reaproveitamos a
-  # fronteira de confiança que já existe.
+  # `system_source: :operational_engine` é o único sinal que autoriza mover pra uma stage
+  # protegida -- não a ausência de `user`. `user: nil` sozinho não prova origem de sistema: é
+  # verdade também num script de console ou num caller futuro que só esqueça de passar `user:`.
+  # A fronteira de confiança tem que ser uma declaração explícita de quem chama (só
+  # OperationalEngine::SalesProjectionSync/ComercialProjectionSync a faz), não a ausência de um
+  # argumento.
   PROTECTED_STAGE_KEYS = %w[agendado ganho perdido].freeze
 
   class ProtectedTransitionError < StandardError; end
@@ -26,11 +26,12 @@ class Sales::Leads::MoveStageService
     'open'
   end
 
-  def initialize(lead:, stage:, position: nil, user: nil)
+  def initialize(lead:, stage:, position: nil, user: nil, system_source: nil)
     @lead = lead
     @stage = stage
     @position = position
     @user = user
+    @system_source = system_source
   end
 
   def perform
@@ -53,7 +54,9 @@ class Sales::Leads::MoveStageService
   private
 
   def blocked_manual_transition?
-    @user.present? && @stage.id != @lead.sales_stage_id && PROTECTED_STAGE_KEYS.include?(@stage.engine_stage_key)
+    @stage.id != @lead.sales_stage_id &&
+      PROTECTED_STAGE_KEYS.include?(@stage.engine_stage_key) &&
+      @system_source != :operational_engine
   end
 
   def move_lead
