@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_21_130000) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_22_140000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1723,10 +1723,12 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_21_130000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "summary"
+    t.uuid "operational_lead_id"
     t.index ["account_id", "sales_pipeline_id", "sales_stage_id", "position"], name: "index_sales_leads_on_account_pipeline_stage_position"
     t.index ["account_id"], name: "index_sales_leads_on_account_id"
     t.index ["assignee_id"], name: "index_sales_leads_on_assignee_id"
     t.index ["contact_id"], name: "index_sales_leads_on_contact_id"
+    t.index ["sales_pipeline_id", "operational_lead_id"], name: "index_sales_leads_on_pipeline_and_operational_lead_id", unique: true, where: "(operational_lead_id IS NOT NULL)"
   end
 
   create_table "sales_pipelines", force: :cascade do |t|

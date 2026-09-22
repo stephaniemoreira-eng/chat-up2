@@ -98,4 +98,33 @@ RSpec.describe OperationalEngine::Lead do
       expect { lead.update!(origem_lead: 'scan', inbox_entrada_id: 5) }.not_to raise_error
     end
   end
+
+  describe 'constraint de banco: Agendado exige Calendar confirmado (SSOT §16.1/§21.2/§28.32)' do
+    it 'recusa etapa_prospect=agendado sem agendamento_status confirmado' do
+      expect { build_lead(etapa_prospect: 'agendado', agendamento_status: 'em_andamento') }
+        .to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_confirmed_calendar/)
+    end
+
+    it 'recusa etapa_prospect=agendado sem calendar_event_id' do
+      expect do
+        build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', agendado_em: Time.current, calendar_event_id: nil)
+      end.to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_confirmed_calendar/)
+    end
+
+    it 'recusa etapa_prospect=agendado sem agendado_em' do
+      expect do
+        build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: nil)
+      end.to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_confirmed_calendar/)
+    end
+
+    it 'permite etapa_prospect=agendado quando os tres fatos do Calendar estao presentes' do
+      lead = build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
+
+      expect(lead.etapa_prospect_agendado?).to be(true)
+    end
+
+    it 'nao exige nada do Calendar quando etapa_prospect nao e agendado' do
+      expect { build_lead(etapa_prospect: 'qualificado', agendamento_status: 'nao_iniciado') }.not_to raise_error
+    end
+  end
 end

@@ -9,6 +9,7 @@
 #  expected_close_date   :date
 #  last_activity_at      :datetime
 #  notes                 :text
+#  operational_lead_id   :uuid
 #  position              :decimal(20, 10)  not null
 #  probability           :integer
 #  source                :string
@@ -31,6 +32,7 @@
 #  index_sales_leads_on_account_pipeline_stage_position  (account_id,sales_pipeline_id,sales_stage_id,position)
 #  index_sales_leads_on_assignee_id                      (assignee_id)
 #  index_sales_leads_on_contact_id                       (contact_id)
+#  index_sales_leads_on_pipeline_and_operational_lead_id  (sales_pipeline_id,operational_lead_id) UNIQUE WHERE (operational_lead_id IS NOT NULL)
 #
 class Sales::Lead < ApplicationRecord
   self.table_name = 'sales_leads'
