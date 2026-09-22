@@ -2,10 +2,12 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   before_action -> { check_authorization(Sales::Lead) }
   before_action :set_lead, only: [
     :show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary,
-    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial
+    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial,
+    :assumir, :devolver
   ]
   before_action :set_operational_lead, only: [
-    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial
+    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial,
+    :assumir, :devolver
   ]
 
   rescue_from Sales::Leads::MoveStageService::ProtectedTransitionError, with: :render_protected_transition_error
@@ -95,6 +97,18 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
       lead: @operational_lead, resultado: params.require(:resultado_comercial),
       motivo_perda: params[:motivo_perda], user_id: Current.user.id
     )
+    @lead.reload
+  end
+
+  # Fase 3 (§18.2/§18.3, §21.2): Assumir/Devolver. O serviço já é idempotente e trava por linha
+  # (OperationalEngine::TakeoverService) -- só faltava o caminho de UI até aqui.
+  def assumir
+    OperationalEngine::TakeoverService.assumir!(lead: @operational_lead, user_id: Current.user.id)
+    @lead.reload
+  end
+
+  def devolver
+    OperationalEngine::TakeoverService.devolver!(lead: @operational_lead)
     @lead.reload
   end
 

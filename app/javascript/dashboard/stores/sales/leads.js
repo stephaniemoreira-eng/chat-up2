@@ -128,5 +128,14 @@ export const useSalesLeadsStore = createStore({
         })
       );
     },
+
+    // Fase 3 (§21.2) -- Assumir/Devolver.
+    assumir({ id }) {
+      return this.replaceRecord(id, SalesLeadsAPI.assumir(id));
+    },
+
+    devolver({ id }) {
+      return this.replaceRecord(id, SalesLeadsAPI.devolver(id));
+    },
   }),
 });

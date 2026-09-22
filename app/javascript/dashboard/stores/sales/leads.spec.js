@@ -14,6 +14,8 @@ vi.mock('dashboard/api/sales/leads', () => ({
     registerNoShow: vi.fn(),
     setPropensao: vi.fn(),
     registerResultadoComercial: vi.fn(),
+    assumir: vi.fn(),
+    devolver: vi.fn(),
   },
 }));
 
@@ -227,6 +229,38 @@ describe('salesLeads store', () => {
         motivoPerda: 'sem orcamento',
       });
       expect(store.getRecord(1).sales_stage_id).toBe(30);
+    });
+  });
+
+  describe('#assumir', () => {
+    it('replaces the local record with the re-synced card', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.assumir.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['humano'] } } },
+      });
+
+      await store.assumir({ id: 1 });
+
+      expect(SalesLeadsAPI.assumir).toHaveBeenCalledWith(1);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['humano']);
+    });
+  });
+
+  describe('#devolver', () => {
+    it('replaces the local record with the re-synced card', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.devolver.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['lavinia'] } } },
+      });
+
+      await store.devolver({ id: 1 });
+
+      expect(SalesLeadsAPI.devolver).toHaveBeenCalledWith(1);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['lavinia']);
     });
   });
 });

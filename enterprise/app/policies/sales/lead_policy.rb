@@ -55,6 +55,14 @@ class Sales::LeadPolicy < ApplicationPolicy
     true
   end
 
+  def assumir?
+    true
+  end
+
+  def devolver?
+    true
+  end
+
   def search?
     true
   end

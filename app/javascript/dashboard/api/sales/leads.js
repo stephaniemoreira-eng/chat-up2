@@ -73,6 +73,15 @@ class SalesLeadsAPI extends ApiClient {
     });
   }
 
+  // Fase 3 (§21.2) -- Assumir/Devolver.
+  assumir(id) {
+    return axios.post(`${this.url}/${id}/assumir`);
+  }
+
+  devolver(id) {
+    return axios.post(`${this.url}/${id}/devolver`);
+  }
+
   summary() {
     return axios.get(`${this.url}/summary`);
   }

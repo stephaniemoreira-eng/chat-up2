@@ -283,6 +283,15 @@
           "MESSAGES": {
             "ERROR": "Não foi possível concluir essa ação. Tente novamente."
           }
+        },
+        "PROSPECT": {
+          "CURRENT_MODE_HUMANO": "Em atendimento humano",
+          "CURRENT_MODE_LAVINIA": "Em atendimento pela Lavínia",
+          "ASSUMIR": "Assumir conversa",
+          "DEVOLVER": "Devolver para Lavínia",
+          "MESSAGES": {
+            "ERROR": "Não foi possível concluir essa ação. Tente novamente."
+          }
         }
       }
     }

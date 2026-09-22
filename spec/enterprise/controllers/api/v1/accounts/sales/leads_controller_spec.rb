@@ -398,4 +398,56 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       end
     end
   end
+
+  describe 'Assumir/Devolver (Fase 3, §18.2/§18.3, §21.2)' do
+    def build_engine_lead(**overrides)
+      OperationalEngine::Lead.create!({
+        conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id
+      }.merge(overrides))
+    end
+
+    def synced_sales_lead(engine_lead)
+      OperationalEngine::SalesProjectionSync.call(engine_lead)
+      Sales::Lead.find_by!(operational_lead_id: engine_lead.lead_id)
+    end
+
+    describe 'POST .../assumir' do
+      it 'poe o lead em modo humano com o agente autenticado como responsavel' do
+        engine_lead = build_engine_lead(modo_atendimento: 'lavinia')
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/assumir",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.modo_atendimento).to eq('humano')
+        expect(engine_lead.responsavel_atual_id).to eq(agent.id)
+        expect(response.parsed_body['payload']['custom_attributes']['engine_tags']).to eq(['humano'])
+      end
+    end
+
+    describe 'POST .../devolver' do
+      it 'volta o lead pra lavinia' do
+        engine_lead = build_engine_lead(modo_atendimento: 'humano', responsavel_atual_id: agent.id)
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/devolver",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.modo_atendimento).to eq('lavinia')
+        expect(engine_lead.responsavel_atual_id).to be_nil
+        expect(response.parsed_body['payload']['custom_attributes']['engine_tags']).to eq(['lavinia'])
+      end
+    end
+
+    it 'retorna unprocessable_entity quando o card nao esta vinculado a um lead do Engine' do
+      lead = create(:sales_lead, account: account, contact: contact, pipeline: pipeline, stage: stage)
+
+      post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/assumir",
+           headers: agent.create_new_auth_token, as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
 end
