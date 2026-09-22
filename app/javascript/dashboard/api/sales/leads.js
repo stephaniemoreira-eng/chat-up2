@@ -51,6 +51,28 @@ class SalesLeadsAPI extends ApiClient {
     return axios.patch(`${this.url}/${id}/update_summary`, { summary });
   }
 
+  // Fase 9 (§21.2) -- ações humanas do Kanban Comercial.
+  registerCallbackRealizado(id) {
+    return axios.post(`${this.url}/${id}/register_callback_realizado`);
+  }
+
+  registerNoShow(id) {
+    return axios.post(`${this.url}/${id}/register_no_show`);
+  }
+
+  setPropensao(id, propensaoFechamento) {
+    return axios.post(`${this.url}/${id}/set_propensao`, {
+      propensao_fechamento: propensaoFechamento,
+    });
+  }
+
+  registerResultadoComercial(id, { resultadoComercial, motivoPerda }) {
+    return axios.post(`${this.url}/${id}/register_resultado_comercial`, {
+      resultado_comercial: resultadoComercial,
+      motivo_perda: motivoPerda,
+    });
+  }
+
   summary() {
     return axios.get(`${this.url}/summary`);
   }

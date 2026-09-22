@@ -10,14 +10,15 @@
 # sincronizar, e não criamos um só pra já deixar pronto (isso inventaria um "Oportunidade"
 # vazio que nenhum evento de negócio gerou).
 #
-# Não é chamado a partir de nenhum caminho que já existe hoje: nada em chat-up2 ainda escreve
-# etapa_comercial (isso nasce de handoff/callback/qualificação -- Fase 4/8, ainda não
-# construídas). Já vai encaixado nos mesmos pontos de disparo do SalesProjectionSync (inbound,
-# Assumir/Devolver) pelo mesmo motivo de sempre: sem custo chamar num lead que não tem
-# oportunidade ainda (só um early return), e quando o campo passar a ser escrito de verdade a
-# sincronização já funciona sem precisar lembrar de encontrar todo ponto de disparo depois.
+# `operational_lead_id` é a chave técnica de casamento, mesmo raciocínio e mesmo mecanismo de
+# adoção de card legado que SalesProjectionSync já usa (ver o comentário lá) -- casar só por
+# contact_id arriscaria sincronizar em cima do card errado quando o mesmo contato tem mais de
+# um Sales::Lead no pipeline Oportunidades (ex.: um criado manualmente antes deste campo
+# existir).
 module OperationalEngine
   class ComercialProjectionSync
+    class ProjectionIntegrityError < StandardError; end
+
     def self.call(lead)
       new(lead).call
     end
@@ -36,7 +37,15 @@ module OperationalEngine
     private
 
     def existing
-      @existing ||= Sales::Lead.find_by(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id, sales_pipeline_id: pipeline.id)
+      @existing ||= mapped_projection_scope.find_by(operational_lead_id: @lead.lead_id) || adopt_legacy_card
+    end
+
+    def adopt_legacy_card
+      legacy_cards = projection_scope.where(operational_lead_id: nil).limit(2).to_a
+      return nil if legacy_cards.empty?
+      raise ProjectionIntegrityError, "ambiguous comercial projection for lead #{@lead.lead_id}" if legacy_cards.size > 1
+
+      legacy_cards.first.tap { |card| card.update!(operational_lead_id: @lead.lead_id, source: 'operational_engine') }
     end
 
     # status/closed_at setados a mão (não só stage:) porque um lead pode chegar ao Engine já
@@ -47,12 +56,18 @@ module OperationalEngine
     def create
       sales_lead = Sales::Lead.new(
         contact: contact, pipeline: pipeline, stage: target_stage, title: title,
+        source: 'operational_engine', operational_lead_id: @lead.lead_id,
         status: Sales::Leads::MoveStageService.status_for(target_stage),
         closed_at: target_stage.open? ? nil : Time.current
       )
       sales_lead.custom_attributes = sales_lead.custom_attributes.merge('engine_tags' => computed_tags)
       sales_lead.save!
       sales_lead
+    rescue ActiveRecord::RecordNotUnique
+      # Mesmo raciocínio de SalesProjectionSync: duas tentativas concorrentes podem chegar depois
+      # de a fonte já ter persistido o mesmo fato -- o índice único decide a corrida; a perdedora
+      # só relê e sincroniza a vencedora.
+      sync(mapped_projection_scope.find_by!(operational_lead_id: @lead.lead_id))
     end
 
     def sync(sales_lead)
@@ -62,8 +77,18 @@ module OperationalEngine
         ).perform
       end
 
-      sales_lead.update!(title: title, custom_attributes: sales_lead.custom_attributes.merge('engine_tags' => computed_tags))
+      sales_lead.update!(
+        contact: contact, title: title, custom_attributes: sales_lead.custom_attributes.merge('engine_tags' => computed_tags)
+      )
       sales_lead
+    end
+
+    def projection_scope
+      Sales::Lead.where(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id, sales_pipeline_id: pipeline.id)
+    end
+
+    def mapped_projection_scope
+      Sales::Lead.where(account_id: @lead.conta_id, sales_pipeline_id: pipeline.id)
     end
 
     # bang de propósito, mesmo raciocínio de SalesProjectionSync#target_stage: as quatro stages

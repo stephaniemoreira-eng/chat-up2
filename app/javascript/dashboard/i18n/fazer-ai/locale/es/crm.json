@@ -202,7 +202,11 @@
       "ENGINE_TAGS": {
         "LAVINIA": "Lavínia",
         "HUMANO": "Human",
-        "CALLBACK": "Callback"
+        "CALLBACK": "Callback",
+        "NO_SHOW": "No-show",
+        "FRIO": "Cold",
+        "MORNO": "Warm",
+        "QUENTE": "Hot"
       },
       "CREATE": {
         "ACTION": "Add lead",
@@ -260,6 +264,25 @@
           "STAGE_TRANSITION": "Moved from {from} to {to}",
           "STAGE_TRANSITION_FIRST": "Moved to {to}",
           "SUMMARY_UPDATED": "Summary updated"
+        },
+        "COMMERCIAL": {
+          "TITLE": "Commercial actions",
+          "RESOLVED_WON": "Deal won.",
+          "RESOLVED_LOST": "Deal lost.",
+          "PROPENSAO": {
+            "LABEL": "Closing likelihood",
+            "FRIO": "Cold",
+            "MORNO": "Warm",
+            "QUENTE": "Hot"
+          },
+          "CALLBACK_REALIZADO": "Register callback done",
+          "NO_SHOW": "Register no-show",
+          "MOTIVO_PERDA_PLACEHOLDER": "Loss reason (optional)",
+          "MARK_WON": "Mark Won",
+          "MARK_LOST": "Mark Lost",
+          "MESSAGES": {
+            "ERROR": "Could not complete this action. Please try again."
+          }
         }
       }
     }

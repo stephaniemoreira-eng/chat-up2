@@ -10,6 +10,10 @@ vi.mock('dashboard/api/sales/leads', () => ({
     unlinkConversation: vi.fn(),
     timeline: vi.fn(),
     updateSummary: vi.fn(),
+    registerCallbackRealizado: vi.fn(),
+    registerNoShow: vi.fn(),
+    setPropensao: vi.fn(),
+    registerResultadoComercial: vi.fn(),
   },
 }));
 
@@ -152,6 +156,77 @@ describe('salesLeads store', () => {
 
       expect(SalesLeadsAPI.updateSummary).toHaveBeenCalledWith(1, 'Novo resumo');
       expect(store.getRecord(1).summary).toBe('Novo resumo');
+    });
+  });
+
+  describe('#registerCallbackRealizado', () => {
+    it('replaces the local record with the re-synced card', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.registerCallbackRealizado.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: [] } } },
+      });
+
+      await store.registerCallbackRealizado({ id: 1 });
+
+      expect(SalesLeadsAPI.registerCallbackRealizado).toHaveBeenCalledWith(1);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual([]);
+    });
+  });
+
+  describe('#registerNoShow', () => {
+    it('replaces the local record with the re-synced card', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.registerNoShow.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['no_show'] } } },
+      });
+
+      await store.registerNoShow({ id: 1 });
+
+      expect(SalesLeadsAPI.registerNoShow).toHaveBeenCalledWith(1);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['no_show']);
+    });
+  });
+
+  describe('#setPropensao', () => {
+    it('sends the classification and replaces the local record', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.setPropensao.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['quente'] } } },
+      });
+
+      await store.setPropensao({ id: 1, propensaoFechamento: 'quente' });
+
+      expect(SalesLeadsAPI.setPropensao).toHaveBeenCalledWith(1, 'quente');
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['quente']);
+    });
+  });
+
+  describe('#registerResultadoComercial', () => {
+    it('sends the result and loss reason and replaces the local record', async () => {
+      const store = useSalesLeadsStore();
+      await seedLead(store);
+
+      SalesLeadsAPI.registerResultadoComercial.mockResolvedValueOnce({
+        data: { payload: { id: 1, sales_stage_id: 30, position: 0 } },
+      });
+
+      await store.registerResultadoComercial({
+        id: 1,
+        resultadoComercial: 'perdido',
+        motivoPerda: 'sem orcamento',
+      });
+
+      expect(SalesLeadsAPI.registerResultadoComercial).toHaveBeenCalledWith(1, {
+        resultadoComercial: 'perdido',
+        motivoPerda: 'sem orcamento',
+      });
+      expect(store.getRecord(1).sales_stage_id).toBe(30);
     });
   });
 });

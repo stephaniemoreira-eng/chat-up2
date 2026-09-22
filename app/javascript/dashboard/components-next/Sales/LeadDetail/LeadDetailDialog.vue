@@ -3,14 +3,19 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import { useSalesLeadsStore } from 'dashboard/stores/sales/leads';
+import { useSalesStagesStore } from 'dashboard/stores/sales/stages';
+import { useSalesPipelinesStore } from 'dashboard/stores/sales/pipelines';
 
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import SummaryPanel from 'dashboard/components-next/Sales/LeadDetail/SummaryPanel.vue';
 import ScanPanel from 'dashboard/components-next/Sales/LeadDetail/ScanPanel.vue';
+import CommercialActionsPanel from 'dashboard/components-next/Sales/LeadDetail/CommercialActionsPanel.vue';
 import Timeline from 'dashboard/components-next/Sales/LeadDetail/Timeline.vue';
 
 const { t } = useI18n();
 const leadsStore = useSalesLeadsStore();
+const stagesStore = useSalesStagesStore();
+const pipelinesStore = useSalesPipelinesStore();
 
 const dialogRef = ref(null);
 const leadId = ref(null);
@@ -18,12 +23,29 @@ const entries = ref([]);
 const nextBefore = ref(null);
 const isLoadingTimeline = ref(false);
 const isSavingSummary = ref(false);
+const isSavingCommercialAction = ref(false);
 
 const lead = computed(() =>
   leadId.value ? leadsStore.getRecord(leadId.value) : null
 );
 
 const hasMore = computed(() => Boolean(nextBefore.value));
+
+// Fase 9 (§21.2): as ações comerciais só fazem sentido num card do pipeline "Oportunidades"
+// (engine_kind comercial) de verdade vinculado a um lead do Engine -- um card manual criado à
+// mão nesse mesmo pipeline (sem passar pelo ComercialProjectionSync) não tem operational_lead_id
+// e não deve mostrar o painel.
+const isCommercialLead = computed(() => {
+  if (!lead.value?.operational_lead_id) return false;
+  const stage = stagesStore.getRecord(lead.value.sales_stage_id);
+  const pipeline = stage && pipelinesStore.getRecord(stage.sales_pipeline_id);
+  return pipeline?.engine_kind === 'comercial';
+});
+
+const engineTags = computed(() => lead.value?.custom_attributes?.engine_tags || []);
+const engineStageKey = computed(
+  () => stagesStore.getRecord(lead.value?.sales_stage_id)?.engine_stage_key || null
+);
 
 const loadTimeline = async ({ append = false } = {}) => {
   isLoadingTimeline.value = true;
@@ -64,6 +86,48 @@ const onSaveSummary = async summary => {
   }
 };
 
+const runCommercialAction = async (action, errorKey) => {
+  isSavingCommercialAction.value = true;
+  try {
+    await action();
+    await loadTimeline();
+  } catch {
+    useAlert(t(errorKey));
+  } finally {
+    isSavingCommercialAction.value = false;
+  }
+};
+
+const onRegisterCallbackRealizado = () =>
+  runCommercialAction(
+    () => leadsStore.registerCallbackRealizado({ id: leadId.value }),
+    'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
+const onRegisterNoShow = () =>
+  runCommercialAction(
+    () => leadsStore.registerNoShow({ id: leadId.value }),
+    'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
+const onSetPropensao = propensaoFechamento =>
+  runCommercialAction(
+    () =>
+      leadsStore.setPropensao({ id: leadId.value, propensaoFechamento }),
+    'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
+const onRegisterResultado = ({ resultado, motivoPerda }) =>
+  runCommercialAction(
+    () =>
+      leadsStore.registerResultadoComercial({
+        id: leadId.value,
+        resultadoComercial: resultado,
+        motivoPerda,
+      }),
+    'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
 defineExpose({ open });
 </script>
 
@@ -90,6 +154,16 @@ defineExpose({ open });
         :summary="lead.summary"
         :is-saving="isSavingSummary"
         @save="onSaveSummary"
+      />
+      <CommercialActionsPanel
+        v-if="isCommercialLead"
+        :engine-tags="engineTags"
+        :engine-stage-key="engineStageKey"
+        :is-saving="isSavingCommercialAction"
+        @register-callback-realizado="onRegisterCallbackRealizado"
+        @register-no-show="onRegisterNoShow"
+        @set-propensao="onSetPropensao"
+        @register-resultado="onRegisterResultado"
       />
       <Timeline
         :entries="entries"

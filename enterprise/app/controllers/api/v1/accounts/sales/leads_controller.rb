@@ -1,8 +1,17 @@
 class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::BaseController
   before_action -> { check_authorization(Sales::Lead) }
-  before_action :set_lead, only: [:show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary]
+  before_action :set_lead, only: [
+    :show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary,
+    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial
+  ]
+  before_action :set_operational_lead, only: [
+    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial
+  ]
 
   rescue_from Sales::Leads::MoveStageService::ProtectedTransitionError, with: :render_protected_transition_error
+  rescue_from OperationalEngine::RegisterCallbackRealizadoService::InvalidTransitionError, with: :render_action_error
+  rescue_from OperationalEngine::RegisterResultadoComercialService::AlreadyResolvedError, with: :render_action_error
+  rescue_from OperationalEngine::RegisterResultadoComercialService::InvalidResultadoError, with: :render_action_error
 
   def index
     @leads = filtered_leads.ordered
@@ -61,7 +70,48 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @lead = Sales::Leads::UpdateSummaryService.new(lead: @lead, summary: params.require(:summary), user: Current.user).perform
   end
 
+  # Fase 9 (§16.3, §21.2): ações humanas mínimas do Kanban Comercial. Todas passam pelo Engine
+  # (nunca escrevem em Sales::Lead diretamente, §5.7) -- o `@lead` acima de re-sincronizado no
+  # retorno é só a projeção já atualizada pelo próprio serviço.
+  def register_callback_realizado
+    OperationalEngine::RegisterCallbackRealizadoService.call!(lead: @operational_lead, user_id: Current.user.id)
+    @lead.reload
+  end
+
+  def register_no_show
+    OperationalEngine::RegisterNoShowService.call!(lead: @operational_lead, user_id: Current.user.id)
+    @lead.reload
+  end
+
+  def set_propensao
+    OperationalEngine::SetPropensaoService.call!(
+      lead: @operational_lead, propensao: params.require(:propensao_fechamento), user_id: Current.user.id
+    )
+    @lead.reload
+  end
+
+  def register_resultado_comercial
+    OperationalEngine::RegisterResultadoComercialService.call!(
+      lead: @operational_lead, resultado: params.require(:resultado_comercial),
+      motivo_perda: params[:motivo_perda], user_id: Current.user.id
+    )
+    @lead.reload
+  end
+
   private
+
+  def set_operational_lead
+    unless @lead.operational_lead_id
+      return render json: { error: 'este negócio não está vinculado a um lead do Operational Engine' }, status: :unprocessable_entity
+    end
+
+    @operational_lead = OperationalEngine::Lead.find_by(lead_id: @lead.operational_lead_id)
+    render json: { error: 'lead do Operational Engine não encontrado' }, status: :not_found unless @operational_lead
+  end
+
+  def render_action_error(exception)
+    render json: { error: exception.message }, status: :unprocessable_entity
+  end
 
   def render_protected_transition_error(exception)
     render json: { error: exception.message }, status: :unprocessable_entity

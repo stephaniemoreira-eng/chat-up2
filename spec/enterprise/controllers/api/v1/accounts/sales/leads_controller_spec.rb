@@ -287,4 +287,115 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       expect(response.parsed_body['payload']['summary']).to eq('Cliente pediu proposta')
     end
   end
+
+  describe 'acoes humanas do Kanban Comercial (Fase 9, §21.2)' do
+    def build_engine_lead(**overrides)
+      OperationalEngine::Lead.create!({
+        conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id,
+        etapa_comercial: 'oportunidade'
+      }.merge(overrides))
+    end
+
+    def synced_sales_lead(engine_lead)
+      OperationalEngine::ComercialProjectionSync.call(engine_lead)
+      Sales::Lead.find_by!(operational_lead_id: engine_lead.lead_id)
+    end
+
+    describe 'POST .../register_callback_realizado' do
+      it 'marca o callback como realizado' do
+        engine_lead = build_engine_lead(agendamento_status: 'callback_registrado')
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_callback_realizado",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.agendamento_status).to eq('callback_realizado')
+      end
+
+      it 'retorna unprocessable_entity quando nao ha callback pendente' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_callback_realizado",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it 'retorna unprocessable_entity quando o card nao esta vinculado a um lead do Engine' do
+        lead = create(:sales_lead, account: account, contact: contact, pipeline: pipeline, stage: stage)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_callback_realizado",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+
+    describe 'POST .../register_no_show' do
+      it 'registra o no-show' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_no_show",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.no_show_em).to be_present
+      end
+    end
+
+    describe 'POST .../set_propensao' do
+      it 'grava a propensao informada' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/set_propensao",
+             params: { propensao_fechamento: 'quente' }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.propensao_fechamento).to eq('quente')
+      end
+    end
+
+    describe 'POST .../register_resultado_comercial' do
+      it 'marca a oportunidade como ganho' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
+             params: { resultado_comercial: 'ganho' }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.resultado_comercial).to eq('ganho')
+        expect(response.parsed_body['payload']['sales_stage_id']).to eq(
+          Sales::Pipelines::SeedComercialPipelineService.new(account: account).perform.stages.find_by!(engine_stage_key: 'ganho').id
+        )
+      end
+
+      it 'marca a oportunidade como perdido com motivo' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
+             params: { resultado_comercial: 'perdido', motivo_perda: 'sem orcamento' },
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.motivo_perda).to eq('sem orcamento')
+      end
+
+      it 'retorna unprocessable_entity ao tentar resolver de novo uma oportunidade ja resolvida' do
+        engine_lead = build_engine_lead(resultado_comercial: 'ganho', etapa_comercial: 'ganho')
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
+             params: { resultado_comercial: 'perdido' }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(engine_lead.reload.resultado_comercial).to eq('ganho')
+      end
+    end
+  end
 end

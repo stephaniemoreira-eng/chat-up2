@@ -4,6 +4,7 @@ json.description resource.description
 json.position resource.position
 json.active resource.active
 json.is_default resource.is_default
+json.engine_kind resource.engine_kind
 json.stages resource.stages do |stage|
   json.partial! 'api/v1/models/sales_stage', formats: [:json], resource: stage
 end
