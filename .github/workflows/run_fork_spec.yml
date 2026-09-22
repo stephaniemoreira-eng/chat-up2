@@ -39,10 +39,12 @@ env:
     spec/enterprise/controllers/api/v1/accounts/sales
     spec/enterprise/controllers/api/v1/accounts/operational_engine
     spec/enterprise/models/operational_engine
+    spec/enterprise/models/up_sales
     spec/enterprise/services/operational_engine
     spec/enterprise/services/up_sales
     spec/enterprise/jobs/operational_engine
     spec/enterprise/listeners/operational_engine_listener_spec.rb
+    spec/enterprise/controllers/super_admin
     spec/lib/tasks/rake/task_up_sales_spec.rb
 
 jobs:

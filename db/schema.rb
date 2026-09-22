@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_22_150000) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_22_160000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1980,7 +1980,6 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_22_150000) do
     t.string "calendar_integration_instance_id"
     t.string "engine_api_key"
     t.bigint "whatsapp_inbox_id"
-    t.bigint "prospecting_agent_id"
     t.index ["account_id"], name: "index_up_sales_agent_tenants_on_account_id", unique: true
     t.index ["whatsapp_inbox_id"], name: "index_up_sales_agent_tenants_on_whatsapp_inbox_id"
   end

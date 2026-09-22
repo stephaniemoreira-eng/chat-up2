@@ -2,7 +2,8 @@ require 'rails_helper'
 
 RSpec.describe UpSales::Agents::OriginateConversationService do
   let(:account) { create(:account) }
-  let(:agent_tenant) { create(:up_sales_agent_tenant, account: account, prospecting_agent_id: 77) }
+  let(:agent_tenant) { create(:up_sales_agent_tenant, account: account) }
+  let!(:sdr_slot) { create(:up_sales_agent_slot, account: account, up2_agents_agent_id: '77') }
   let(:contact) { create(:contact, account: account, name: 'João', phone_number: '+5513991234567') }
   let(:inbox) { create(:inbox, account: account) }
   let(:contact_inbox) { create(:contact_inbox, contact: contact, inbox: inbox) }

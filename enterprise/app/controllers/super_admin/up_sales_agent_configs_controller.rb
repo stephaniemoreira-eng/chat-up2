@@ -8,6 +8,7 @@ class SuperAdmin::UpSalesAgentConfigsController < SuperAdmin::EnterpriseBaseCont
   def show
     @agent_tenant = @account.up_sales_agent_tenant || @account.build_up_sales_agent_tenant
     @slots = current_slots
+    @whatsapp_inboxes = whatsapp_inboxes
   end
 
   def update
@@ -24,6 +25,7 @@ class SuperAdmin::UpSalesAgentConfigsController < SuperAdmin::EnterpriseBaseCont
       end
     else
       @slots = current_slots
+      @whatsapp_inboxes = whatsapp_inboxes
       render :show, status: :unprocessable_entity
     end
   end
@@ -32,6 +34,12 @@ class SuperAdmin::UpSalesAgentConfigsController < SuperAdmin::EnterpriseBaseCont
 
   def set_account
     @account = Account.find(params[:account_id])
+  end
+
+  # Fase 6 (dispatcher): só inboxes WhatsApp fazem sentido pra originar o primeiro contato --
+  # nao lista as outras (email, widget, etc.) que o dispatcher nunca usaria.
+  def whatsapp_inboxes
+    @account.inboxes.where(channel_type: 'Channel::Whatsapp').order(:name)
   end
 
   def current_slots
@@ -58,7 +66,7 @@ class SuperAdmin::UpSalesAgentConfigsController < SuperAdmin::EnterpriseBaseCont
 
   def agent_tenant_params
     permitted = params.require(:agent_tenant)
-                       .permit(:agents_tenant_id, :agents_tenant_slug, :api_key, :calendar_integration_instance_id)
+                       .permit(:agents_tenant_id, :agents_tenant_slug, :api_key, :calendar_integration_instance_id, :whatsapp_inbox_id)
                        .to_h
     permitted[:api_key] = nil if permitted[:api_key].blank?
     permitted.compact
