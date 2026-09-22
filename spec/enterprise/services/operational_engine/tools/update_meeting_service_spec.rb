@@ -38,7 +38,11 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
   end
 
   it 'retorna erro quando a reunião não está confirmada (mesmo com o event_id certo)' do
-    lead.update!(agendamento_status: 'em_andamento')
+    # etapa_prospect=agendado com agendamento_status != confirmado não é mais um estado possível
+    # no banco (chk_leads_agendado_requires_confirmed_calendar) -- o cenário real equivalente é
+    # uma reunião já cancelada (CancelMeetingService também não zera calendar_event_id, fica como
+    # referência histórica), mas o chamador ainda manda o event_id antigo.
+    lead.update!(agendamento_status: 'cancelado', etapa_prospect: 'qualificado')
 
     result = perform
 
