@@ -33,7 +33,7 @@ class UpSales::Agents::OriginateConversationService
   def body
     contact = contact_inbox.contact
     {
-      agentId: agent_tenant.prospecting_agent_id.to_s,
+      agentId: agent_tenant.prospecting_agent_up2_id,
       chatwootAccountId: agent_tenant.account_id,
       chatwootConversationId: conversation.display_id,
       chatwootInboxId: contact_inbox.inbox_id,

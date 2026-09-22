@@ -7,7 +7,12 @@ module OperationalEngine
     queue_as :scheduled_jobs
 
     def perform
-      UpSales::AgentTenant.where.not(whatsapp_inbox_id: nil).where.not(prospecting_agent_id: nil).find_each do |agent_tenant|
+      # dispatcher_ready? não é mais uma condição só de coluna (o id do agente vem do slot "sdr",
+      # UpSales::AgentSlot) -- o where.not aqui é só um pré-filtro barato, a checagem completa é
+      # o método do model.
+      UpSales::AgentTenant.where.not(whatsapp_inbox_id: nil).find_each do |agent_tenant|
+        next unless agent_tenant.dispatcher_ready?
+
         OperationalEngine::Dispatcher.call(conta_id: agent_tenant.account_id)
       rescue StandardError => e
         Rails.logger.error("[OperationalEngine::DispatcherJob] account #{agent_tenant.account_id}: #{e.message}")

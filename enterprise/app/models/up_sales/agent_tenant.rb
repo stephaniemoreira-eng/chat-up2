@@ -12,7 +12,6 @@
 #  updated_at                       :datetime         not null
 #  account_id                       :bigint           not null
 #  whatsapp_inbox_id                :bigint
-#  prospecting_agent_id             :bigint
 #
 # Indexes
 #
@@ -29,12 +28,19 @@
 # pra chamar ele. Diferente de `api_key` (colado manualmente, gerado no painel do up2-agents),
 # este é gerado por nós (has_secure_token) -- quem chama este lado da relação é o dono dela.
 #
-# `whatsapp_inbox_id`/`prospecting_agent_id` (Fase 6, dispatcher): qual inbox WhatsApp e qual
-# Agent do up2-agents usar pra originar o primeiro contato. Configuração manual, não
-# auto-detectada -- o Agent de lá não tem um campo "kind" pra distinguir prospecção de outros
-# tipos, e este projeto já teve mais de um ambiente/inbox ambíguo pra arriscar adivinhar.
+# `whatsapp_inbox_id` (Fase 6, dispatcher): qual inbox WhatsApp usar pra originar o primeiro
+# contato. Configuração manual, não auto-detectada -- este projeto já teve mais de um ambiente/
+# inbox ambíguo pra arriscar adivinhar.
+#
+# O id do Agent de prospecção no up2-agents NÃO mora aqui -- vem de
+# `account.up_sales_agent_slots.find_by(agent_type: 'sdr')&.up2_agents_agent_id`, que já existe
+# desde o Super Admin de configuração de agente (ver UpSales::Agents::UpsertAgentService).
+# Corrigido depois de descobrir esse mecanismo: a Fase 6 (dispatcher) tinha adicionado uma coluna
+# `prospecting_agent_id` própria, redundante e sem nenhum jeito real de ser preenchida.
 class UpSales::AgentTenant < ApplicationRecord
   self.table_name = 'up_sales_agent_tenants'
+
+  PROSPECTING_AGENT_SLOT_TYPE = 'sdr'.freeze
 
   belongs_to :account
   belongs_to :whatsapp_inbox, class_name: 'Inbox', optional: true
@@ -52,6 +58,10 @@ class UpSales::AgentTenant < ApplicationRecord
   # qualquer uma, OperationalEngine::Dispatcher pula a conta inteira (falha explícita, não
   # tenta adivinhar qual inbox/agente usar).
   def dispatcher_ready?
-    whatsapp_inbox_id.present? && prospecting_agent_id.present?
+    whatsapp_inbox_id.present? && prospecting_agent_up2_id.present?
+  end
+
+  def prospecting_agent_up2_id
+    account.up_sales_agent_slots.find_by(agent_type: PROSPECTING_AGENT_SLOT_TYPE)&.up2_agents_agent_id
   end
 end

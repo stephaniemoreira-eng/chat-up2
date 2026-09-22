@@ -60,8 +60,39 @@
             </p>
           </div>
         </div>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :whatsapp_inbox_id, 'Inbox WhatsApp (dispatcher)' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.select :whatsapp_inbox_id,
+                options_from_collection_for_select(@whatsapp_inboxes, :id, :name, @agent_tenant.whatsapp_inbox_id),
+                { include_blank: '— nenhuma —' },
+                { class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full" }
+            %>
+            <p class="pt-2 text-xs italic text-slate-400">
+              Fase 6 (dispatcher): de qual inbox WhatsApp desta conta a Lavínia origina o primeiro
+              contato. Só lista inboxes do canal WhatsApp já conectados nesta conta.
+            </p>
+          </div>
+        </div>
       <% end %>
     </fieldset>
+
+    <% if @agent_tenant.persisted? %>
+      <p class="mb-4 text-sm">
+        Dispatcher (Fase 6):
+        <% if @agent_tenant.dispatcher_ready? %>
+          <span class="text-green-600 font-bold">pronto</span> — inbox WhatsApp e agente de
+          prospecção (slot SDR) configurados.
+        <% else %>
+          <span class="text-amber-600 font-bold">incompleto</span> — falta
+          <%= @agent_tenant.whatsapp_inbox_id.present? ? '' : 'a inbox WhatsApp' %>
+          <%= @agent_tenant.whatsapp_inbox_id.present? || @agent_tenant.prospecting_agent_up2_id.present? ? '' : ' e ' %>
+          <%= @agent_tenant.prospecting_agent_up2_id.present? ? '' : 'o slot SDR ativado abaixo' %>.
+        <% end %>
+      </p>
+    <% end %>
 
     <fieldset class="mb-8">
       <legend class="font-bold mb-2">Agentes ativos (seleção múltipla)</legend>

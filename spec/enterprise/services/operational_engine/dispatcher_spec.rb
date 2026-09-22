@@ -8,8 +8,11 @@ RSpec.describe OperationalEngine::Dispatcher do
   # quebraria a idempotencia que claim_conversation depende (first_or_create! por source_id).
   let(:inbox) { create(:channel_whatsapp, account: account, sync_templates: false, validate_provider_config: false).inbox }
   let!(:agent_tenant) do
-    create(:up_sales_agent_tenant, account: account, whatsapp_inbox: inbox, prospecting_agent_id: 77)
+    create(:up_sales_agent_tenant, account: account, whatsapp_inbox: inbox)
   end
+  # O id do agente de prospecção vem do slot "sdr" (UpSales::AgentSlot), não de uma coluna
+  # própria em AgentTenant -- ver o comentário no modelo pra o porquê.
+  let!(:sdr_slot) { create(:up_sales_agent_slot, account: account, up2_agents_agent_id: '77') }
   # Terca, 10:00 America/Sao_Paulo -- dentro da janela da manha do BacklogCapacity.
   let(:business_hours) { Time.find_zone('America/Sao_Paulo').local(2026, 9, 22, 10, 0, 0) }
 
@@ -65,8 +68,18 @@ RSpec.describe OperationalEngine::Dispatcher do
     ).to have_been_made.once
   end
 
-  it 'pula a conta quando o agent_tenant nao esta configurado (sem whatsapp_inbox/prospecting_agent_id)' do
+  it 'pula a conta quando o agent_tenant nao esta configurado (sem whatsapp_inbox)' do
     agent_tenant.update!(whatsapp_inbox: nil)
+    stub_originate
+    build_lead
+
+    described_class.call(conta_id: account.id)
+
+    expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
+  end
+
+  it 'pula a conta quando nao ha slot sdr configurado (sem agente de prospeccao no up2-agents)' do
+    sdr_slot.destroy!
     stub_originate
     build_lead
 
