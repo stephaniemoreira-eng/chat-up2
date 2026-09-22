@@ -2,7 +2,11 @@ require 'rails_helper'
 
 RSpec.describe OperationalEngine::Dispatcher do
   let(:account) { create(:account) }
-  let(:inbox) { create(:inbox, account: account) }
+  # Precisa ser um inbox WhatsApp de verdade: ContactInboxBuilder só deriva um source_id
+  # deterministico (por telefone) pro channel_type Channel::Whatsapp -- um inbox generico
+  # (Channel::WebWidget, o default da factory :inbox) cai no branch SecureRandom.uuid, o que
+  # quebraria a idempotencia que claim_conversation depende (first_or_create! por source_id).
+  let(:inbox) { create(:channel_whatsapp, account: account, sync_templates: false, validate_provider_config: false).inbox }
   let!(:agent_tenant) do
     create(:up_sales_agent_tenant, account: account, whatsapp_inbox: inbox, prospecting_agent_id: 77)
   end
