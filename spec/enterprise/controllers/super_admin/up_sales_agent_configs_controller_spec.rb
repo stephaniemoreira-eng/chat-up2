@@ -69,7 +69,9 @@ RSpec.describe 'Super Admin Up Sales agent config', type: :request do
 
       expected_message = UpSales::AgentTenant.new(agents_tenant_id: '3').tap(&:valid?).errors.full_messages.find { |m| m.match?(/api.?key/i) }
       expect(expected_message).to be_present
-      expect(response.body).to include(expected_message)
+      # a view escapa o HTML (o apostrofo de "can't" vira &#39;) -- comparar com o mesmo escape,
+      # nao com a string crua da validacao.
+      expect(response.body).to include(ERB::Util.html_escape(expected_message))
       expect(account_sem_tenant.reload.up_sales_agent_tenant).to be_nil
     end
   end
