@@ -11,6 +11,17 @@
     <%= link_to '← Todas as contas', super_admin_up_sales_agent_configs_path %>
   </p>
 
+  <% if @agent_tenant.errors.any? %>
+    <div class="mb-4 p-3 border rounded-md border-red-300 bg-red-50 text-red-700 text-sm">
+      <p class="font-bold mb-1">Não foi possível salvar:</p>
+      <ul class="list-disc pl-5">
+        <% @agent_tenant.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
   <%= form_with url: super_admin_account_up_sales_agent_config_path(@account), method: :patch, local: true do |form| %>
     <fieldset class="mb-8">
       <legend class="font-bold mb-2">Conexão com o up2-agents</legend>

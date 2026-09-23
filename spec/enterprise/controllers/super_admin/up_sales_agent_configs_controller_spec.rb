@@ -56,4 +56,23 @@ RSpec.describe 'Super Admin Up Sales agent config', type: :request do
       expect(response.body).to include('pronto')
     end
   end
+
+  describe 'PATCH numa conta sem tenant ainda (achado testando ao vivo em teste., 23/09)' do
+    let(:account_sem_tenant) { create(:account) }
+
+    it 'mostra as mensagens de erro quando falta um campo obrigatorio (api_key), em vez de falhar em silencio' do
+      patch "/super_admin/accounts/#{account_sem_tenant.id}/up_sales_agent_config",
+            params: { agent_tenant: { agents_tenant_id: '3', agents_tenant_slug: 'lava-e-pronto' } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include('Não foi possível salvar')
+
+      expected_message = UpSales::AgentTenant.new(agents_tenant_id: '3').tap(&:valid?).errors.full_messages.find { |m| m.match?(/api.?key/i) }
+      expect(expected_message).to be_present
+      # a view escapa o HTML (o apostrofo de "can't" vira &#39;) -- comparar com o mesmo escape,
+      # nao com a string crua da validacao.
+      expect(response.body).to include(ERB::Util.html_escape(expected_message))
+      expect(account_sem_tenant.reload.up_sales_agent_tenant).to be_nil
+    end
+  end
 end
