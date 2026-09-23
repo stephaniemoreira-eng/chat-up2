@@ -19,6 +19,10 @@
 # 2. Conversa com ativação "authorized" e sem mensagem do contato = abertura do Dispatcher:
 #    exige elegibilidade completa (OutboundEligibility) e nenhuma outra ativação já consumida.
 # 3. Lead em Backlog sem ativação válida e sem mensagem do contato: abertura não autorizada.
+# 1b. CP-06 (§18.3 "timers antigos não ressuscitam", RISK-026-01): envio programado do up2-agents
+#    (carimbo `content_attributes.up2_automation.created_at` = quando o timer/job nasceu) criado
+#    ANTES da última mudança de modo_atendimento é recusado -- um follow-up agendado antes do
+#    Assumir não fala depois do Devolver. Carimbo presente mas ilegível falha fechado.
 # 4. nao_contatar / cliente_atual / lead encerrado: só responde o contato (§19.1, §19.2, §28.26)
 #    -- mensagem automática fora de REPLY_WINDOW desde a última mensagem dele é proativa
 #    (timer/recovery/nudge/reativação) e é bloqueada.
@@ -54,12 +58,13 @@ module OperationalEngine
       UpSales::AgentTenant.exists?(account_id: conversation.account_id)
     end
 
-    def self.authorize!(conversation:, &)
-      new(conversation).authorize!(&)
+    def self.authorize!(conversation:, params: {}, &)
+      new(conversation, params).authorize!(&)
     end
 
-    def initialize(conversation)
+    def initialize(conversation, params = {})
       @conversation = conversation
+      @params = params
     end
 
     def authorize!
@@ -114,6 +119,7 @@ module OperationalEngine
 
     def blocking_reason(lead, opening)
       return 'atendimento_humano' if human_block?(lead)
+      return 'automacao_anterior_a_mudanca_de_modo' if stale_automation?(lead)
       return opening_blocking_reason(lead) if opening
       return 'primeira_abordagem_sem_autorizacao' if unauthorized_opening?(lead)
 
@@ -122,6 +128,30 @@ module OperationalEngine
 
     def human_block?(lead)
       lead.modo_atendimento_humano? && !handoff_reply_allowed?(lead)
+    end
+
+    def stale_automation?(lead)
+      stamp = automation_stamp
+      return false if stamp.nil?
+
+      created_at = Time.zone.parse(stamp['created_at'].to_s)
+      return true if created_at.nil?
+
+      lead.modo_atendimento_entrou_em.present? && created_at < lead.modo_atendimento_entrou_em
+    rescue ArgumentError
+      true
+    end
+
+    # content_attributes pode chegar como Hash ou como JSON em string (mesma tolerância do
+    # Messages::MessageBuilder).
+    def automation_stamp
+      raw = @params[:content_attributes]
+      raw = JSON.parse(raw) if raw.is_a?(String)
+      raw = raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+      stamp = raw.is_a?(Hash) ? raw.with_indifferent_access[:up2_automation] : nil
+      stamp.is_a?(Hash) ? stamp.with_indifferent_access : nil
+    rescue JSON::ParserError
+      nil
     end
 
     def unauthorized_opening?(lead)
