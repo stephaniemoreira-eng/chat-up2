@@ -55,7 +55,7 @@ class OperationalEngineListener < BaseListener
     lead = OperationalEngine::LeadRepository.find_by_telefone(conta_id: account.id, telefone: phone)
     return if lead.nil?
 
-    OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id)
+    OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id, motivo: 'mensagem_publica_humana')
   end
 
   # Risco §14.1 do plano: só a transição de branco pra presente confirma o envio real -- não
