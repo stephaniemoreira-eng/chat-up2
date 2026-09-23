@@ -236,7 +236,7 @@ RSpec.describe OperationalEngine::TakeoverService do
     end
 
     def events(type)
-      OperationalEngine::LeadEvent.where(lead: lead, event_type: type).order(:event_at, :id)
+      OperationalEngine::LeadEvent.where(lead: lead, event_type: type).order(:event_at)
     end
 
     it '28.19: assumir para a Lavínia na conversa do canal, cancela a abertura autorizada e registra modo/responsável' do
