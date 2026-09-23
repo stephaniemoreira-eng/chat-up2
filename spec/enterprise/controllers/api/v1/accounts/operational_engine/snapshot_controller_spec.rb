@@ -79,7 +79,10 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Snapshot', type: :request 
       # nada que chegou depois do disparador vaza para o turno anterior
       expect(body_primeira['snapshot']['mensagens_recentes_relevantes'].pluck('message_id')).to eq([primeira.id.to_s])
       expect(body_segunda['snapshot']['mensagem_atual']['message_id']).to eq(segunda.id.to_s)
-      expect(body_segunda['snapshot']['mensagens_recentes_relevantes'].pluck('message_id')).to eq([primeira.id.to_s, segunda.id.to_s])
+      # o histórico do segundo turno termina no seu disparador e inclui o anterior (o widget pode ter
+      # criado mensagens próprias no meio -- ex.: coleta de e-mail -- que também são conversa pública)
+      recentes = body_segunda['snapshot']['mensagens_recentes_relevantes'].pluck('message_id')
+      expect(recentes.first(1) + recentes.last(1)).to eq([primeira.id.to_s, segunda.id.to_s])
     end
 
     it 'recusa uma mensagem que não pertence à conversa' do
