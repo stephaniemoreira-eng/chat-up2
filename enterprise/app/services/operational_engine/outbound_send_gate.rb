@@ -23,7 +23,8 @@
 #    -- mensagem automática fora de REPLY_WINDOW desde a última mensagem dele é proativa
 #    (timer/recovery/nudge/reativação) e é bloqueada.
 #
-# Falha fechado: se o Engine (Supabase) não responde, a mensagem automática não sai (§23.3).
+# Falha fechado: se o Engine (Supabase) não responde, ou se o contato tem telefone mas nenhum lead
+# é resolvido, a mensagem automática não sai (§23.3). Contato sem telefone fica fora do Engine.
 module OperationalEngine
   class OutboundSendGate
     class Blocked < StandardError
@@ -37,7 +38,7 @@ module OperationalEngine
 
     # Parâmetros técnicos (não regra de negócio), sobrescrevíveis por ENV.
     def self.reply_window
-      ENV.fetch('UP_SALES_REPLY_WINDOW_MINUTES', '15').to_i.minutes
+      ENV.fetch('UP_SALES_REPLY_WINDOW_MINUTES', '5').to_i.minutes
     end
 
     def self.handoff_reply_window
@@ -62,8 +63,13 @@ module OperationalEngine
     end
 
     def authorize!
+      return yield unless engine_tracked_contact?
+
       lead = find_lead
-      return yield if lead.nil?
+      # Contato com telefone numa conta com Engine e sem lead correspondente não é "fora do Engine":
+      # é identidade não resolvida (ex.: telefone reescrito em outro formato -- RISK-019-02,
+      # IP-01). Sem saber o estado do lead, a mensagem automática não sai.
+      raise_blocked(nil, 'lead_nao_resolvido') if lead.nil?
 
       message = nil
       lead.with_lock do
@@ -72,10 +78,7 @@ module OperationalEngine
         opening = opening?(lead, activation)
 
         reason = blocking_reason(lead, opening)
-        if reason
-          log_block(lead, reason)
-          raise Blocked, reason
-        end
+        raise_blocked(lead, reason) if reason
 
         message = yield
         activation.transition!('consumed', message_id: message.id) if opening && message&.persisted?
@@ -85,11 +88,13 @@ module OperationalEngine
 
     private
 
-    def find_lead
-      phone = @conversation.contact&.phone_number
-      return if phone.blank?
+    # Sem telefone (ex.: web widget) não existe lead possível -- a conversa fica fora do Engine.
+    def engine_tracked_contact?
+      @conversation.contact&.phone_number.present?
+    end
 
-      OperationalEngine::LeadRepository.find_by_telefone(conta_id: @conversation.account_id, telefone: phone)
+    def find_lead
+      OperationalEngine::LeadRepository.find_by_telefone(conta_id: @conversation.account_id, telefone: @conversation.contact.phone_number)
     rescue ActiveRecord::ActiveRecordError => e
       # Engine indisponível: não dá pra saber se o envio é permitido -- não envia.
       Rails.logger.error("[OperationalEngine::OutboundSendGate] engine indisponível: #{e.class}: #{e.message}")
@@ -187,12 +192,10 @@ module OperationalEngine
       @conversation.messages.outgoing.where(sender_type: 'User', private: false).where('created_at >= ?', time).none?
     end
 
-    def log_block(lead, reason)
-      Rails.logger.warn(
-        "[OperationalEngine::OutboundSendGate] bloqueado #{{ account_id: @conversation.account_id,
-                                                             conversation_id: @conversation.id,
-                                                             lead_id: lead.lead_id, reason: reason }.to_json}"
-      )
+    def raise_blocked(lead, reason)
+      payload = { account_id: @conversation.account_id, conversation_id: @conversation.id, lead_id: lead&.lead_id, reason: reason }
+      Rails.logger.warn("[OperationalEngine::OutboundSendGate] bloqueado #{payload.to_json}")
+      raise Blocked, reason
     end
   end
 end

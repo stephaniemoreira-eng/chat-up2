@@ -219,9 +219,19 @@ RSpec.describe OperationalEngine::OutboundSendGate do
     expect_blocked(/engine_indisponivel/)
   end
 
-  it 'conversa sem lead no Engine segue o fluxo nativo' do
+  it 'contato com telefone e sem lead resolvido: falha fechado (RISK-019-02)' do
     contact.update!(phone_number: '+5511988887777')
 
+    expect_blocked(/lead_nao_resolvido/)
+  end
+
+  it 'contato sem telefone (fora do Engine) segue o fluxo nativo' do
+    contact.update!(phone_number: nil)
+
     expect(post_bot_message).to be_persisted
+  end
+
+  it 'a janela de resposta padrão é curta (5 min): lembrete/nudge logo depois não passa por "resposta"' do
+    expect(described_class.reply_window).to eq(5.minutes)
   end
 end
