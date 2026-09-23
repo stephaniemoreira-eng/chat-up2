@@ -2,7 +2,8 @@ require 'rails_helper'
 
 RSpec.describe UpSales::AgentTenant do
   let(:account) { create(:account) }
-  let(:inbox) { create(:inbox, account: account) }
+  # A inbox do dispatcher precisa ser WhatsApp da própria conta (CP-07, P1-027-02).
+  let(:inbox) { create(:channel_whatsapp, account: account, sync_templates: false, validate_provider_config: false).inbox }
 
   describe '#dispatcher_ready?' do
     it 'e falso sem whatsapp_inbox e sem slot sdr' do
@@ -24,7 +25,7 @@ RSpec.describe UpSales::AgentTenant do
       expect(agent_tenant.dispatcher_ready?).to be(false)
     end
 
-    it 'e verdadeiro com whatsapp_inbox e slot sdr com agente configurado' do
+    it 'e verdadeiro com whatsapp_inbox e slot sdr habilitado com agente configurado' do
       agent_tenant = create(:up_sales_agent_tenant, account: account, whatsapp_inbox: inbox)
       create(:up_sales_agent_slot, account: account, up2_agents_agent_id: '77')
 
@@ -36,6 +37,32 @@ RSpec.describe UpSales::AgentTenant do
       create(:up_sales_agent_slot, account: account, agent_type: 'follow_up', up2_agents_agent_id: '99')
 
       expect(agent_tenant.dispatcher_ready?).to be(false)
+    end
+
+    # CP-07 -- P1-027-01: desativar o SDR preserva o id remoto no slot; "tem id" não é "está ativo".
+    it 'e falso com o slot sdr desabilitado mesmo mantendo o up2_agents_agent_id' do
+      agent_tenant = create(:up_sales_agent_tenant, account: account, whatsapp_inbox: inbox)
+      create(:up_sales_agent_slot, account: account, enabled: false, up2_agents_agent_id: '77')
+
+      expect(agent_tenant.dispatcher_ready?).to be(false)
+    end
+
+    it 'volta a ficar pronto ao reabilitar o mesmo slot, sem vinculo paralelo' do
+      agent_tenant = create(:up_sales_agent_tenant, account: account, whatsapp_inbox: inbox)
+      slot = create(:up_sales_agent_slot, account: account, enabled: false, up2_agents_agent_id: '77')
+
+      slot.update!(enabled: true)
+
+      expect(agent_tenant.dispatcher_ready?).to be(true)
+      expect(agent_tenant.prospecting_agent_up2_id).to eq('77')
+    end
+
+    it 'e falso se a inbox gravada por fora nao for WhatsApp da mesma conta' do
+      agent_tenant = create(:up_sales_agent_tenant, account: account)
+      create(:up_sales_agent_slot, account: account, up2_agents_agent_id: '77')
+      agent_tenant.update_column(:whatsapp_inbox_id, create(:inbox, account: account).id) # rubocop:disable Rails/SkipsModelValidations
+
+      expect(agent_tenant.reload.dispatcher_ready?).to be(false)
     end
   end
 
@@ -51,6 +78,45 @@ RSpec.describe UpSales::AgentTenant do
       agent_tenant = create(:up_sales_agent_tenant, account: account)
 
       expect(agent_tenant.prospecting_agent_up2_id).to be_nil
+    end
+
+    it 'e nil quando o slot sdr esta desabilitado (a originacao nunca usa um agente desativado)' do
+      agent_tenant = create(:up_sales_agent_tenant, account: account)
+      create(:up_sales_agent_slot, account: account, enabled: false, up2_agents_agent_id: '123')
+
+      expect(agent_tenant.prospecting_agent_up2_id).to be_nil
+    end
+  end
+
+  # CP-07 -- P1-027-02: a regra vive no backend, não só no dropdown.
+  describe 'validacao de whatsapp_inbox_id' do
+    let(:agent_tenant) { create(:up_sales_agent_tenant, account: account) }
+
+    it 'aceita inbox WhatsApp da mesma conta' do
+      expect(agent_tenant.update(whatsapp_inbox_id: inbox.id)).to be(true)
+    end
+
+    it 'rejeita inbox nao-WhatsApp da mesma conta' do
+      expect(agent_tenant.update(whatsapp_inbox_id: create(:inbox, account: account).id)).to be(false)
+      expect(agent_tenant.errors[:whatsapp_inbox_id]).to include('não é uma inbox WhatsApp')
+    end
+
+    it 'rejeita inbox WhatsApp de outra conta' do
+      other = create(:channel_whatsapp, account: create(:account), sync_templates: false, validate_provider_config: false).inbox
+
+      expect(agent_tenant.update(whatsapp_inbox_id: other.id)).to be(false)
+      expect(agent_tenant.errors[:whatsapp_inbox_id]).to include('pertence a outra conta')
+    end
+
+    it 'rejeita id inexistente de forma explicita' do
+      expect(agent_tenant.update(whatsapp_inbox_id: 0)).to be(false)
+      expect(agent_tenant.errors[:whatsapp_inbox_id]).to include('não existe')
+    end
+
+    it 'aceita limpar a inbox' do
+      agent_tenant.update!(whatsapp_inbox_id: inbox.id)
+
+      expect(agent_tenant.update(whatsapp_inbox_id: nil)).to be(true)
     end
   end
 end
