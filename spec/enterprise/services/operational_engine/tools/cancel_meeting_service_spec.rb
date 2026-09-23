@@ -16,7 +16,7 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
   end
 
   def perform(**overrides)
-    described_class.new(account: account, conversation_id: conversation.id, event_id: 'evt_123', **overrides).call
+    described_class.new(account: account, conversation_id: conversation.display_id, event_id: 'evt_123', **overrides).call
   end
 
   def stub_cancel_event(status: 200)

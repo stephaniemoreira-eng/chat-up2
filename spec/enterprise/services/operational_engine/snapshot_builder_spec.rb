@@ -88,6 +88,8 @@ RSpec.describe OperationalEngine::SnapshotBuilder do
         ultima_interacao_em: lead.ultima_interacao_em.iso8601,
         contexto_execucao: 'conversa'
       },
+      mensagens_recentes_relevantes: [],
+      mensagem_atual: nil,
       source: 'engine'
     )
   end
@@ -103,26 +105,34 @@ RSpec.describe OperationalEngine::SnapshotBuilder do
     expect(snapshot[:continuidade][:ultima_interacao_em]).to be_nil
   end
 
+  # CP-03 (P1-017-02): o contexto vem do DISPARADOR, informado por quem orquestra o turno -- não
+  # é inferido da fotografia do lead. O mesmo estado produz contextos diferentes.
   describe 'contexto_execucao' do
-    it 'é agenda quando o agendamento está em andamento' do
-      lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513992222222', agendamento_status: 'em_andamento')
-
-      expect(perform(lead)[:continuidade][:contexto_execucao]).to eq('agenda')
-    end
-
-    it 'é recuperacao quando a recuperação está ativa e o lead está em contatado' do
-      lead = OperationalEngine::Lead.create!(
-        conta_id: account.id, telefone: '+5513993333333',
-        etapa_prospect: 'contatado', recuperacao_status: 'ativa'
+    let(:lead) do
+      OperationalEngine::Lead.create!(
+        conta_id: account.id, telefone: '+5513992222222',
+        etapa_prospect: 'contatado', recuperacao_status: 'ativa', agendamento_status: 'em_andamento'
       )
-
-      expect(perform(lead)[:continuidade][:contexto_execucao]).to eq('recuperacao')
     end
 
-    it 'é conversa no caso default' do
-      lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513994444444')
+    %w[conversa primeiro_contato recuperacao agenda].each do |contexto|
+      it "reflete o disparador: #{contexto}" do
+        snapshot = described_class.call(lead, trigger: { contexto_execucao: contexto })
 
-      expect(perform(lead)[:continuidade][:contexto_execucao]).to eq('conversa')
+        expect(snapshot[:continuidade][:contexto_execucao]).to eq(contexto)
+      end
+    end
+
+    it 'sem disparador informado é conversa -- nunca "agenda"/"recuperacao" adivinhados do estado' do
+      expect(described_class.call(lead)[:continuidade][:contexto_execucao]).to eq('conversa')
+    end
+
+    it 'carrega a mensagem atual e o histórico recente montados em torno do disparador' do
+      atual = { message_id: '7', texto: 'oi', timestamp: '2026-09-23T10:00:00-03:00' }
+      snapshot = described_class.call(lead, trigger: { mensagem_atual: atual, mensagens_recentes_relevantes: [atual] })
+
+      expect(snapshot[:mensagem_atual]).to eq(atual)
+      expect(snapshot[:mensagens_recentes_relevantes]).to eq([atual])
     end
   end
 end

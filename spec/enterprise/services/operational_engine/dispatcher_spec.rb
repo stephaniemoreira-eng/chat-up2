@@ -142,6 +142,11 @@ RSpec.describe OperationalEngine::Dispatcher do
       expect(activation.status).to eq('authorized')
       expect(activation.lead_id).to eq(lead.lead_id)
       expect(activation.activation_id).to be_present
+      # CP-03 (P1-022-02): a mesma identidade vai para o up2-agents (Snapshot primeiro_contato + turn_id).
+      expect(
+        a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+          .with(body: hash_including('activationId' => activation.activation_id))
+      ).to have_been_made.once
     end
 
     it 'lead elegivel: a abertura sai e consome a ativacao' do

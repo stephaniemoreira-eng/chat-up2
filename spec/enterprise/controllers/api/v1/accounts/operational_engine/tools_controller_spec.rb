@@ -12,7 +12,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   describe 'autenticação (S-5: servidor-a-servidor, sem sessão)' do
     it 'rejeita sem header Authorization' do
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/register_callback",
-           params: { conversation_id: conversation.id }, as: :json
+           params: { conversation_id: conversation.display_id }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
       expect(response.parsed_body).to eq('ok' => false, 'reason' => 'chave inválida')
@@ -20,14 +20,14 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
 
     it 'rejeita com a chave errada' do
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/register_callback",
-           params: { conversation_id: conversation.id }, headers: { 'Authorization' => 'Bearer chave-errada' }, as: :json
+           params: { conversation_id: conversation.display_id }, headers: { 'Authorization' => 'Bearer chave-errada' }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
     end
 
     it 'rejeita quando a conta não existe' do
       post '/api/v1/accounts/999999/operational_engine/tools/register_callback',
-           params: { conversation_id: conversation.id }, headers: valid_headers, as: :json
+           params: { conversation_id: conversation.display_id }, headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:not_found)
     end
@@ -37,14 +37,14 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
       other_tenant = create(:up_sales_agent_tenant, account: other_account)
 
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/register_callback",
-           params: { conversation_id: conversation.id }, headers: { 'Authorization' => "Bearer #{other_tenant.engine_api_key}" }, as: :json
+           params: { conversation_id: conversation.display_id }, headers: { 'Authorization' => "Bearer #{other_tenant.engine_api_key}" }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
     end
 
     it 'aceita com a chave certa' do
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/register_callback",
-           params: { conversation_id: conversation.id }, headers: valid_headers, as: :json
+           params: { conversation_id: conversation.display_id }, headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body).to eq('ok' => true)
@@ -54,7 +54,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   describe 'POST register_callback' do
     it 'reflete o resultado do service' do
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/register_callback",
-           params: { conversation_id: conversation.id }, headers: valid_headers, as: :json
+           params: { conversation_id: conversation.display_id }, headers: valid_headers, as: :json
 
       expect(response.parsed_body).to eq('ok' => true)
       expect(lead.reload.agendamento_status).to eq('callback_registrado')
@@ -82,7 +82,8 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   describe 'POST schedule_meeting' do
     it 'reflete o resultado do service' do
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/schedule_meeting",
-           params: { conversation_id: conversation.id, summary: 'Reunião', start: '2026-09-22T14:00:00-03:00', end: '2026-09-22T14:30:00-03:00' },
+           params: { conversation_id: conversation.display_id, summary: 'Reunião',
+                     start: '2026-09-22T14:00:00-03:00', end: '2026-09-22T14:30:00-03:00' },
            headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -93,7 +94,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   describe 'PATCH schedule_meeting/:event_id' do
     it 'reflete o resultado do service' do
       patch "/api/v1/accounts/#{account.id}/operational_engine/tools/schedule_meeting/evt_123",
-            params: { conversation_id: conversation.id, start: '2026-09-23T15:00:00-03:00' },
+            params: { conversation_id: conversation.display_id, start: '2026-09-23T15:00:00-03:00' },
             headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -104,7 +105,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   describe 'DELETE schedule_meeting/:event_id' do
     it 'reflete o resultado do service' do
       delete "/api/v1/accounts/#{account.id}/operational_engine/tools/schedule_meeting/evt_123",
-             params: { conversation_id: conversation.id },
+             params: { conversation_id: conversation.display_id },
              headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
