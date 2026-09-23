@@ -276,14 +276,16 @@ RSpec.describe OperationalEngine::TakeoverService do
 
     it 'devolver grava modo e responsável com de/para/motivo/executado_por (timeline reconstruível)' do
       described_class.assumir!(lead: lead, user_id: user.id)
-      travel(1.minute)
       described_class.devolver!(lead: lead, user_id: 7)
 
-      modo = events('modo_atendimento_alterado').last.metadata
-      expect(modo).to include('de' => 'humano', 'para' => 'lavinia', 'motivo' => 'devolver', 'executado_por' => 7)
-      expect(events('responsavel_alterado').last.metadata).to include('de' => user.id, 'para' => nil, 'motivo' => 'devolver')
-      expect(events('intervencao_humana_encerrada').last.metadata).to include('responsavel_atual_id' => user.id, 'executado_por' => 7)
-      expect(events('modo_atendimento_alterado').map { |event| event.metadata['para'] }).to eq(%w[humano lavinia])
+      # event_at vem do now() do banco (constante na transação do teste): seleciona pelo motivo.
+      modo = events('modo_atendimento_alterado').find { |event| event.metadata['motivo'] == 'devolver' }.metadata
+      expect(modo).to include('de' => 'humano', 'para' => 'lavinia', 'executado_por' => 7)
+      responsavel = events('responsavel_alterado').find { |event| event.metadata['motivo'] == 'devolver' }.metadata
+      expect(responsavel).to include('de' => user.id, 'para' => nil, 'correlation_id' => modo['correlation_id'])
+      expect(events('intervencao_humana_encerrada').sole.metadata).to include('responsavel_atual_id' => user.id, 'executado_por' => 7)
+      expect(events('modo_atendimento_alterado').map { |event| event.metadata.values_at('de', 'para') })
+        .to contain_exactly(%w[lavinia humano], %w[humano lavinia])
     end
 
     it 'sincronização falha: lead continua humano, responsável mantido, nenhum evento e nada projetado' do
