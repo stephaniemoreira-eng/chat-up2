@@ -117,11 +117,10 @@ RSpec.describe OperationalEngine::OutboundSendGate do
       expect_blocked(/nao_contatar/)
     end
 
-    it 'bloqueia telefone que deixou de ser E.164 válido (CP-02, P1-024-04)' do
+    it 'telefone que deixou de ser E.164 válido torna o lead inelegível para a abertura (CP-02, P1-024-04)' do
       lead.update_column(:telefone, '13991234567') # rubocop:disable Rails/SkipsModelValidations
-      contact.update!(phone_number: '13991234567')
 
-      expect_blocked(/telefone_invalido/)
+      expect(OperationalEngine::OutboundEligibility.origination_blockers(lead.reload)).to include('telefone_invalido')
     end
 
     # CP-02 -- P0-022-01: retry/concorrência da mesma ativação depois de o lead já estar Contatado.

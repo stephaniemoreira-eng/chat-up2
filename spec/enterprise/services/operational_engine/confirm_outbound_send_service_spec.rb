@@ -82,7 +82,8 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
   # CP-02 -- P1-019-01, P1-019-02, P0-019-01, P2-019-01 (SSOT §9, §10.6, §28.1).
   describe 'confirmação operacional completa e recuperável' do
     let!(:lead) do
-      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog')
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog',
+                                      upsales_contact_id: contact.id)
     end
     let(:message) { create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc') }
 
@@ -133,7 +134,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
       allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_call_original
       perform(message)
 
-      expect(Sales::Lead.find_by(operational_lead_id: lead.lead_id)&.stage&.engine_stage_key).to eq('contatado')
+      expect(Sales::Lead.find_by(contact_id: contact.id)&.stage&.engine_stage_key).to eq('contatado')
       expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'primeiro_contato_enviado').count).to eq(1)
     end
   end

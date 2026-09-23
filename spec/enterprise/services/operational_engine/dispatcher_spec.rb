@@ -219,7 +219,8 @@ RSpec.describe OperationalEngine::Dispatcher do
       expect(lead.reload.etapa_prospect).to eq('backlog')
       activation_id = activation_for(lead).activation_id
 
-      travel(OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute) { described_class.call(conta_id: account.id) }
+      travel_to(business_hours + OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute)
+      described_class.call(conta_id: account.id)
 
       expect(a_request(:post, originate_url)).to have_been_made.twice
       expect(Conversation.where(account_id: account.id).count).to eq(1)
@@ -231,7 +232,8 @@ RSpec.describe OperationalEngine::Dispatcher do
       lead = build_lead(telefone: '+5513991234567')
 
       4.times do |tick|
-        travel((OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute) * tick) { described_class.call(conta_id: account.id) }
+        travel_to(business_hours + ((OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute) * tick))
+        described_class.call(conta_id: account.id)
       end
 
       expect(a_request(:post, originate_url)).to have_been_made.times(OperationalEngine::OriginationActivation::MAX_ATTEMPTS)
@@ -279,7 +281,8 @@ RSpec.describe OperationalEngine::Dispatcher do
       described_class.call(conta_id: account.id)
       expect(a_request(:post, originate_url)).to have_been_made.once
 
-      travel(OperationalEngine::DispatchPacing.interval + 1.second) { described_class.call(conta_id: account.id) }
+      travel_to(business_hours + OperationalEngine::DispatchPacing.interval + 1.second)
+      described_class.call(conta_id: account.id)
       expect(a_request(:post, originate_url)).to have_been_made.twice
     end
 
@@ -306,7 +309,8 @@ RSpec.describe OperationalEngine::Dispatcher do
       lead = build_lead(telefone: '+5513991234567')
 
       described_class.call(conta_id: account.id)
-      travel(OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute) { described_class.call(conta_id: account.id) }
+      travel_to(business_hours + OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute)
+      described_class.call(conta_id: account.id)
 
       expect(a_request(:post, originate_url)).to have_been_made.once
       expect(Message.where(account_id: account.id, message_type: 'outgoing').count).to eq(1)
