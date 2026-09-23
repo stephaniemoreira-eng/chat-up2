@@ -58,18 +58,22 @@ module OperationalEngine
 
     # update_columns de propósito: é estado técnico de coordenação, não uma edição da conversa --
     # não deve disparar CONVERSATION_UPDATED, webhooks nem reatribuição. O lock da própria conversa
-    # evita que dois escritores concorrentes se atropelem no merge do jsonb.
+    # evita que dois escritores concorrentes se atropelem no merge do jsonb. Trava uma instância
+    # recém-lida: o objeto recebido pode ter atributos sujos (callbacks de criação, por exemplo), e
+    # o Rails recusa `with_lock` nesse caso.
     def transition!(new_status, **extra)
       raise ArgumentError, "status inválido: #{new_status}" unless STATUSES.include?(new_status)
 
-      conversation.with_lock do
-        current = (conversation.additional_attributes || {}).dup
+      fresh = ::Conversation.find(conversation.id)
+      fresh.with_lock do
+        current = (fresh.additional_attributes || {}).dup
         entry = (current[KEY] || @data).merge('status' => new_status, 'status_at' => Time.current.iso8601(6))
         entry.merge!(extra.transform_keys(&:to_s))
         current[KEY] = entry
-        conversation.update_columns(additional_attributes: current)
+        fresh.update_columns(additional_attributes: current)
         @data = entry
       end
+      @conversation = fresh
       self
     end
   end
