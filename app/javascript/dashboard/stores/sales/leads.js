@@ -105,7 +105,10 @@ export const useSalesLeadsStore = createStore({
     },
 
     registerCallbackRealizado({ id }) {
-      return this.replaceRecord(id, SalesLeadsAPI.registerCallbackRealizado(id));
+      return this.replaceRecord(
+        id,
+        SalesLeadsAPI.registerCallbackRealizado(id)
+      );
     },
 
     registerNoShow({ id }) {
@@ -127,6 +130,18 @@ export const useSalesLeadsStore = createStore({
           motivoPerda,
         })
       );
+    },
+
+    // CP-05 (§8.4/§21.2, §20.3).
+    advanceEtapaComercial({ id, etapaComercial }) {
+      return this.replaceRecord(
+        id,
+        SalesLeadsAPI.advanceEtapaComercial(id, etapaComercial)
+      );
+    },
+
+    removeNoShow({ id }) {
+      return this.replaceRecord(id, SalesLeadsAPI.removeNoShow(id));
     },
 
     // Fase 3 (§21.2) -- Assumir/Devolver.

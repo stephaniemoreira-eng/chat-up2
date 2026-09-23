@@ -289,10 +289,11 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
   end
 
   describe 'acoes humanas do Kanban Comercial (Fase 9, §21.2)' do
+    # CP-05 (P2-025-01): oportunidade Comercial completa (handoff real), não etapa_comercial solta.
     def build_engine_lead(**overrides)
       OperationalEngine::Lead.create!({
         conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id,
-        etapa_comercial: 'oportunidade'
+        **comercial_opportunity_attributes
       }.merge(overrides))
     end
 
@@ -361,7 +362,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
 
     describe 'POST .../register_resultado_comercial' do
       it 'marca a oportunidade como ganho' do
-        engine_lead = build_engine_lead
+        engine_lead = build_engine_lead(etapa_comercial: 'em_acompanhamento')
         lead = synced_sales_lead(engine_lead)
 
         post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
@@ -375,7 +376,7 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       end
 
       it 'marca a oportunidade como perdido com motivo' do
-        engine_lead = build_engine_lead
+        engine_lead = build_engine_lead(etapa_comercial: 'em_acompanhamento')
         lead = synced_sales_lead(engine_lead)
 
         post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
@@ -395,6 +396,126 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
 
         expect(response).to have_http_status(:unprocessable_entity)
         expect(engine_lead.reload.resultado_comercial).to eq('ganho')
+      end
+
+      # CP-05 (P1-025-02): chamada direta fora da sequência §8.4 é recusada no backend.
+      it 'retorna unprocessable_entity ao resolver direto de Oportunidade, sem mexer no Engine' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
+             params: { resultado_comercial: 'ganho' }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['error']).to include('transição Comercial não permitida')
+        expect(engine_lead.reload.resultado_comercial).to eq('em_aberto')
+      end
+    end
+
+    # CP-05 (P1-025-02): guardas de backend -- valem mesmo se o botão não estivesse visível.
+    describe 'contexto Comercial inválido' do
+      it 'recusa no-show/propensão/resultado num lead sem oportunidade Comercial' do
+        engine_lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513991110030', upsales_contact_id: contact.id)
+        comercial = Sales::Pipelines::SeedComercialPipelineService.new(account: account).perform
+        card = create(:sales_lead, account: account, contact: contact, pipeline: comercial, stage: comercial.stages.first,
+                                   operational_lead_id: engine_lead.lead_id)
+
+        %w[register_no_show set_propensao register_resultado_comercial].each do |action|
+          post "/api/v1/accounts/#{account.id}/crm/leads/#{card.id}/#{action}",
+               params: { propensao_fechamento: 'quente', resultado_comercial: 'ganho' }, headers: agent.create_new_auth_token, as: :json
+
+          expect(response).to have_http_status(:unprocessable_entity)
+        end
+        expect(engine_lead.reload.attributes.values_at('no_show_em', 'propensao_fechamento', 'resultado_comercial'))
+          .to eq([nil, 'nao_classificado', 'em_aberto'])
+      end
+
+      it 'o card Prospect do mesmo lead não serve de atalho para ações Comerciais' do
+        engine_lead = build_engine_lead(etapa_comercial: 'em_acompanhamento')
+        OperationalEngine::SalesProjectionSync.call(engine_lead)
+        prospect_card = Sales::Lead.joins(:pipeline).find_by!(operational_lead_id: engine_lead.lead_id,
+                                                              sales_pipelines: { engine_kind: 'prospect' })
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{prospect_card.id}/register_resultado_comercial",
+             params: { resultado_comercial: 'ganho' }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(engine_lead.reload.resultado_comercial).to eq('em_aberto')
+      end
+    end
+
+    # CP-05 (P1-023-03, §21.2): drag num card Comercial gerido pelo Engine vira ação do Engine.
+    describe 'POST .../move num card Comercial gerido pelo Engine' do
+      def stage_for(key)
+        Sales::Pipelines::SeedComercialPipelineService.new(account: account).perform.stages.find_by!(engine_stage_key: key)
+      end
+
+      it 'Oportunidade → Em acompanhamento passa pelo Engine (etapa + evento) antes de mover o card' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/move",
+             params: { sales_stage_id: stage_for('em_acompanhamento').id }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.etapa_comercial).to eq('em_acompanhamento')
+        expect(engine_lead.events.find_by(event_type: 'etapa_alterada')).to be_present
+        expect(lead.reload.sales_stage_id).to eq(stage_for('em_acompanhamento').id)
+      end
+
+      it 'drag para Ganho é recusado e o card não diverge do Engine' do
+        engine_lead = build_engine_lead(etapa_comercial: 'em_acompanhamento')
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/move",
+             params: { sales_stage_id: stage_for('ganho').id }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(engine_lead.reload.etapa_comercial).to eq('em_acompanhamento')
+        expect(lead.reload.sales_stage_id).to eq(stage_for('em_acompanhamento').id)
+      end
+
+      it 'drag num card Prospect gerido pelo Engine é recusado' do
+        engine_lead = build_engine_lead(**confirmed_meeting_attributes)
+        OperationalEngine::SalesProjectionSync.call(engine_lead)
+        prospect_card = Sales::Lead.joins(:pipeline).find_by!(operational_lead_id: engine_lead.lead_id,
+                                                              sales_pipelines: { engine_kind: 'prospect' })
+        qualificado = prospect_card.pipeline.stages.find_by!(engine_stage_key: 'qualificado')
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{prospect_card.id}/move",
+             params: { sales_stage_id: qualificado.id }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(prospect_card.reload.stage.engine_stage_key).to eq('agendado')
+      end
+    end
+
+    describe 'POST .../advance_etapa_comercial' do
+      it 'move a oportunidade para Em acompanhamento pelo Engine' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/advance_etapa_comercial",
+             params: { etapa_comercial: 'em_acompanhamento' }, headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.etapa_comercial).to eq('em_acompanhamento')
+      end
+    end
+
+    # CP-05 (P2-025-03, §20.3).
+    describe 'POST .../remove_no_show' do
+      it 'remove a tag NO-SHOW preservando o evento histórico' do
+        engine_lead = build_engine_lead(etapa_comercial: 'em_acompanhamento')
+        lead = synced_sales_lead(engine_lead)
+        OperationalEngine::RegisterNoShowService.call!(lead: engine_lead, user_id: agent.id)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/remove_no_show",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(response.parsed_body['payload']['custom_attributes']['engine_tags']).not_to include('no_show')
+        expect(engine_lead.events.where(event_type: 'reuniao_no_show').count).to eq(1)
       end
     end
   end

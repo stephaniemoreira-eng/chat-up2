@@ -73,6 +73,17 @@ class SalesLeadsAPI extends ApiClient {
     });
   }
 
+  // CP-05 (§8.4/§21.2, §20.3) -- movimentação Comercial via Engine e remoção manual do NO-SHOW.
+  advanceEtapaComercial(id, etapaComercial) {
+    return axios.post(`${this.url}/${id}/advance_etapa_comercial`, {
+      etapa_comercial: etapaComercial,
+    });
+  }
+
+  removeNoShow(id) {
+    return axios.post(`${this.url}/${id}/remove_no_show`);
+  }
+
   // Fase 3 (§21.2) -- Assumir/Devolver.
   assumir(id) {
     return axios.post(`${this.url}/${id}/assumir`);
