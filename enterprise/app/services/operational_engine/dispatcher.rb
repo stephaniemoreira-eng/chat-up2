@@ -20,8 +20,9 @@
 # 2. `contact_inbox.lock!` (Postgres nativo, dentro de uma transaction própria): protege o risco
 #    real -- o PRÓPRIO dispatcher rodando duas vezes concorrentemente (cron sobrepondo, retry
 #    manual) e criando duas conversas pro mesmo lead. Mesma técnica que
-#    Campaigns::CampaignConversationBuilder já usa. A existência da conversa é o sinal de "já
-#    reivindicado".
+#    Campaigns::CampaignConversationBuilder já usa. CP-02: a conversa é reaproveitada enquanto a
+#    ativação estiver autorizada; quem impede duas chamadas simultâneas é o claim_attempt! (lease)
+#    da OriginationActivation, e quem impede duas aberturas é o OutboundSendGate.
 #
 # Nunca segurar QUALQUER lock durante a chamada de rede pro up2-agents -- ela roda depois dos dois
 # commits, sempre (mesmo raciocínio de SalesProjectionSync ficar fora do with_lock em
@@ -42,11 +43,22 @@ module OperationalEngine
       @conta_id = conta_id
     end
 
+    # CP-02: fila FIFO real (P1-024-02), capacidade contada só pelas originações que de fato
+    # aconteceram neste tick -- leads com ativação em andamento/esgotada/já consumida são pulados
+    # sem ocupar vaga (P1-024-01, sem head-of-line blocking) -- e pacing por inbox antes de cada
+    # abordagem (P1-024-03).
     def call
       return unless agent_tenant&.dispatcher_ready?
 
-      OperationalEngine::BacklogSelector.proximos(conta_id: @conta_id).find_each do |lead|
-        originate(lead)
+      capacidade = OperationalEngine::BacklogCapacity.disponivel(conta_id: @conta_id)
+      return if capacidade.zero?
+
+      originadas = 0
+      OperationalEngine::BacklogSelector.candidatos(conta_id: @conta_id).each do |lead|
+        break if originadas >= capacidade
+        break unless OperationalEngine::DispatchPacing.allows?(inbox_id: agent_tenant.whatsapp_inbox_id)
+
+        originadas += 1 if originate(lead)
       end
     end
 
@@ -58,13 +70,15 @@ module OperationalEngine
       @agent_tenant ||= UpSales::AgentTenant.find_by(account_id: @conta_id)
     end
 
+    # true quando uma chamada de originação foi de fato feita (conta para capacidade e pacing).
     def originate(lead)
-      return unless still_eligible?(lead)
+      return false unless still_eligible?(lead)
 
-      claim = claim_conversation(lead)
-      return unless claim
+      claim = claim_or_resume(lead)
+      return false unless claim&.dig(:activation)&.claim_attempt!
 
       send_opening_message(lead, claim)
+      true
     end
 
     # Lock 1 (Supabase) -- só releitura, nada de escrita nem trabalho nativo aqui dentro. Mesmo
@@ -78,48 +92,67 @@ module OperationalEngine
 
     # Lock 2 (Postgres nativo, conexão própria) -- protege contra o dispatcher rodando duas vezes
     # concorrentemente e criando duas conversas pro mesmo lead.
-    def claim_conversation(lead)
+    #
+    # CP-02 (P1-024-01): conversa existente não é mais "já reivindicado para sempre" -- se ela carrega
+    # uma ativação AINDA autorizada deste lead (tentativa anterior falhou antes da abertura sair), a
+    # mesma ativação é retomada na mesma conversa. Abertura já gravada, ativação invalidada/esgotada
+    # ou conversa sem ativação (histórica, humana) nunca são reoriginadas.
+    def claim_or_resume(lead)
       contact_inbox = ContactInboxWithContactBuilder.new(
         inbox: agent_tenant.whatsapp_inbox,
         contact_attributes: { phone_number: lead.telefone, name: lead.nome.presence || lead.empresa }
       ).perform
 
       result = nil
-
       ActiveRecord::Base.transaction do
         contact_inbox.lock!
-        next if contact_inbox.reload.conversations.present?
+        conversation = contact_inbox.reload.conversations.order(:id).last || create_conversation(contact_inbox, lead)
+        activation = OperationalEngine::OriginationActivation.for(conversation)
+        next unless activation&.authorized? && activation.lead_id == lead.lead_id
 
-        # A autorização desta ativação nasce junto com a conversa (mesma transação): o
-        # OutboundSendGate só aceita a abertura se ela ainda estiver "authorized" e o lead ainda
-        # elegível no instante do post (CP-01, P0-024-01).
-        conversation = ::Conversation.create!(
-          account_id: account.id,
-          inbox_id: contact_inbox.inbox_id,
-          contact_id: contact_inbox.contact_id,
-          contact_inbox_id: contact_inbox.id,
-          additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead)
-        )
-
-        result = { contact_inbox: contact_inbox, conversation: conversation }
+        result = { contact_inbox: contact_inbox, conversation: conversation, activation: activation }
       end
-
       result
+    end
+
+    # A autorização desta ativação nasce junto com a conversa (mesma transação): o OutboundSendGate
+    # só aceita a abertura se ela ainda estiver "authorized" e o lead ainda elegível no instante do
+    # post (CP-01, P0-024-01).
+    def create_conversation(contact_inbox, lead)
+      ::Conversation.create!(
+        account_id: account.id,
+        inbox_id: contact_inbox.inbox_id,
+        contact_id: contact_inbox.contact_id,
+        contact_inbox_id: contact_inbox.id,
+        additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead)
+      )
     end
 
     def send_opening_message(lead, claim)
       UpSales::Agents::OriginateConversationService.new(
         agent_tenant: agent_tenant,
-        conversation: claim[:conversation],
+        conversation: claim[:activation].conversation,
         contact_inbox: claim[:contact_inbox]
       ).perform
     rescue UpSales::Agents::OriginateConversationService::SyncError => e
-      Rails.logger.error("[OperationalEngine::Dispatcher] origination failed for lead #{lead.lead_id}: #{e.message}")
+      record_failure(lead, claim[:activation], e.message)
+    end
+
+    # §28.2: falha mantém o lead em Backlog, sem timestamps de sucesso. CP-02 (P1-024-01/§23.3):
+    # retries limitados e observáveis -- cada tentativa falha vira evento com o número da tentativa;
+    # ao esgotar MAX_ATTEMPTS a ativação vira failed (terminal) e o evento sai marcado para
+    # intervenção humana.
+    def record_failure(lead, activation, motivo)
+      terminal = activation.attempts >= OperationalEngine::OriginationActivation::MAX_ATTEMPTS
+      activation.transition!('failed', motivo: motivo) if terminal
+      Rails.logger.error(
+        "[OperationalEngine::Dispatcher] origination failed for lead #{lead.lead_id} " \
+        "(tentativa #{activation.attempts}#{', terminal' if terminal}): #{motivo}"
+      )
       OperationalEngine::LeadEvent.create!(
-        lead: lead,
-        event_type: 'primeiro_contato_falhou',
-        source: 'system',
-        metadata: { motivo: e.message, correlation_id: SecureRandom.uuid }
+        lead: lead, event_type: 'primeiro_contato_falhou', source: 'system',
+        metadata: { motivo: motivo, tentativa: activation.attempts, terminal: terminal,
+                    activation_id: activation.activation_id, correlation_id: SecureRandom.uuid }
       )
     end
 

@@ -29,8 +29,28 @@ module OperationalEngine
       Sales::Prospecting::PhoneNormalizer.normalize(telefone) || telefone
     end
 
+    # CP-02 (RISK-019-02, confirmado no IP-01): o mesmo celular brasileiro aparece com e sem o
+    # nono dígito, e a camada WhatsApp do próprio fork reescreve o telefone do contato para a forma
+    # que o WhatsApp reporta -- sem isto o lead original "sumia" e um duplicado nascia. Adota a MESMA
+    # definição de equivalência que o fork já usa (BrazilPhoneNormalizer#variants / PhoneMatch), não
+    # uma regra nova. A forma exata tem precedência; a equivalente só é usada se a exata não existe.
     def find(conta_id, normalized_telefone)
-      OperationalEngine::Lead.find_by(conta_id: conta_id, telefone: normalized_telefone)
+      OperationalEngine::Lead.find_by(conta_id: conta_id, telefone: normalized_telefone) ||
+        find_equivalent(conta_id, normalized_telefone)
+    end
+
+    def find_equivalent(conta_id, telefone)
+      equivalents = brazilian_variants(telefone)
+      return if equivalents.empty?
+
+      OperationalEngine::Lead.where(conta_id: conta_id, telefone: equivalents).order(:criado_em).first
+    end
+
+    def brazilian_variants(telefone)
+      digits = telefone.to_s.delete_prefix('+')
+      return [] unless digits.match?(/\A55\d{10,11}\z/)
+
+      Whatsapp::PhoneNormalizers::BrazilPhoneNormalizer.new.variants(digits).map { |variant| "+#{variant}" } - [telefone]
     end
 
     def create(conta_id, telefone, attributes)

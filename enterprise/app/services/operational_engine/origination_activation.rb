@@ -13,10 +13,19 @@
 #   consumed   -> a abertura foi gravada; mensagens seguintes seguem as regras normais do gate
 #   superseded -> o contato falou antes da abertura sair (resposta nova, §23.2)
 #   cancelled  -> invalidada por fato mais novo no Engine (ex.: ativar_nao_contatar)
+#   failed     -> CP-02 (P1-024-01): a originação falhou MAX_ATTEMPTS vezes -- erro terminal visível
+#                 (evento primeiro_contato_falhou com terminal=true), fica para intervenção humana
+#
+# CP-02 (P1-024-01): "conversa existe" deixou de significar "ativação concluída". Enquanto a
+# ativação está authorized, o Dispatcher pode retomá-la na MESMA conversa (sem criar outra) depois
+# de uma falha transitória -- mas só uma chamada por vez (lease de DISPATCH_LEASE) e no máximo
+# MAX_ATTEMPTS vezes. Uma abertura já gravada (consumed) nunca é reoriginada.
 module OperationalEngine
   class OriginationActivation
     KEY = 'up_sales_origination'.freeze
-    STATUSES = %w[authorized consumed superseded cancelled].freeze
+    STATUSES = %w[authorized consumed superseded cancelled failed].freeze
+    MAX_ATTEMPTS = 3
+    DISPATCH_LEASE = 10.minutes
 
     def self.build_attributes(lead)
       {
@@ -55,6 +64,35 @@ module OperationalEngine
     def authorized_at = Time.zone.parse(@data['authorized_at'].to_s)
 
     def authorized? = status == 'authorized'
+    def status_at = @data['status_at'].presence && Time.zone.parse(@data['status_at'])
+    def attempts = @data['attempts'].to_i
+
+    # Pode chamar o up2-agents agora? Autorizada, abaixo do teto de tentativas e sem outra chamada
+    # em andamento (lease).
+    def dispatchable?(now = Time.current)
+      return false unless authorized? && attempts < MAX_ATTEMPTS
+
+      last = @data['last_attempt_at'].presence && Time.zone.parse(@data['last_attempt_at'])
+      last.nil? || last <= now - DISPATCH_LEASE
+    end
+
+    # Reivindica a próxima tentativa sob o lock da conversa -- dois dispatchers concorrentes não
+    # chamam o up2-agents juntos para a mesma ativação.
+    def claim_attempt!(now = Time.current)
+      claimed = false
+      fresh = ::Conversation.find(conversation.id)
+      fresh.with_lock do
+        entry = fresh.additional_attributes&.dig(KEY)
+        next unless entry && self.class.new(fresh, entry).dispatchable?(now)
+
+        entry = entry.merge('attempts' => entry['attempts'].to_i + 1, 'last_attempt_at' => now.iso8601(6))
+        fresh.update_columns(additional_attributes: fresh.additional_attributes.merge(KEY => entry)) # rubocop:disable Rails/SkipsModelValidations
+        @data = entry
+        claimed = true
+      end
+      @conversation = fresh
+      claimed
+    end
 
     # update_columns de propósito: é estado técnico de coordenação, não uma edição da conversa --
     # não deve disparar CONVERSATION_UPDATED, webhooks nem reatribuição. O lock da própria conversa
@@ -70,7 +108,7 @@ module OperationalEngine
         entry = (current[KEY] || @data).merge('status' => new_status, 'status_at' => Time.current.iso8601(6))
         entry.merge!(extra.transform_keys(&:to_s))
         current[KEY] = entry
-        fresh.update_columns(additional_attributes: current)
+        fresh.update_columns(additional_attributes: current) # rubocop:disable Rails/SkipsModelValidations
         @data = entry
       end
       @conversation = fresh

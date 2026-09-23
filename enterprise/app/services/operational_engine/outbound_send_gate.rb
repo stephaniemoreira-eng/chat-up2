@@ -45,6 +45,12 @@ module OperationalEngine
       ENV.fetch('UP_SALES_HANDOFF_REPLY_WINDOW_SECONDS', '120').to_i.seconds
     end
 
+    # CP-02 (P0-022-01): quanto tempo depois de gravada a abertura ainda aceita balões da MESMA
+    # abertura (split humanizado do up2-agents). Técnico, não regra de negócio.
+    def self.opening_run_window
+      ENV.fetch('UP_SALES_OPENING_RUN_WINDOW_SECONDS', '120').to_i.seconds
+    end
+
     def self.applies?(conversation:, sender:, params:)
       return false unless sender.is_a?(::AgentBot)
       return false if ActiveModel::Type::Boolean.new.cast(params[:private])
@@ -77,7 +83,7 @@ module OperationalEngine
         activation = OperationalEngine::OriginationActivation.for(@conversation)
         opening = opening?(lead, activation)
 
-        reason = blocking_reason(lead, opening)
+        reason = blocking_reason(lead, opening, activation)
         raise_blocked(lead, reason) if reason
 
         message = yield
@@ -112,12 +118,28 @@ module OperationalEngine
       false
     end
 
-    def blocking_reason(lead, opening)
+    def blocking_reason(lead, opening, activation)
       return 'atendimento_humano' if human_block?(lead)
       return opening_blocking_reason(lead) if opening
+      # Abertura já gravada e contato ainda sem responder: balões da mesma abertura passam (dentro da
+      # janela), reenvio não (CP-02) -- e as proteções proativas continuam valendo nos dois casos.
+      return duplicate_opening_reason(activation) || proactive_blocking_reason(lead) if opening_run?(activation)
       return 'primeira_abordagem_sem_autorizacao' if unauthorized_opening?(lead)
 
       proactive_blocking_reason(lead)
+    end
+
+    def opening_run?(activation)
+      activation&.status == 'consumed' && !contact_spoke?
+    end
+
+    # CP-02 (P0-022-01; §10.5 "uma única mensagem", §23.1): a abertura desta ativação já foi gravada e
+    # o contato ainda não respondeu -- qualquer mensagem automática nova fora da janela da própria
+    # abertura é um reenvio (retry/timeout/concorrência), não conversa. Recovery (Fase 7) terá a sua
+    # própria autorização.
+    def duplicate_opening_reason(activation)
+      consumed_at = activation.status_at
+      'abertura_ja_enviada' if consumed_at.nil? || consumed_at < self.class.opening_run_window.ago
     end
 
     def human_block?(lead)

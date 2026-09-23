@@ -13,6 +13,9 @@ module OperationalEngine
       UpSales::AgentTenant.where.not(whatsapp_inbox_id: nil).find_each do |agent_tenant|
         next unless agent_tenant.dispatcher_ready?
 
+        # CP-02 (P0-019-01): antes de abordar alguém novo, recupera confirmações de envio perdidas --
+        # um lead já contatado não pode continuar parecendo Backlog elegível.
+        OperationalEngine::OutboundConfirmationReconciler.call(account_id: agent_tenant.account_id)
         OperationalEngine::Dispatcher.call(conta_id: agent_tenant.account_id)
       rescue StandardError => e
         Rails.logger.error("[OperationalEngine::DispatcherJob] account #{agent_tenant.account_id}: #{e.message}")
