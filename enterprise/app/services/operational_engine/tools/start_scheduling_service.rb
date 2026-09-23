@@ -35,12 +35,12 @@ module OperationalEngine
 
           OperationalEngine::QualificationService.qualificar!(lead, source: 'lavinia')
           start_scheduling!(lead)
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'agendamento_iniciado')
           { ok: true }
         end
         return result unless result[:ok]
 
-        OperationalEngine::SalesProjectionSync.call(lead)
-        OperationalEngine::ComercialProjectionSync.call(lead)
+        OperationalEngine::ProjectionReconciler.flush(lead)
         result
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }

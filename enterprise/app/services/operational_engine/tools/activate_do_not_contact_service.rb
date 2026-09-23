@@ -33,11 +33,11 @@ module OperationalEngine
           lead.update!(nao_contatar: true, lead_status: 'encerrado', motivo_encerramento: 'nao_contatar', **AUTOMACAO_ENCERRADA)
           OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'nao_contatar_ativado', source: 'lavinia',
                                                 metadata: { correlation_id: SecureRandom.uuid })
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'nao_contatar_ativado')
         end
 
         cancel_pending_activations(lead)
-        OperationalEngine::SalesProjectionSync.call(lead)
-        OperationalEngine::ComercialProjectionSync.call(lead)
+        OperationalEngine::ProjectionReconciler.flush(lead)
         { ok: true }
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }

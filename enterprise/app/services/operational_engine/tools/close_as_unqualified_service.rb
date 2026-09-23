@@ -24,12 +24,12 @@ module OperationalEngine
           lead.update!(lead_status: 'encerrado', motivo_encerramento: 'nao_qualificado', qualificacao_status: 'nao_qualificado')
           OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'encerrado_nao_qualificado', source: 'lavinia',
                                                 metadata: { correlation_id: SecureRandom.uuid })
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'encerrado_nao_qualificado')
           { ok: true }
         end
         return result unless result[:ok]
 
-        OperationalEngine::SalesProjectionSync.call(lead)
-        OperationalEngine::ComercialProjectionSync.call(lead)
+        OperationalEngine::ProjectionReconciler.flush(lead)
         result
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }
