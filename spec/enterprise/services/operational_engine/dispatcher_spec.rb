@@ -238,8 +238,9 @@ RSpec.describe OperationalEngine::Dispatcher do
 
       expect(a_request(:post, originate_url)).to have_been_made.times(OperationalEngine::OriginationActivation::MAX_ATTEMPTS)
       expect(activation_for(lead).status).to eq('failed')
-      terminal = lead.events.where(event_type: 'primeiro_contato_falhou').order(:event_at).last
-      expect(terminal.metadata).to include('terminal' => true, 'tentativa' => OperationalEngine::OriginationActivation::MAX_ATTEMPTS)
+      falhas = lead.events.where(event_type: 'primeiro_contato_falhou').map(&:metadata)
+      expect(falhas.pluck('tentativa')).to contain_exactly(1, 2, OperationalEngine::OriginationActivation::MAX_ATTEMPTS)
+      expect(falhas.select { |m| m['terminal'] }.pluck('tentativa')).to eq([OperationalEngine::OriginationActivation::MAX_ATTEMPTS])
     end
 
     describe 'com pacing desligado' do
