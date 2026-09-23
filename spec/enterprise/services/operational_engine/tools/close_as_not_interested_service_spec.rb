@@ -36,7 +36,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
   end
 
   it 'recusa quando já existe um agendamento confirmado' do
-    lead.update!(agendamento_status: 'confirmado')
+    lead.update!(confirmed_meeting_attributes)
 
     expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
     expect(lead.reload.lead_status).to eq('ativo')
@@ -52,7 +52,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
   # CP-01 -- P1-018-05: estado mais novo vence a ação antiga que esperava o lock.
   describe 'corrida com fato mais novo' do
     it 'reunião confirmada enquanto a ação esperava: não encerra' do
-      persist_newer_fact_before_lock(agendamento_status: 'confirmado')
+      persist_newer_fact_before_lock(**confirmed_meeting_attributes)
 
       expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
       expect(lead.reload.lead_status).to eq('ativo')

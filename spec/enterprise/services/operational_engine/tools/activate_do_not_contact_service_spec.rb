@@ -29,7 +29,7 @@ RSpec.describe OperationalEngine::Tools::ActivateDoNotContactService do
   end
 
   it 'vale mesmo com um agendamento confirmado -- não tem guarda de estado' do
-    lead.update!(agendamento_status: 'confirmado')
+    lead.update!(confirmed_meeting_attributes)
 
     expect(perform).to eq(ok: true)
     expect(lead.reload.nao_contatar).to eq(true)

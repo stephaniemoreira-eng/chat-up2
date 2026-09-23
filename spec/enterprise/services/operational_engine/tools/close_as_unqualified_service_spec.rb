@@ -29,7 +29,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsUnqualifiedService do
   end
 
   it 'recusa quando já existe um agendamento confirmado' do
-    lead.update!(agendamento_status: 'confirmado')
+    lead.update!(confirmed_meeting_attributes)
 
     expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
     expect(lead.reload.lead_status).to eq('ativo')
@@ -45,7 +45,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsUnqualifiedService do
   # CP-01 -- P1-018-05.
   describe 'corrida com fato mais novo' do
     it 'reunião confirmada enquanto a ação esperava: não encerra nem mexe na qualificação' do
-      persist_newer_fact_before_lock(agendamento_status: 'confirmado')
+      persist_newer_fact_before_lock(**confirmed_meeting_attributes)
 
       expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
       lead.reload

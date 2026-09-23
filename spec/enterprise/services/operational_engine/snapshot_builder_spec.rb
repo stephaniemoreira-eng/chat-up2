@@ -22,7 +22,7 @@ RSpec.describe OperationalEngine::SnapshotBuilder do
       inbox_atual_id: 43,
       qualificacao_status: 'em_qualificacao',
       orcamento_status: 'informado',
-      agendamento_status: 'confirmado',
+      agendamento_status: 'nao_iniciado', # CP-04 (P2-017-01): confirmado exige Calendar real
       recuperacao_status: 'inativa',
       frente_operacional: 'comercial',
       modo_atendimento: 'lavinia',
@@ -63,7 +63,7 @@ RSpec.describe OperationalEngine::SnapshotBuilder do
         etapa_prospect: 'backlog',
         qualificacao_status: 'em_qualificacao',
         orcamento_status: 'informado',
-        agendamento_status: 'confirmado',
+        agendamento_status: 'nao_iniciado',
         recuperacao_status: 'inativa',
         frente_operacional: 'comercial',
         modo_atendimento: 'lavinia',
