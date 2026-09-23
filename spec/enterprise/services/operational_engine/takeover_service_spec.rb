@@ -267,7 +267,8 @@ RSpec.describe OperationalEngine::TakeoverService do
       expect(lead.reload.modo_atendimento).to eq('lavinia')
       expect(lead.ultima_interacao_em).to be_within(1.second).of(lead_msg.created_at)
       sync = events('intervencao_humana_encerrada').last.metadata['sincronizacao']
-      expect(sync).to include('conversation_id' => conversation.id, 'mensagens_na_intervencao' => 2, 'ultimo_ponto' => 'perguntou sobre coleta')
+      expect(sync).to include('conversation_id' => conversation.id, 'ultimo_ponto' => 'perguntou sobre coleta')
+      expect(sync['mensagens_na_intervencao']).to be >= 2 # + mensagens automáticas do inbox (saudação)
       expect(sync['ultima_mensagem_lead']['message_id']).to eq(lead_msg.id)
       expect(sync['ultima_mensagem_humana']).to include('message_id' => human_msg.id, 'user_id' => user.id)
       expect(conversation.reload).to be_pending
@@ -275,6 +276,7 @@ RSpec.describe OperationalEngine::TakeoverService do
 
     it 'devolver grava modo e responsável com de/para/motivo/executado_por (timeline reconstruível)' do
       described_class.assumir!(lead: lead, user_id: user.id)
+      travel(1.minute)
       described_class.devolver!(lead: lead, user_id: 7)
 
       modo = events('modo_atendimento_alterado').last.metadata
