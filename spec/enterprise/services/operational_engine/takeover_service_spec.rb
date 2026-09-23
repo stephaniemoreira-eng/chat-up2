@@ -146,6 +146,73 @@ RSpec.describe OperationalEngine::TakeoverService do
     end
   end
 
+  # CP-05 -- P1-026-02 (SSOT §3.2, §23.3, §28.40): falha de projeção depois da transição não deixa o
+  # card stale -- retry/no-op do próprio endpoint (ou o reconciliador) converge, sem duplicar evento.
+  describe 'reconciliacao da projecao (P1-026-02)' do
+    let(:account) { create(:account) }
+    let(:contact) { create(:contact, account: account) }
+
+    def prospect_tags(lead)
+      Sales::Lead.joins(:pipeline).find_by!(operational_lead_id: lead.lead_id, sales_pipelines: { engine_kind: 'prospect' })
+                 .custom_attributes['engine_tags']
+    end
+
+    def break_projection!
+      allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_raise(ActiveRecord::StatementInvalid, 'banco nativo fora')
+    end
+
+    def heal_projection!
+      allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_call_original
+    end
+
+    it 'assumir: projeção falha, repetir Assumir (no-op) converge o card para HUMANO sem duplicar a intervenção' do
+      lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513991110020', upsales_contact_id: contact.id)
+      OperationalEngine::SalesProjectionSync.call(lead)
+      break_projection!
+
+      expect { described_class.assumir!(lead: lead, user_id: 42) }.not_to raise_error
+      expect(lead.reload.modo_atendimento).to eq('humano')
+      expect(OperationalEngine::ProjectionRequest.find(lead.lead_id)).to be_status_pendente
+
+      heal_projection!
+      described_class.assumir!(lead: lead, user_id: 42)
+
+      expect(prospect_tags(lead)).to eq(['humano'])
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'intervencao_humana_iniciada').count).to eq(1)
+      expect(OperationalEngine::ProjectionRequest.find(lead.lead_id)).to be_status_sincronizado
+    end
+
+    it 'devolver: projeção falha, o reconciliador converge o card para LAVÍNIA sem duplicar o evento' do
+      lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513991110021', upsales_contact_id: contact.id,
+                                             modo_atendimento: 'humano', responsavel_atual_id: 42)
+      OperationalEngine::SalesProjectionSync.call(lead)
+      break_projection!
+      described_class.devolver!(lead: lead)
+
+      heal_projection!
+      travel(5.minutes) { OperationalEngine::ProjectionReconcileJob.perform_now }
+
+      expect(prospect_tags(lead)).to eq(['lavinia'])
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'intervencao_humana_encerrada').count).to eq(1)
+    end
+  end
+
+  # CP-05 -- P1-018-01: o handoff real pode deixar o responsável Comercial pendente (lacuna do SSOT);
+  # Assumir preenche o responsável (§18.2) sem abrir uma segunda intervenção.
+  describe 'assumir um lead com responsável pendente do handoff' do
+    it 'grava o usuário como responsável e registra responsavel_alterado' do
+      lead = build_lead(modo_atendimento: 'humano', responsavel_atual_id: nil, frente_operacional: 'comercial',
+                        etapa_comercial: 'oportunidade', motivo_handoff: 'avanco_comercial')
+
+      described_class.assumir!(lead: lead, user_id: 42)
+
+      expect(lead.reload.responsavel_atual_id).to eq(42)
+      event = OperationalEngine::LeadEvent.find_by(lead: lead, event_type: 'responsavel_alterado')
+      expect(event.metadata).to include('de' => nil, 'para' => 42)
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'intervencao_humana_iniciada')).to be_empty
+    end
+  end
+
   describe 'concorrencia (teste 28.23)' do
     # Prova o mecanismo (row lock via with_lock), não a corrida em si: um teste com Threads reais
     # contra o pool de conexões de teste é flaky por natureza (timing, tamanho do pool) e não há
