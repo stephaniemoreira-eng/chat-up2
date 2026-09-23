@@ -92,6 +92,8 @@ module OperationalEngine
       lead = OperationalEngine::Lead.find(@lead_id)
       OperationalEngine::SalesProjectionSync.call(lead)
       OperationalEngine::ComercialProjectionSync.call(lead)
+      # CP-06: o modo também é projetado na conversa do canal (quem a Lavínia atende no up2-agents).
+      OperationalEngine::ConversationModeProjection.call(lead)
       mark_synced(pending)
       :sincronizado
     rescue StandardError => e
