@@ -27,6 +27,11 @@
 # commits, sempre (mesmo raciocínio de SalesProjectionSync ficar fora do with_lock em
 # TakeoverService: seria só "segurar mais tempo" sem ganhar atomicidade nenhuma, já que são bancos/
 # conexões diferentes).
+#
+# CP-01 (P0-024-01): por isso mesmo `still_eligible?` NÃO é a autorização de envio -- entre ele e o
+# post existem claim, geração no LLM e rede. A autorização final é do OutboundSendGate, que relê o
+# lead sob o mesmo lock no momento em que a mensagem de abertura é gravada e confere a ativação
+# (OriginationActivation) que este serviço grava na conversa reivindicada.
 module OperationalEngine
   class Dispatcher
     def self.call(conta_id:)
@@ -62,10 +67,12 @@ module OperationalEngine
       send_opening_message(lead, claim)
     end
 
-    # Lock 1 (Supabase) -- só releitura, nada de escrita nem trabalho nativo aqui dentro.
+    # Lock 1 (Supabase) -- só releitura, nada de escrita nem trabalho nativo aqui dentro. Mesmo
+    # predicado do OutboundSendGate (CP-01): este filtro só evita trabalho inútil; a autorização que
+    # vale é a do gate, no instante do post, porque entre aqui e lá ainda há claim + LLM + rede.
     def still_eligible?(lead)
       lead.with_lock do
-        lead.etapa_prospect_backlog? && lead.modo_atendimento_lavinia? && !lead.nao_contatar?
+        OperationalEngine::OutboundEligibility.origination_blockers(lead).empty?
       end
     end
 
@@ -83,11 +90,15 @@ module OperationalEngine
         contact_inbox.lock!
         next if contact_inbox.reload.conversations.present?
 
+        # A autorização desta ativação nasce junto com a conversa (mesma transação): o
+        # OutboundSendGate só aceita a abertura se ela ainda estiver "authorized" e o lead ainda
+        # elegível no instante do post (CP-01, P0-024-01).
         conversation = ::Conversation.create!(
           account_id: account.id,
           inbox_id: contact_inbox.inbox_id,
           contact_id: contact_inbox.contact_id,
-          contact_inbox_id: contact_inbox.id
+          contact_inbox_id: contact_inbox.id,
+          additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead)
         )
 
         result = { contact_inbox: contact_inbox, conversation: conversation }

@@ -48,4 +48,22 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
 
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'encerrado_sem_interesse').count).to eq(1)
   end
+
+  # CP-01 -- P1-018-05: estado mais novo vence a ação antiga que esperava o lock.
+  describe 'corrida com fato mais novo' do
+    it 'reunião confirmada enquanto a ação esperava: não encerra' do
+      persist_newer_fact_before_lock(agendamento_status: 'confirmado')
+
+      expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
+      expect(lead.reload.lead_status).to eq('ativo')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'encerrado_sem_interesse')).to be_empty
+    end
+
+    it 'humano assumiu enquanto a ação esperava: a Lavínia não altera o estado' do
+      persist_newer_fact_before_lock(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+      expect(lead.reload.lead_status).to eq('ativo')
+    end
+  end
 end
