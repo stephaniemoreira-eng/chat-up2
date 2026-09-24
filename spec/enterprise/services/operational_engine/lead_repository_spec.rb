@@ -56,4 +56,34 @@ RSpec.describe OperationalEngine::LeadRepository do
       expect(found&.lead_id).to eq(lead.lead_id)
     end
   end
+
+  # CP-02 -- RISK-019-02 (confirmado no IP-01): nono dígito brasileiro.
+  describe 'celular brasileiro com e sem o nono dígito' do
+    it 'acha o lead original quando o contato foi reescrito para a forma sem o nono dígito' do
+      lead = described_class.find_or_create_by_telefone(conta_id: 1, telefone: '+5513991234567')
+
+      expect(described_class.find_by_telefone(conta_id: 1, telefone: '+551391234567')).to eq(lead)
+    end
+
+    it 'não cria um lead duplicado a partir da forma equivalente' do
+      described_class.find_or_create_by_telefone(conta_id: 1, telefone: '+5513991234567')
+
+      expect { described_class.find_or_create_by_telefone(conta_id: 1, telefone: '+551391234567') }
+        .not_to change(OperationalEngine::Lead, :count)
+    end
+
+    it 'a forma exata tem precedência quando as duas já existem' do
+      com_nove = OperationalEngine::Lead.create!(conta_id: 1, telefone: '+5513991234567')
+      sem_nove = OperationalEngine::Lead.create!(conta_id: 1, telefone: '+551391234567')
+
+      expect(described_class.find_by_telefone(conta_id: 1, telefone: '+551391234567')).to eq(sem_nove)
+      expect(described_class.find_by_telefone(conta_id: 1, telefone: '+5513991234567')).to eq(com_nove)
+    end
+
+    it 'fixo (começa com 2-5) não vira celular equivalente' do
+      OperationalEngine::Lead.create!(conta_id: 1, telefone: '+551332345678')
+
+      expect(described_class.find_by_telefone(conta_id: 1, telefone: '+5513932345678')).to be_nil
+    end
+  end
 end

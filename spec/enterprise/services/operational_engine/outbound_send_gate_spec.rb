@@ -117,6 +117,39 @@ RSpec.describe OperationalEngine::OutboundSendGate do
       expect_blocked(/nao_contatar/)
     end
 
+    it 'telefone que deixou de ser E.164 válido torna o lead inelegível para a abertura (CP-02, P1-024-04)' do
+      lead.update_column(:telefone, '13991234567') # rubocop:disable Rails/SkipsModelValidations
+
+      expect(OperationalEngine::OutboundEligibility.origination_blockers(lead.reload)).to include('telefone_invalido')
+    end
+
+    # CP-02 -- P0-022-01: retry/concorrência da mesma ativação depois de o lead já estar Contatado.
+    it 'abertura já gravada e contato sem responder: nova mensagem automática fora da janela é bloqueada' do
+      post_bot_message
+      lead.update!(etapa_prospect: 'contatado', primeiro_contato_em: Time.current)
+
+      travel(described_class.opening_run_window + 1.second) do
+        expect { post_bot_message(content: 'Oi de novo!') }
+          .to raise_error(described_class::Blocked) { |e| expect(e.reason).to eq('abertura_ja_enviada') }
+      end
+      expect(conversation.messages.outgoing.where(sender: agent_bot).count).to eq(1)
+    end
+
+    it 'balão seguinte da mesma abertura (split) dentro da janela ainda passa, mesmo antes da confirmação' do
+      post_bot_message
+
+      expect(post_bot_message(content: 'Posso te fazer uma pergunta rápida?')).to be_persisted
+      expect(lead.reload.etapa_prospect).to eq('backlog')
+    end
+
+    it 'opt-out entre dois balões da abertura bloqueia o segundo' do
+      post_bot_message
+      lead.update!(nao_contatar: true)
+
+      expect { post_bot_message(content: 'segundo balão') }
+        .to raise_error(described_class::Blocked) { |e| expect(e.reason).to match(/nao_contatar/) }
+    end
+
     it 'sem ativação válida e sem mensagem do contato, lead em Backlog não recebe abertura' do
       activation.transition!('cancelled', motivo: 'nao_contatar')
 

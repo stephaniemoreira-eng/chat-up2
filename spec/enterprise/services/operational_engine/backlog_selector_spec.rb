@@ -76,4 +76,31 @@ RSpec.describe OperationalEngine::BacklogSelector do
       expect(proximos).to be_empty
     end
   end
+
+  # CP-02 -- P1-024-04 (§10.2) e P1-024-02 (§10.3).
+  describe 'elegibilidade completa e fila real' do
+    it 'exclui telefone que não está normalizado em E.164' do
+      invalido = build_lead
+      invalido.update_column(:telefone, '13 99123-4567') # rubocop:disable Rails/SkipsModelValidations
+
+      expect(proximos.to_a).not_to include(invalido)
+    end
+
+    it 'exclui lead que já tem primeira abordagem confirmada no ciclo' do
+      ja_abordado = build_lead(primeiro_contato_em: 1.day.ago)
+
+      expect(proximos.to_a).not_to include(ja_abordado)
+    end
+
+    it 'candidatos seguem FIFO estrito com desempate estável, independente da ordem das PKs' do
+      mesmo_instante = 4.hours.ago
+      novo = build_lead(etapa_entrou_em: 1.hour.ago)
+      antigo_b = build_lead(etapa_entrou_em: mesmo_instante)
+      antigo_a = build_lead(etapa_entrou_em: mesmo_instante)
+      mais_antigo = build_lead(etapa_entrou_em: 6.hours.ago)
+
+      empatados = [antigo_a, antigo_b].sort_by(&:lead_id)
+      expect(described_class.candidatos(conta_id: 1)).to eq([mais_antigo, *empatados, novo])
+    end
+  end
 end
