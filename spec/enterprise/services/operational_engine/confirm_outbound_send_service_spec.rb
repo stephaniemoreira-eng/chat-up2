@@ -127,9 +127,11 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     end
 
     it 'falha só na projeção: o retry repara o CRM sem recriar o evento de negócio' do
+      # CP-08: a projeção agora é durável (ProjectionReconciler) -- a falha não sobe para o listener.
       allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_raise('CRM fora')
-      expect { perform(message) }.to raise_error('CRM fora')
+      expect { perform(message) }.not_to raise_error
       expect(lead.reload.primeiro_contato_em).to be_present
+      expect(OperationalEngine::ProjectionRequest.find(lead.lead_id)).to be_status_pendente
 
       allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_call_original
       perform(message)
