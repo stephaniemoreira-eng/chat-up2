@@ -55,8 +55,11 @@ module OperationalEngine
                      .conversation(account: @account, conversation_id: @conversation_id)&.contact_id
         return if contact_id.blank?
 
-        OperationalEngine::OriginationActivation.pending_for_contact(account_id: @account.id, contact_id: contact_id).each do |activation|
-          activation.transition!('cancelled', motivo: 'nao_contatar') if activation.lead_id == lead.lead_id
+        # CP-13 (P1-VAL-12, §19.2/28.25): tentativa de recovery autorizada também é cancelada.
+        [OperationalEngine::OriginationActivation, OperationalEngine::RecoveryActivation].each do |klass|
+          klass.pending_for_contact(account_id: @account.id, contact_id: contact_id).each do |activation|
+            activation.transition!('cancelled', motivo: 'nao_contatar') if activation.lead_id == lead.lead_id
+          end
         end
       end
     end

@@ -21,12 +21,27 @@ module OperationalEngine
       last.nil? || last <= now - interval
     end
 
-    # A tentativa mais recente de originação nesta inbox (qualquer ativação, em qualquer estado).
+    # A tentativa automática mais recente nesta inbox (qualquer ativação, em qualquer estado).
+    #
+    # CP-13 (P1-VAL-12; SSOT §15.6 "uma fila operacional de saída" coordenando primeira abordagem E
+    # recovery WhatsApp): conta também as tentativas de recovery (RecoveryActivation) da inbox --
+    # abertura e recovery disputam o mesmo espaçamento, nunca saem juntas. A conversa de recovery pode
+    # ser antiga (criada há mais de LOOKBACK), então o recorte dela é pela última atividade.
     def self.last_attempt_at(inbox_id)
-      key = OperationalEngine::OriginationActivation::KEY
-      value = ::Conversation.where(inbox_id: inbox_id, created_at: LOOKBACK.ago..)
-                            .maximum(Arel.sql("(additional_attributes -> '#{key}' ->> 'last_attempt_at')::timestamptz"))
-      value&.in_time_zone
+      [origination_attempt_at(inbox_id), recovery_attempt_at(inbox_id)].compact.map(&:in_time_zone).max
     end
+
+    def self.origination_attempt_at(inbox_id)
+      ::Conversation.where(inbox_id: inbox_id, created_at: LOOKBACK.ago..).maximum(attempt_sql(OperationalEngine::OriginationActivation::KEY))
+    end
+
+    def self.recovery_attempt_at(inbox_id)
+      ::Conversation.where(inbox_id: inbox_id, last_activity_at: LOOKBACK.ago..).maximum(attempt_sql(OperationalEngine::RecoveryActivation::KEY))
+    end
+
+    def self.attempt_sql(key)
+      Arel.sql("(additional_attributes -> '#{key}' ->> 'last_attempt_at')::timestamptz")
+    end
+    private_class_method :origination_attempt_at, :recovery_attempt_at, :attempt_sql
   end
 end

@@ -279,8 +279,8 @@ RSpec.describe OperationalEngine::OutboundSendGate do
       incoming!(at: 2.hours.ago)
     end
 
-    def post_scheduled(created_at)
-      params = { content_attributes: { up2_automation: { kind: 'FOLLOWUP', job_id: 'job-1', created_at: created_at } } }
+    def post_scheduled(created_at, kind: 'APPOINTMENT_REMINDER')
+      params = { content_attributes: { up2_automation: { kind: kind, job_id: 'job-1', created_at: created_at } } }
       described_class.authorize!(conversation: conversation, params: params) do
         create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
                          sender: agent_bot, content: 'Oi, conseguiu ver a proposta?')
@@ -331,6 +331,98 @@ RSpec.describe OperationalEngine::OutboundSendGate do
       OperationalEngine::TakeoverService.devolver!(lead: lead, user_id: user.id)
 
       expect(post_bot_message).to be_persisted
+    end
+
+    # CP-13 (P1-VAL-12): numa conta com Engine, a recovery do SSOT é a única automação de
+    # reengajamento -- o follow-up nativo do up2-agents não fala por fora do ciclo do Engine.
+    it 'follow-up nativo (FOLLOWUP), redirect e tipo desconhecido são recusados; lembrete de reunião passa' do
+      %w[FOLLOWUP REDIRECT_FOLLOWUP REDIRECT_CLOSING QUALQUER_COISA].each do |kind|
+        expect { post_scheduled(Time.current.iso8601, kind: kind) }.to raise_error(described_class::Blocked) do |e|
+          expect(e.reason).to eq('automacao_fora_do_ciclo_do_engine')
+        end
+      end
+      expect(conversation.messages.outgoing.where(sender: agent_bot)).to be_empty
+
+      expect(post_scheduled(Time.current.iso8601)).to be_persisted
+    end
+  end
+
+  # CP-13 -- P1-VAL-12 (SSOT §15.6-§15.8, 28.4, 28.23, 28.25): post de recovery só com a autorização
+  # do Engine e passando de novo pela revalidação completa, no instante do post.
+  describe 'recovery (carimbo RECUPERACAO + RecoveryActivation)' do
+    let(:zone) { Time.find_zone('America/Sao_Paulo') }
+    let(:whatsapp_inbox) { create(:channel_whatsapp, account: account, sync_templates: false, validate_provider_config: false).inbox }
+    let(:inbox) { whatsapp_inbox }
+    let(:recovery) { OperationalEngine::RecoveryActivation.write!(conversation, lead, 1, 'whatsapp') }
+
+    after { travel_back }
+
+    # travel_to sem bloco + travel_back: os testes abaixo usam travel_to com bloco (nunca aninhado).
+    before do
+      travel_to(zone.local(2026, 9, 24, 11, 0))
+      conversation.update!(additional_attributes: {})
+      lead.update!(etapa_prospect: 'em_conversa', inbox_atual_id: whatsapp_inbox.id, aguardando_resposta: true, recuperacao_status: 'ativa',
+                   tentativa_recuperacao: 0, proxima_recuperacao_em: 1.minute.ago, upsales_conversation_atual_id: conversation.id)
+      incoming!(at: 1.day.ago)
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing', sender: agent_bot,
+                       content: 'Quantos quilos por mês?', created_at: 20.hours.ago)
+    end
+
+    def post_recovery(job_id: recovery.activation_id, created_at: Time.current.iso8601)
+      stamp = { up2_automation: { kind: 'RECUPERACAO', job_id: job_id, created_at: created_at } }
+      described_class.authorize!(conversation: conversation, params: { content_attributes: stamp }) do
+        create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                         sender: agent_bot, content: 'Conseguiu ver o volume?')
+      end
+    end
+
+    def expect_recovery_blocked(reason_pattern, **args)
+      expect { post_recovery(**args) }.to raise_error(described_class::Blocked) { |e| expect(e.reason).to match(reason_pattern) }
+    end
+
+    it 'com a ativação autorizada e o lead elegível, sai e consome a ativação; balão da mesma tentativa passa, reenvio não' do
+      message = post_recovery
+
+      expect(message).to be_persisted
+      expect(OperationalEngine::RecoveryActivation.for(conversation.reload)).to have_attributes(status: 'consumed', message_id: message.id)
+      expect(post_recovery).to be_persisted # split humanizado da mesma mensagem
+      travel_to(zone.local(2026, 9, 24, 11, 3)) { expect_recovery_blocked(/recuperacao_ja_enviada/) }
+    end
+
+    it 'sem ativação, com job_id de outra ativação ou tentativa divergente, não sai' do
+      expect_recovery_blocked(/recuperacao_sem_autorizacao/, job_id: SecureRandom.uuid)
+
+      lead.update!(tentativa_recuperacao: 1)
+      expect_recovery_blocked(/tentativa_divergente/)
+    end
+
+    it 'revalida o §15.8 inteiro no post: humano, não contatar, encerrado, sem aguardar, resposta nova' do
+      { { modo_atendimento: 'humano' } => /atendimento_humano/, { nao_contatar: true } => /nao_contatar/,
+        { lead_status: 'encerrado' } => /lead_encerrado/, { aguardando_resposta: false } => /nao_aguarda_resposta/ }.each do |change, reason|
+        lead.update!(change)
+        expect_recovery_blocked(reason)
+        lead.update!(modo_atendimento: 'lavinia', nao_contatar: false, lead_status: 'ativo', aguardando_resposta: true)
+      end
+
+      incoming!
+      expect_recovery_blocked(/resposta_nova/)
+      expect(conversation.messages.outgoing.where(content: 'Conseguiu ver o volume?')).to be_empty
+    end
+
+    it 'fora da janela de recovery (seg-sex 09-18) não sai' do
+      recovery
+      travel_to(zone.local(2026, 9, 24, 19, 0)) { expect_recovery_blocked(/fora_da_janela_de_recuperacao/) }
+    end
+
+    it '28.22: recovery autorizada antes de uma mudança de modo não sai depois do Devolver' do
+      created_at = recovery.authorized_at.iso8601(6)
+      user = create(:user, account: account)
+      travel_to(zone.local(2026, 9, 24, 11, 1)) do
+        OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+        OperationalEngine::TakeoverService.devolver!(lead: lead.reload, user_id: user.id)
+      end
+
+      travel_to(zone.local(2026, 9, 24, 11, 2)) { expect_recovery_blocked(/automacao_anterior_a_mudanca_de_modo/, created_at: created_at) }
     end
   end
 end

@@ -48,10 +48,25 @@ class Api::V1::Accounts::OperationalEngine::SnapshotController < Api::V1::Accoun
       account: Current.account, conversation_id: params[:conversation_id]
     )
     validate_first_contact!(conversation, lead) if contexto == 'primeiro_contato'
+    return recovery_trigger(conversation, lead) if contexto == 'recuperacao'
 
     { contexto_execucao: contexto }.merge(
       ::OperationalEngine::TurnMessages.call(conversation: conversation, message_id: params[:message_id])
     )
+  end
+
+  # CP-13 (P1-VAL-12; SSOT §15.2, §12.3, 28.5): recuperação só existe para a tentativa que o
+  # RecoveryDispatcher autorizou nesta conversa/lead e enquanto ela ainda vale. Não há mensagem nova
+  # do lead (mensagem_atual nula); o histórico recente relevante vai junto para a Lavínia continuar
+  # do ultimo_ponto sem reiniciar o diagnóstico.
+  def recovery_trigger(conversation, lead)
+    activation = ::OperationalEngine::RecoveryActivation.for(conversation)
+    valid = activation&.authorized? && activation.lead_id == lead.lead_id &&
+            params[:recovery_activation_id].present? && activation.activation_id == params[:recovery_activation_id]
+    raise InvalidTurn, 'ativação de recuperação inválida ou já usada' unless valid
+    raise InvalidTurn, 'recuperação não tem mensagem disparadora' if params[:message_id].present?
+
+    { contexto_execucao: 'recuperacao' }.merge(::OperationalEngine::TurnMessages.recent(conversation: conversation))
   end
 
   # Primeiro contato só existe para a ativação que o Dispatcher autorizou nesta conversa e para

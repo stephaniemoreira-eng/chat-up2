@@ -22,6 +22,9 @@
 #   lead inbound já tem a sua e nunca é sobrescrito).
 # - P1-019-02 (§7.3/§7.4/§10.6): Backlog → Contatado grava também etapa_alterada
 #   {de, para, motivo: primeiro_contato_enviado}; sem mudança real de etapa, nenhum evento falso.
+#
+# CP-13 (P1-VAL-12): idempotente também para o Recovery -- armar só acontece com o ciclo inativo e
+# sem timer, e a tentativa só incrementa se o lead ainda está exatamente uma tentativa antes dela.
 module OperationalEngine
   class ConfirmOutboundSendService
     def self.call(message:)
@@ -40,10 +43,15 @@ module OperationalEngine
       return if lead.nil?
 
       lead.with_lock do
-        next unless lead.primeiro_contato_em.nil?
-
-        record_first_contact(lead)
-        OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'primeiro_contato')
+        if lead.primeiro_contato_em.nil?
+          record_first_contact(lead)
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'primeiro_contato')
+        end
+        # CP-13 (P1-VAL-12; SSOT §15.2, §15.8, §23.3): a mesma confirmação real do provedor é o que
+        # conta uma tentativa de recovery como enviada, ou arma o ciclo depois de uma mensagem da
+        # Lavínia que ficou aguardando resposta. Depois do primeiro contato (mesmo lock), para que a
+        # abertura já tenha levado o lead a Contatado -- e a cadência seja a de "nunca respondeu".
+        OperationalEngine::RecoveryCycle.on_send_confirmed(lead, @message)
       end
 
       # CP-08 (resíduo do CP-05, P1-025-04): projeção pelo mecanismo durável. Também no no-op

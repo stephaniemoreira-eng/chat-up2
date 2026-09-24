@@ -15,6 +15,12 @@ module OperationalEngine
       new(conversation, message_id).call
     end
 
+    # CP-13 (P1-VAL-12): turno sem disparador do contato (recuperação) -- sem mensagem atual, com as
+    # RECENT_LIMIT mensagens públicas mais recentes da conversa como histórico relevante.
+    def self.recent(conversation:)
+      new(conversation, nil).recent
+    end
+
     def initialize(conversation, message_id)
       @conversation = conversation
       @message_id = message_id
@@ -33,16 +39,23 @@ module OperationalEngine
       }
     end
 
+    def recent
+      last = public_messages.reorder(id: :desc).first
+      { mensagem_atual: nil, mensagens_recentes_relevantes: last ? recent_until(last).map { |message| serialize(message) } : [] }
+    end
+
     private
 
+    def public_messages
+      @conversation.messages.where(private: false, message_type: %i[incoming outgoing template])
+    end
+
     def recent_until(trigger)
-      @conversation.messages
-                   .where(private: false, message_type: %i[incoming outgoing template])
-                   .where('messages.id <= ?', trigger.id)
-                   .reorder(id: :desc)
-                   .limit(RECENT_LIMIT)
-                   .to_a
-                   .reverse
+      public_messages.where('messages.id <= ?', trigger.id)
+                     .reorder(id: :desc)
+                     .limit(RECENT_LIMIT)
+                     .to_a
+                     .reverse
     end
 
     def serialize(message)

@@ -11,7 +11,9 @@
 #   confirmada, `em_qualificacao`/`nao_concluido` só atualizam o status sem regredir quem já é
 #   qualificado; `sem_alteracao` não faz nada;
 # - aguardando_resposta / ultimo_ponto / resumo_oportunidade: gravados quando presentes (§15.2: o
-#   timer de recovery nasce no Engine a partir deste flag -- o ciclo de recovery em si é Fase 7);
+#   timer de recovery nasce no Engine a partir deste flag -- CP-13: como este commit roda ANTES do
+#   post, o timer é armado por OperationalEngine::RecoveryCycle quando o provedor confirma o envio
+#   real da mensagem deste turno (§23.3); ultimo_ponto nunca é apagado por null/vazio, 28.5);
 # - modo_atendimento=humano: nada é aplicado (§12.4 "nenhuma ação da Lavínia").
 #
 # Tudo dentro do lock do lead, num só commit. Chamado via TurnIdempotency pelo controller, com a

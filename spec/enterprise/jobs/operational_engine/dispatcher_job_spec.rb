@@ -19,6 +19,15 @@ RSpec.describe OperationalEngine::DispatcherJob do
     described_class.perform_now
   end
 
+  # CP-13 -- P1-VAL-12 (SSOT §15.6): recovery na mesma fila por inbox, no mesmo tick, depois da
+  # primeira abordagem.
+  it 'chama o RecoveryDispatcher depois do Dispatcher, na mesma conta' do
+    expect(OperationalEngine::Dispatcher).to receive(:call).with(conta_id: account.id).ordered
+    expect(OperationalEngine::RecoveryDispatcher).to receive(:call).with(conta_id: account.id).ordered
+
+    described_class.perform_now
+  end
+
   it 'pula uma conta com whatsapp_inbox mas sem slot sdr ativo' do
     account_sem_slot = create(:account)
     create(:up_sales_agent_tenant, account: account_sem_slot, whatsapp_inbox: whatsapp_inbox_for(account_sem_slot))
