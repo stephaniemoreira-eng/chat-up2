@@ -30,12 +30,16 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   end
 
   # Indicadores do Dashboard (Up Sales). Ver docs/fork/ADR-0004-up-sales-reskin.md.
+  # CP-11 (P1-VAL-09; 28.34/28.40): um lead do Engine tem dois cards (Prospect + Comercial), então
+  # a contagem é por lead único -- cards do Engine deduplicados por operational_lead_id, cards
+  # nativos (sem lead do Engine) um a um. As métricas de negócio por coorte ficam no
+  # ProspectDashboardController (§22), sobre o Engine.
   def summary
     leads = Current.account.sales_leads
 
     render json: {
-      leads_count: leads.count,
-      deals_won_count: leads.won.count,
+      leads_count: unique_lead_count(leads),
+      deals_won_count: unique_lead_count(leads.won),
       last_search_at: leads.where(source: 'busca_prospeccao').maximum(:created_at)
     }
   end
@@ -145,6 +149,10 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   end
 
   private
+
+  def unique_lead_count(scope)
+    scope.where(operational_lead_id: nil).count + scope.where.not(operational_lead_id: nil).distinct.count(:operational_lead_id)
+  end
 
   def move_via_engine(stage)
     operational_lead = OperationalEngine::Lead.find_by(lead_id: @lead.operational_lead_id)
