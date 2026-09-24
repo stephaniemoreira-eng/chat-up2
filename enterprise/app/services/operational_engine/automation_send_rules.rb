@@ -14,8 +14,15 @@
 # reunião real já confirmada, que não é reengajamento) é recusado: FOLLOWUP, REDIRECT_FOLLOWUP,
 # REDIRECT_CLOSING e qualquer tipo desconhecido (falha fechado). O up2-agents também desliga o
 # gatilho do follow-up nativo para tenants com Engine (PR coordenada) -- esta regra é a autoridade.
+#
+# CP-16B (P2-VAL-20, decisão da Stéphanie em 24/09/2026): o turno silencioso de ressincronização
+# pós-devolução (OperationalEngine::DevolucaoResync) nunca fala com o lead. O up2-agents nem cria
+# cliente Chatwoot nesse turno; se um post carimbado kind=RESSINCRONIZACAO chegar mesmo assim, é
+# recusado aqui SEMPRE -- antes e independentemente da lista da ENV (incluir o tipo lá não o libera).
 module OperationalEngine
   class AutomationSendRules
+    RESSINCRONIZACAO_KIND = 'RESSINCRONIZACAO'.freeze
+
     def self.allowed_kinds
       ENV.fetch('UP_SALES_ENGINE_AUTOMATION_KINDS', 'APPOINTMENT_REMINDER').split(',').map(&:strip).compact_blank
     end
@@ -30,6 +37,7 @@ module OperationalEngine
     end
 
     def blocking_reason(lead, recovery)
+      return 'ressincronizacao_nunca_envia' if @stamp[:kind].to_s == RESSINCRONIZACAO_KIND
       return recovery_reason(lead, recovery) if recovery?
 
       'automacao_fora_do_ciclo_do_engine' unless self.class.allowed_kinds.include?(@stamp[:kind].to_s)

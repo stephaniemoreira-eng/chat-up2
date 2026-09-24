@@ -49,6 +49,7 @@ class Api::V1::Accounts::OperationalEngine::SnapshotController < Api::V1::Accoun
     )
     validate_first_contact!(conversation, lead) if contexto == 'primeiro_contato'
     return recovery_trigger(conversation, lead) if contexto == 'recuperacao'
+    return devolucao_trigger(conversation, lead, contexto) if params[:devolucao_id].present?
 
     { contexto_execucao: contexto }.merge(
       ::OperationalEngine::TurnMessages.call(conversation: conversation, message_id: params[:message_id])
@@ -67,6 +68,19 @@ class Api::V1::Accounts::OperationalEngine::SnapshotController < Api::V1::Accoun
     raise InvalidTurn, 'recuperação não tem mensagem disparadora' if params[:message_id].present?
 
     { contexto_execucao: 'recuperacao' }.merge(::OperationalEngine::TurnMessages.recent(conversation: conversation))
+  end
+
+  # CP-16B (P2-VAL-20; decisão da Stéphanie em 24/09/2026): o turno silencioso de ressincronização
+  # pós-devolução (OperationalEngine::DevolucaoResync). O contexto continua `conversa` -- o contrato
+  # do Snapshot e o Prompt V1.0 não ganham valor novo --, sem mensagem atual (ninguém disparou o turno)
+  # e com as mensagens públicas recentes da conversa, inclusive as do humano (autor `humano`), para a
+  # Lavínia ver onde o contexto terminou. Só para a devolução vigente deste lead.
+  def devolucao_trigger(conversation, lead, contexto)
+    raise InvalidTurn, 'ressincronização só existe no contexto conversa' unless contexto == 'conversa'
+    raise InvalidTurn, 'ressincronização não tem mensagem disparadora' if params[:message_id].present?
+    raise InvalidTurn, 'devolução inválida ou não vigente' unless ::OperationalEngine::DevolucaoResync.current?(lead, params[:devolucao_id])
+
+    { contexto_execucao: 'conversa' }.merge(::OperationalEngine::TurnMessages.recent(conversation: conversation))
   end
 
   # Primeiro contato só existe para a ativação que o Dispatcher autorizou nesta conversa e para

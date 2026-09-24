@@ -52,7 +52,7 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
 
     result = perform
 
-    expect(result).to eq(ok: false, reason: 'agenda não conectada para esta conta')
+    expect(result).to eq(ok: false, reason: 'agenda não conectada para esta conta', falha_calendar: true)
   end
 
   it 'reagenda o evento real e grava o evento de timeline' do
@@ -81,7 +81,7 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
 
     result = perform
 
-    expect(result).to eq(ok: false, reason: 'Horário indisponível')
+    expect(result).to eq(ok: false, reason: 'Horário indisponível', falha_calendar: true)
   end
 
   # CP-10 (P1-VAL-03): ferramenta "Atualizar evento" da Lavínia -- o modelo não carrega event_id.
@@ -114,7 +114,7 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
     it 'falha do Calendar: não registra reagendamento' do
       stub_update_event(status: 422, body: { error: 'Calendário inválido' })
 
-      expect(perform(event_id: nil)).to eq(ok: false, reason: 'Calendário inválido')
+      expect(perform(event_id: nil)).to eq(ok: false, reason: 'Calendário inválido', falha_calendar: true)
       expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'reuniao_reagendada')).to be_empty
     end
   end

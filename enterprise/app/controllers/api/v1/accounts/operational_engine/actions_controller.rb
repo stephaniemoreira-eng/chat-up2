@@ -77,11 +77,15 @@ class Api::V1::Accounts::OperationalEngine::ActionsController < Api::V1::Account
   # CP-03 (P1-021-02): a parte semântica do turno. `saida` chega crua (hash aninhado de
   # dados_extraidos) de propósito -- quem valida e faz a whitelist é o ApplyStructuredOutputService;
   # a chamada já passou pela autenticação servidor-a-servidor do Engine.
+  #
+  # CP-16B (P2-VAL-20): `modo=ressincronizacao` é o commit do turno silencioso pós-devolução
+  # (OperationalEngine::DevolucaoResync) -- só fatos de continuidade, nenhuma decisão/ação.
   def saida_estruturada
     saida = params[:saida].respond_to?(:to_unsafe_h) ? params[:saida].to_unsafe_h : {}
     render_tool_result(turn_idempotent('saida_estruturada') do
       ::OperationalEngine::ApplyStructuredOutputService.new(
-        account: Current.account, conversation_id: params[:conversation_id], saida: saida
+        account: Current.account, conversation_id: params[:conversation_id], saida: saida,
+        ressincronizacao: params[:modo] == 'ressincronizacao'
       ).call
     end)
   end

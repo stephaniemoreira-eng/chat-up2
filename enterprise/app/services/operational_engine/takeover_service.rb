@@ -30,6 +30,12 @@
 # - Timeline (P2-026-01): além de intervencao_humana_iniciada/encerrada, cada transição grava
 #   modo_atendimento_alterado e responsavel_alterado com de/para/motivo/executado_por -- quem
 #   assumiu, o que havia antes, quando devolveu e o estado resultante saem só dos eventos.
+#
+# CP-16B (P2-VAL-20, decisão da Stéphanie em 24/09/2026 -- "A LAVÍNIA ANALISA A CONVERSA NOVAMENTE E
+# VÊ AONDE O CONTEXTO TERMINA E INTERPRETA QUAL O ultimo_ponto PARA CONTINUAÇÃO DA CONVERSA, SE
+# NECESSÁRIO."): depois do commit da devolução (fora do lock), agenda o turno silencioso de
+# ressincronização da Lavínia (OperationalEngine::DevolucaoResync). Ele só roda depois que a
+# devolução já está gravada e nunca a desfaz: falhar ali mantém o `ultimo_ponto` anterior.
 module OperationalEngine
   class TakeoverService
     def self.assumir!(lead:, user_id:, motivo: 'assumir')
@@ -74,32 +80,39 @@ module OperationalEngine
     end
 
     def devolver!(user_id = nil)
+      devolucao_id = nil
       @lead.with_lock do
         next if @lead.modo_atendimento_lavinia?
 
         # §18.3: sincroniza ANTES de reativar. SyncError aqui desfaz a transação inteira.
         sync = OperationalEngine::DevolucaoSync.call(@lead)
         before = transition_snapshot
-        @lead.update!(
-          **sync[:lead_attributes],
-          modo_atendimento: 'lavinia',
-          responsavel_atual_id: nil,
-          modo_atendimento_entrou_em: Time.current,
-          # §18.3 "timers antigos não ressuscitam": nada pendente de antes volta a valer.
-          aguardando_resposta: false,
-          recuperacao_status: 'inativa',
-          proxima_recuperacao_em: nil
-        )
-        write_transition_events('intervencao_humana_encerrada', before, 'devolver', user_id,
-                                responsavel_atual_id: before[:responsavel_atual_id], sincronizacao: sync[:sincronizacao])
+        reactivate_lavinia!(sync[:lead_attributes])
+        devolucao_id = write_transition_events('intervencao_humana_encerrada', before, 'devolver', user_id,
+                                               responsavel_atual_id: before[:responsavel_atual_id], sincronizacao: sync[:sincronizacao])
         OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'devolver')
       end
 
       OperationalEngine::ProjectionReconciler.flush(@lead)
+      # Só numa devolução real (no-op não reagenda) e só depois do commit.
+      OperationalEngine::DevolucaoResync.schedule(@lead, devolucao_id) if devolucao_id
       @lead
     end
 
     private
+
+    def reactivate_lavinia!(synced_attributes)
+      @lead.update!(
+        **synced_attributes,
+        modo_atendimento: 'lavinia',
+        responsavel_atual_id: nil,
+        modo_atendimento_entrou_em: Time.current,
+        # §18.3 "timers antigos não ressuscitam": nada pendente de antes volta a valer.
+        aguardando_resposta: false,
+        recuperacao_status: 'inativa',
+        proxima_recuperacao_em: nil
+      )
+    end
 
     def transition_snapshot
       { modo_atendimento: @lead.modo_atendimento, responsavel_atual_id: @lead.responsavel_atual_id }
@@ -113,14 +126,16 @@ module OperationalEngine
     end
 
     # Mesma correlation_id em todos os eventos da transição (uma ação lógica, várias semânticas).
+    # Devolve a correlation_id -- é a identidade da devolução para o turno de ressincronização (CP-16B).
     def write_transition_events(intervencao_event, before, motivo, user_id, **intervencao_metadata)
       correlation_id = SecureRandom.uuid
       common = { motivo: motivo, executado_por: user_id }
       write_event(intervencao_event, correlation_id, **intervencao_metadata, **common)
       write_event('modo_atendimento_alterado', correlation_id, de: before[:modo_atendimento], para: @lead.modo_atendimento, **common)
-      return if before[:responsavel_atual_id] == @lead.responsavel_atual_id
-
-      write_event('responsavel_alterado', correlation_id, de: before[:responsavel_atual_id], para: @lead.responsavel_atual_id, **common)
+      if before[:responsavel_atual_id] != @lead.responsavel_atual_id
+        write_event('responsavel_alterado', correlation_id, de: before[:responsavel_atual_id], para: @lead.responsavel_atual_id, **common)
+      end
+      correlation_id
     end
 
     # Grava direto (não via EventWriter/IdempotencyGuard): esta não é uma "entrada" de evento

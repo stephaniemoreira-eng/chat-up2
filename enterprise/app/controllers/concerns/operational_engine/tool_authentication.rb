@@ -38,11 +38,14 @@ module Concerns::OperationalEngine::ToolAuthentication
     @current_account = account
   end
 
+  # CP-16B (P2-VAL-19): uma recusa pode carregar a marca `falha_calendar` -- o up2-agents a usa para
+  # distinguir falha do Calendar (tentar de novo em silêncio, depois callback do Danilo) de recusa de
+  # negócio. Só essa chave extra atravessa; o resto do hash interno não vaza.
   def render_tool_result(result, ok_payload: ->(_r) { {} })
     if result[:ok]
       render json: { ok: true, **ok_payload.call(result) }, status: :ok
     else
-      render_tool_error(result[:reason], status: :unprocessable_entity)
+      render json: { ok: false, reason: result[:reason], **result.slice(:falha_calendar) }, status: :unprocessable_entity
     end
   end
 

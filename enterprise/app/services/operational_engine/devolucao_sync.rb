@@ -17,8 +17,10 @@
 # - campos alterados, etapa/estado e ações comerciais: desde o CP-05 toda ação humana sobre um
 #   lead do Engine passa pelo próprio Engine (Assumir, Comercial, callback, NO-SHOW...), então o
 #   estado já está no Engine; a sincronização valida e registra a fotografia com que a Lavínia volta.
-# - `ultimo_ponto`: mantido como está -- LACUNA registrada na PR do CP-06: o SSOT manda sincronizar,
-#   mas não define quem redige o novo ponto de continuidade de uma conversa conduzida por humano.
+# - `ultimo_ponto`: mantido como está AQUI (dentro do lock, antes de reativar). A lacuna do CP-06
+#   ("quem redige o novo ponto de continuidade de uma conversa conduzida por humano") foi DECIDIDA pela
+#   Stéphanie em 24/09/2026 (CP-16B, P2-VAL-20): a Lavínia relê a conversa num turno silencioso depois
+#   do commit da devolução e o Engine grava o novo ponto, se houver -- ver OperationalEngine::DevolucaoResync.
 #
 # Falha fechado: conversa informada mas inexistente, de outra conta ou de outro contato, ou banco
 # nativo indisponível -> SyncError (o operador vê o erro e repete; nada foi reativado).
