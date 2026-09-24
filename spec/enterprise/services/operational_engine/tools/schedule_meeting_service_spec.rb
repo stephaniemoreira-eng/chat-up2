@@ -151,6 +151,89 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
     end
   end
 
+  # CP-09 -- P1-VAL-05 (SSOT §16.1, §13.2, §13.3, §8.4).
+  describe 'reunião confirmada qualifica e cria/mantém a oportunidade Comercial' do
+    def events(type)
+      OperationalEngine::LeadEvent.where(lead: lead, event_type: type)
+    end
+
+    before { lead.update!(etapa_prospect: 'em_conversa', etapa_entrou_em: 1.day.ago) }
+
+    it 'lead ainda não qualificado: qualifica no mesmo lock antes do Agendado' do
+      stub_create_event
+
+      perform
+
+      lead.reload
+      expect(lead.qualificacao_status).to eq('qualificado')
+      expect(lead.qualificado_em).to be_present
+      expect(lead.etapa_prospect).to eq('agendado')
+      expect(events('lead_qualificado').count).to eq(1)
+      expect(events('etapa_alterada').first.metadata).to include('de' => 'em_conversa', 'para' => 'qualificado')
+    end
+
+    it 'cria a oportunidade Comercial com oportunidade_criada, sem handoff' do
+      stub_create_event
+
+      perform
+
+      lead.reload
+      expect(lead.etapa_comercial).to eq('oportunidade')
+      expect(lead.resultado_comercial).to eq('em_aberto')
+      expect([lead.frente_operacional, lead.modo_atendimento]).to eq(%w[prospeccao lavinia])
+      expect(events('oportunidade_criada').first.metadata).to include('etapa_comercial' => 'oportunidade', 'motivo' => 'reuniao_agendada')
+    end
+
+    it 'projeta o card Comercial em Oportunidade' do
+      stub_create_event
+
+      perform
+
+      comercial = Sales::Lead.joins(:pipeline).find_by!(operational_lead_id: lead.lead_id, sales_pipelines: { engine_kind: 'comercial' })
+      expect(comercial.stage.engine_stage_key).to eq('oportunidade')
+    end
+
+    it 'lead já qualificado: não regrava qualificado_em nem duplica lead_qualificado' do
+      qualificado_em = 2.days.ago.change(usec: 0)
+      lead.update!(etapa_prospect: 'qualificado', qualificacao_status: 'qualificado', qualificado_em: qualificado_em)
+      stub_create_event
+
+      perform
+
+      expect(lead.reload.qualificado_em).to eq(qualificado_em)
+      expect(events('lead_qualificado')).to be_empty
+    end
+
+    it 'mantém uma oportunidade que já existia (callback pendente) sem rebaixar nem duplicar o evento' do
+      lead.update!(pending_callback_attributes.merge(etapa_comercial: 'em_acompanhamento'))
+      stub_create_event
+
+      perform
+
+      expect(lead.reload.etapa_comercial).to eq('em_acompanhamento')
+      expect(events('oportunidade_criada')).to be_empty
+    end
+
+    it 'Calendar falha: não qualifica nem cria oportunidade (§23.3)' do
+      stub_create_event(status: 422, body: { error: 'Calendário inválido' })
+
+      perform
+
+      lead.reload
+      expect(lead.qualificacao_status).to eq('em_qualificacao')
+      expect(lead.etapa_prospect).to eq('em_conversa')
+      expect(lead.etapa_comercial).to be_nil
+      expect(events('oportunidade_criada')).to be_empty
+    end
+
+    it 'repetir a confirmação não duplica eventos (idempotência)' do
+      stub_create_event
+      perform
+
+      expect { perform }.not_to change(OperationalEngine::LeadEvent, :count)
+    end
+  end
+
   # CP-10 (P1-VAL-03; SSOT §12.4, §23.2, 28.19): agora é a ferramenta "Criar evento" da Lavínia --
   # as guardas valem ANTES do Calendar, então nenhum evento real nasce para um lead bloqueado.
   describe 'guardas da Lavínia (CP-10)' do

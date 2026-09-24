@@ -10,6 +10,7 @@ module OperationalEngine
     module LaviniaActionGuard
       HUMANO = 'lead em atendimento humano'.freeze
       NAO_CONTATAR = 'lead está em não-contatar'.freeze
+      ENCERRADO = 'lead encerrado'.freeze
 
       def self.blocked_reason(lead, nao_contatar: false)
         return HUMANO if lead.modo_atendimento_humano?

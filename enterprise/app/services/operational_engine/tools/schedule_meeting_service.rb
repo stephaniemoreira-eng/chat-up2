@@ -87,19 +87,16 @@ module OperationalEngine
         # essa igualdade por um detalhe de timing, não por regra de negócio.
         now = Time.current
         lead.with_lock do
-          lead.update!(
-            calendar_event_id: event_id,
-            agendamento_status: 'confirmado',
-            agendado_em: now,
-            etapa_prospect: 'agendado',
-            **(lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'agendamento' } : {})
-          )
-          OperationalEngine::LeadEvent.create!(
-            lead: lead,
-            event_type: 'reuniao_agendada',
-            source: 'lavinia',
-            metadata: { calendar_event_id: event_id, correlation_id: SecureRandom.uuid }
-          )
+          # CP-09 (P1-VAL-05; SSOT §16.1 "Prospect continua Qualificado" até o sucesso real, §13.2
+          # rota curta, §13.3): uma reunião realmente criada no Calendar é evidência de oportunidade
+          # real -- se o lead ainda não estava Qualificado, a qualificação é persistida no MESMO lock,
+          # antes do Agendado (nenhum lead chega a Agendado sem ter passado por Qualificado).
+          OperationalEngine::QualificationService.qualificar!(lead, source: 'lavinia')
+          confirm_meeting!(lead, event_id, now)
+          # CP-09 (P1-VAL-05; §16.1 "criar/manter oportunidade Comercial"): mesmo caminho do callback
+          # e do handoff -- cria só se não havia, nunca rebaixa. Frente operacional e modo de
+          # atendimento não mudam: reunião confirmada não é handoff (§17.2).
+          OperationalEngine::ComercialOpportunity.garantir!(lead, source: 'lavinia', motivo: 'reuniao_agendada')
           OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'reuniao_agendada')
         end
 
@@ -107,6 +104,22 @@ module OperationalEngine
         # Postgres nativo, um banco diferente do Supabase -- não vale segurar o lock pela viagem
         # de rede extra. CP-05: projeção durável via OperationalEngine::ProjectionReconciler.
         OperationalEngine::ProjectionReconciler.flush(lead)
+      end
+
+      def confirm_meeting!(lead, event_id, now)
+        lead.update!(
+          calendar_event_id: event_id,
+          agendamento_status: 'confirmado',
+          agendado_em: now,
+          etapa_prospect: 'agendado',
+          **(lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'agendamento' } : {})
+        )
+        OperationalEngine::LeadEvent.create!(
+          lead: lead,
+          event_type: 'reuniao_agendada',
+          source: 'lavinia',
+          metadata: { calendar_event_id: event_id, correlation_id: SecureRandom.uuid }
+        )
       end
     end
   end

@@ -168,6 +168,90 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
       expect(response).to have_http_status(:success)
       expect(lead.reload.sales_pipeline_id).to eq(pipeline.id)
     end
+
+    it 'card nao vinculado ao Engine continua com custom_attributes livres' do
+      patch "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}",
+            params: { lead: { custom_attributes: { 'origem_planilha' => 'feira' } } },
+            headers: agent.create_new_auth_token,
+            as: :json
+
+      expect(response).to have_http_status(:success)
+      expect(lead.reload.custom_attributes).to eq('origem_planilha' => 'feira')
+    end
+
+    # CP-09 -- P2-VAL-07 (SSOT §3.3, §20, teste 28.39): tag visual isolada não redefine estado de
+    # negócio, e o card vinculado nem chega a divergir do Engine.
+    describe 'card vinculado a um lead do Engine' do
+      let!(:engine_lead) do
+        OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513998887777', upsales_contact_id: contact.id,
+                                        modo_atendimento: 'humano', **pending_callback_attributes)
+      end
+      let!(:card) do
+        OperationalEngine::SalesProjectionSync.call(engine_lead)
+        Sales::Lead.find_by!(operational_lead_id: engine_lead.lead_id)
+      end
+
+      def patch_card(lead_params)
+        patch "/api/v1/accounts/#{account.id}/crm/leads/#{card.id}",
+              params: { lead: lead_params }, headers: agent.create_new_auth_token, as: :json
+      end
+
+      it 'recusa sobrescrever engine_tags e deixa card e Engine intactos' do
+        tags_antes = card.custom_attributes['engine_tags']
+
+        patch_card(custom_attributes: card.custom_attributes.merge('engine_tags' => ['lavinia']))
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['error']).to include('engine_tags')
+        expect(card.reload.custom_attributes['engine_tags']).to eq(tags_antes)
+        expect(tags_antes).to contain_exactly('humano', 'callback')
+        engine_lead.reload
+        expect([engine_lead.modo_atendimento, engine_lead.agendamento_status]).to eq(%w[humano callback_registrado])
+      end
+
+      it 'recusa sobrescrever engine_filters' do
+        filtros = card.custom_attributes['engine_filters'].merge('modo_atendimento' => 'lavinia')
+
+        patch_card(custom_attributes: card.custom_attributes.merge('engine_filters' => filtros))
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(card.reload.custom_attributes['engine_filters']['modo_atendimento']).to eq('humano')
+      end
+
+      it 'aceita reenviar os valores atuais do Engine junto com uma chave nao gerida' do
+        patch_card(custom_attributes: card.custom_attributes.merge('observacao' => 'ligar de manha'))
+
+        expect(response).to have_http_status(:success)
+        expect(card.reload.custom_attributes).to include('observacao' => 'ligar de manha', 'engine_tags' => %w[humano callback])
+      end
+
+      it 'payload sem as chaves do Engine nao as apaga' do
+        patch_card(custom_attributes: { 'observacao' => 'retornar sexta' })
+
+        expect(response).to have_http_status(:success)
+        card.reload
+        expect(card.custom_attributes['observacao']).to eq('retornar sexta')
+        expect(card.custom_attributes['engine_tags']).to contain_exactly('humano', 'callback')
+        expect(card.custom_attributes['engine_filters']).to include('modo_atendimento' => 'humano')
+      end
+
+      it 'campos nao geridos pelo Engine continuam editaveis' do
+        patch_card(notes: 'cliente prefere WhatsApp', value: 1500, assignee_id: agent.id)
+
+        expect(response).to have_http_status(:success)
+        card.reload
+        expect(card.notes).to eq('cliente prefere WhatsApp')
+        expect(card.value.to_i).to eq(1500)
+        expect(card.assignee_id).to eq(agent.id)
+      end
+
+      it 'a proxima sincronizacao do Engine continua igual ao que o card mostra' do
+        patch_card(custom_attributes: { 'engine_tags' => ['lavinia'] })
+        OperationalEngine::SalesProjectionSync.call(engine_lead.reload)
+
+        expect(card.reload.custom_attributes['engine_tags']).to contain_exactly('humano', 'callback')
+      end
+    end
   end
 
   describe 'DELETE /api/v1/accounts/{account.id}/crm/leads/{id}' do

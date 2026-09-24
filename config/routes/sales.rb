@@ -50,6 +50,9 @@ resources :leads, module: :sales, path: 'crm/leads' do
   end
 end
 
+# CP-11 (§22): Dashboard Prospect por coorte, calculado sobre o Engine.
+get 'crm/prospect_dashboard', to: 'sales/prospect_dashboard#show'
+
 post 'crm/prospecting/search', to: 'sales/prospecting#search'
 post 'crm/prospecting/create_leads', to: 'sales/prospecting#create_leads'
 

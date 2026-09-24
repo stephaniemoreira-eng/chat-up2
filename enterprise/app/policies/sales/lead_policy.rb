@@ -88,4 +88,9 @@ class Sales::LeadPolicy < ApplicationPolicy
   def summary?
     true
   end
+
+  # CP-11 (§22): mesma audiência do summary -- o SSOT não define RBAC próprio para o Dashboard.
+  def prospect_dashboard?
+    true
+  end
 end
