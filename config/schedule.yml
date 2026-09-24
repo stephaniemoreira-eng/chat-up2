@@ -110,3 +110,12 @@ operational_engine_dispatcher_job:
   cron: '*/5 * * * *'
   class: 'OperationalEngine::DispatcherJob'
   queue: scheduled_jobs
+
+# executed every minute
+# Up Sales — CP-05 (SSOT §3.2, §23.3): reprocessa pedidos de projecao Supabase -> Kanban que
+# falharam depois do commit do fato (retry limitado/observavel, ver
+# OperationalEngine::ProjectionReconciler). So toca leads com pedido pendente vencido.
+operational_engine_projection_reconcile_job:
+  cron: '* * * * *'
+  class: 'OperationalEngine::ProjectionReconcileJob'
+  queue: scheduled_jobs

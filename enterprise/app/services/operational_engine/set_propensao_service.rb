@@ -3,9 +3,15 @@
 # humano (não há tool equivalente pro Engine/IA chamar).
 #
 # Idempotente de propósito, mesmo padrão de TakeoverService: reclassificar pro mesmo valor que já
-# está gravado não é erro, é um no-op que não duplica evento nem re-sincroniza à toa.
+# está gravado não é erro, é um no-op que não duplica evento (mas repara uma projeção que tenha
+# ficado pendente -- CP-05, P1-025-04).
+#
+# CP-05 (P1-025-02): só sobre uma oportunidade Comercial aberta (OperationalEngine::ComercialActionGuard),
+# guarda avaliada dentro do lock -- vale mesmo para chamada direta por API.
 module OperationalEngine
   class SetPropensaoService
+    class InvalidPropensaoError < StandardError; end
+
     def self.call!(lead:, propensao:, user_id:)
       new(lead, propensao, user_id).call!
     end
@@ -17,32 +23,32 @@ module OperationalEngine
     end
 
     def call!
-      changed = false
-
-      @lead.with_lock do
-        next if @lead.propensao_fechamento == @propensao
-
-        @lead.update!(propensao_fechamento: @propensao)
-        write_event
-        changed = true
+      unless OperationalEngine::Lead.propensao_fechamentos.key?(@propensao)
+        raise InvalidPropensaoError, "propensão inválida: #{@propensao.inspect}"
       end
 
-      sync! if changed
+      @lead.with_lock do
+        OperationalEngine::ComercialActionGuard.ensure_oportunidade_aberta!(@lead, acao: 'classificar propensão')
+        next if @lead.propensao_fechamento == @propensao
+
+        previous = @lead.propensao_fechamento
+        @lead.update!(propensao_fechamento: @propensao)
+        write_event(previous)
+        OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'propensao_atualizada')
+      end
+
+      OperationalEngine::ProjectionReconciler.flush(@lead)
       @lead
     end
 
     private
 
-    def write_event
+    def write_event(previous)
       OperationalEngine::LeadEvent.create!(
         lead: @lead, event_type: 'propensao_atualizada', source: 'human',
-        metadata: { propensao_fechamento: @propensao, responsavel_atual_id: @user_id, correlation_id: SecureRandom.uuid }
+        metadata: { de: previous, para: @propensao, propensao_fechamento: @propensao, responsavel_atual_id: @user_id,
+                    correlation_id: SecureRandom.uuid }
       )
-    end
-
-    def sync!
-      OperationalEngine::SalesProjectionSync.call(@lead)
-      OperationalEngine::ComercialProjectionSync.call(@lead)
     end
   end
 end

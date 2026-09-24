@@ -6,6 +6,10 @@
 # Sem guarda de "só se houver reunião confirmada": o SSOT não condiciona o registro a um estado
 # prévio específico, e mais de um no-show ao longo do tempo (reunião remarcada, no-show de novo)
 # é um caso real -- por isso sempre grava um evento novo, nunca é idempotente/no-op.
+#
+# CP-05 (P1-025-02): §20.3 "manter oportunidade Comercial" pressupõe uma -- exige oportunidade
+# Comercial aberta (OperationalEngine::ComercialActionGuard), dentro do lock. A remoção manual da
+# tag é OperationalEngine::RemoveNoShowTagService.
 module OperationalEngine
   class RegisterNoShowService
     def self.call!(lead:, user_id:)
@@ -19,11 +23,14 @@ module OperationalEngine
 
     def call!
       @lead.with_lock do
+        OperationalEngine::ComercialActionGuard.ensure_oportunidade_aberta!(@lead, acao: 'registrar no-show')
+
         @lead.update!(no_show_em: Time.current)
         write_event
+        OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'reuniao_no_show')
       end
 
-      sync!
+      OperationalEngine::ProjectionReconciler.flush(@lead)
       @lead
     end
 
@@ -34,11 +41,6 @@ module OperationalEngine
         lead: @lead, event_type: 'reuniao_no_show', source: 'human',
         metadata: { responsavel_atual_id: @user_id, correlation_id: SecureRandom.uuid }
       )
-    end
-
-    def sync!
-      OperationalEngine::SalesProjectionSync.call(@lead)
-      OperationalEngine::ComercialProjectionSync.call(@lead)
     end
   end
 end

@@ -48,9 +48,12 @@ const isCommercialLead = computed(() => {
 // humano/lavinia) existe em qualquer lead vinculado ao Engine, então basta ter operational_lead_id.
 const isProspectLead = computed(() => Boolean(lead.value?.operational_lead_id));
 
-const engineTags = computed(() => lead.value?.custom_attributes?.engine_tags || []);
+const engineTags = computed(
+  () => lead.value?.custom_attributes?.engine_tags || []
+);
 const engineStageKey = computed(
-  () => stagesStore.getRecord(lead.value?.sales_stage_id)?.engine_stage_key || null
+  () =>
+    stagesStore.getRecord(lead.value?.sales_stage_id)?.engine_stage_key || null
 );
 
 const loadTimeline = async ({ append = false } = {}) => {
@@ -118,8 +121,7 @@ const onRegisterNoShow = () =>
 
 const onSetPropensao = propensaoFechamento =>
   runLeadAction(
-    () =>
-      leadsStore.setPropensao({ id: leadId.value, propensaoFechamento }),
+    () => leadsStore.setPropensao({ id: leadId.value, propensaoFechamento }),
     'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
   );
 
@@ -131,6 +133,19 @@ const onRegisterResultado = ({ resultado, motivoPerda }) =>
         resultadoComercial: resultado,
         motivoPerda,
       }),
+    'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
+const onAdvanceEtapaComercial = etapaComercial =>
+  runLeadAction(
+    () =>
+      leadsStore.advanceEtapaComercial({ id: leadId.value, etapaComercial }),
+    'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
+  );
+
+const onRemoveNoShow = () =>
+  runLeadAction(
+    () => leadsStore.removeNoShow({ id: leadId.value }),
     'CRM.LEAD.DETAIL.COMMERCIAL.MESSAGES.ERROR'
   );
 
@@ -189,6 +204,8 @@ defineExpose({ open });
         @register-no-show="onRegisterNoShow"
         @set-propensao="onSetPropensao"
         @register-resultado="onRegisterResultado"
+        @advance-etapa-comercial="onAdvanceEtapaComercial"
+        @remove-no-show="onRemoveNoShow"
       />
       <Timeline
         :entries="entries"

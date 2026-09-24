@@ -25,10 +25,10 @@ module OperationalEngine
             source: 'lavinia',
             metadata: { correlation_id: SecureRandom.uuid }
           )
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'callback_registrado')
         end
 
-        OperationalEngine::SalesProjectionSync.call(lead)
-        OperationalEngine::ComercialProjectionSync.call(lead)
+        OperationalEngine::ProjectionReconciler.flush(lead)
         { ok: true }
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }

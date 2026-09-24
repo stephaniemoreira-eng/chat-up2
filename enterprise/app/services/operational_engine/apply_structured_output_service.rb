@@ -36,11 +36,15 @@ module OperationalEngine
       decisao = @saida['decisao_qualificacao'].presence || 'sem_alteracao'
       return { ok: false, reason: 'decisao_qualificacao inválida' } unless DECISOES.include?(decisao)
 
-      result = lead.with_lock { apply(lead, decisao) }
+      result = lead.with_lock do
+        apply(lead, decisao).tap do |applied|
+          # CP-05 (P1-025-04): pedido durável de projeção na mesma transação do commit do turno.
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'saida_estruturada') if applied[:ok]
+        end
+      end
       return result unless result[:ok]
 
-      OperationalEngine::SalesProjectionSync.call(lead)
-      OperationalEngine::ComercialProjectionSync.call(lead)
+      OperationalEngine::ProjectionReconciler.flush(lead)
       result
     rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
       { ok: false, reason: e.message }

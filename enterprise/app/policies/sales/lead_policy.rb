@@ -55,6 +55,16 @@ class Sales::LeadPolicy < ApplicationPolicy
     true
   end
 
+  # CP-05: mesmo escopo das demais ações Comerciais (RISK-025-01 -- o SSOT não congela uma matriz
+  # RBAC; nenhuma regra de cargo nova é inventada aqui).
+  def advance_etapa_comercial?
+    true
+  end
+
+  def remove_no_show?
+    true
+  end
+
   def assumir?
     true
   end

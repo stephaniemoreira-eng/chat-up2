@@ -23,12 +23,12 @@ module OperationalEngine
           lead.update!(orcamento_status: 'em_dimensionamento')
           OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'orcamento_iniciado', source: 'lavinia',
                                                 metadata: { correlation_id: SecureRandom.uuid })
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'orcamento_iniciado')
           { ok: true }
         end
         return result unless result[:ok]
 
-        OperationalEngine::SalesProjectionSync.call(lead)
-        OperationalEngine::ComercialProjectionSync.call(lead)
+        OperationalEngine::ProjectionReconciler.flush(lead)
         result
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }

@@ -11,9 +11,19 @@ class Sales::Leads::MoveStageService
   # A fronteira de confiança tem que ser uma declaração explícita de quem chama (só
   # OperationalEngine::SalesProjectionSync/ComercialProjectionSync a faz), não a ausência de um
   # argumento.
+  #
+  # CP-05 (P1-023-03; SSOT §4, §21.2, §30, §28.39): num card GERIDO pelo Engine (tem
+  # `operational_lead_id` -- só as projeções o gravam) a etapa é reflexo do Supabase, então
+  # QUALQUER mudança de coluna sem `system_source: :operational_engine` é recusada, não só a
+  # entrada em Agendado/Ganho/Perdido -- inclusive sair de Agendado (a reunião real continua tendo
+  # existido, §28.29). O drag humano permitido no Kanban Comercial não chega aqui: o controller o
+  # converte em ação do Engine (OperationalEngine::AdvanceEtapaComercialService), que persiste a
+  # etapa + evento e só então projeta. Cards nativos (sem vínculo) mantêm o comportamento próprio.
   PROTECTED_STAGE_KEYS = %w[agendado ganho perdido].freeze
 
   class ProtectedTransitionError < StandardError; end
+
+  ENGINE_MANAGED_MESSAGE = 'card gerido pelo Operational Engine: a etapa só muda por uma ação do Engine'.freeze
 
   # Exposto como class method (não só a lógica privada de instância) porque um card recém-criado
   # já direto numa stage won/lost (ex.: ComercialProjectionSync#create, um lead que chega no
@@ -36,6 +46,7 @@ class Sales::Leads::MoveStageService
 
   def perform
     raise ArgumentError, 'stage must belong to the lead pipeline' if @stage.sales_pipeline_id != @lead.sales_pipeline_id
+    raise ProtectedTransitionError, ENGINE_MANAGED_MESSAGE if blocked_engine_managed_move?
     raise ProtectedTransitionError, "#{@stage.engine_stage_key} só pode ser definido por uma ação real de negócio" if blocked_manual_transition?
     return @lead if @stage.id == @lead.sales_stage_id
 
@@ -52,6 +63,10 @@ class Sales::Leads::MoveStageService
   end
 
   private
+
+  def blocked_engine_managed_move?
+    @stage.id != @lead.sales_stage_id && @lead.operational_lead_id.present? && @system_source != :operational_engine
+  end
 
   def blocked_manual_transition?
     @stage.id != @lead.sales_stage_id &&
