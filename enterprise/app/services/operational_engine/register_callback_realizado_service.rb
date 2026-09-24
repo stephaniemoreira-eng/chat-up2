@@ -34,9 +34,11 @@ module OperationalEngine
           **(@lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'callback' } : {})
         )
         write_event
+        # CP-05 (P1-025-04): projeção durável -- ver OperationalEngine::ProjectionReconciler.
+        OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'callback_realizado')
       end
 
-      sync!
+      OperationalEngine::ProjectionReconciler.flush(@lead)
       @lead
     end
 
@@ -50,11 +52,6 @@ module OperationalEngine
         lead: @lead, event_type: 'callback_realizado', source: 'human',
         metadata: { responsavel_atual_id: @user_id, correlation_id: SecureRandom.uuid }
       )
-    end
-
-    def sync!
-      OperationalEngine::SalesProjectionSync.call(@lead)
-      OperationalEngine::ComercialProjectionSync.call(@lead)
     end
   end
 end

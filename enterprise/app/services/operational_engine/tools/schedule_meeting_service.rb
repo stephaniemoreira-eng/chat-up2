@@ -76,12 +76,13 @@ module OperationalEngine
             source: 'lavinia',
             metadata: { calendar_event_id: event_id, correlation_id: SecureRandom.uuid }
           )
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'reuniao_agendada')
         end
 
         # Fora do with_lock de propósito (mesma razão do TakeoverService): a sincronização toca o
         # Postgres nativo, um banco diferente do Supabase -- não vale segurar o lock pela viagem
-        # de rede extra.
-        OperationalEngine::SalesProjectionSync.call(lead)
+        # de rede extra. CP-05: projeção durável via OperationalEngine::ProjectionReconciler.
+        OperationalEngine::ProjectionReconciler.flush(lead)
       end
     end
   end

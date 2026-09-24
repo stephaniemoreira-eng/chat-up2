@@ -6,6 +6,17 @@
 #
 # Idempotente de propósito: assumir uma conversa já humana, ou devolver uma já lavinia, não é erro
 # -- é um no-op que não reescreve modo_atendimento_entrou_em nem duplica o evento.
+#
+# CP-05 (P1-026-02; SSOT §3.2, §23.3, §28.40): a projeção passa pelo mecanismo durável
+# OperationalEngine::ProjectionReconciler -- o pedido de projeção é gravado junto com a transição,
+# e `flush` roda SEMPRE depois do lock, inclusive no no-op: repetir "Assumir"/"Devolver" depois de
+# uma projeção que falhou conserta o card em vez de deixá-lo stale (o reconciliador também o faria
+# sozinho, independentemente do endpoint).
+#
+# CP-05 (P1-018-01, §17.2 + §18.2): o handoff real pode deixar o lead em modo humano com o
+# responsável Comercial pendente (lacuna do SSOT, ver OperationalEngine::CommercialResponsibleResolver).
+# Assumir esse lead grava o usuário como responsável (§18.2 "responsavel_atual_id = usuário") sem
+# reabrir a intervenção -- o modo já era humano desde o handoff.
 module OperationalEngine
   class TakeoverService
     def self.assumir!(lead:, user_id:)
@@ -21,10 +32,11 @@ module OperationalEngine
     end
 
     def assumir!(user_id)
-      changed = false
-
       @lead.with_lock do
-        next @lead if @lead.modo_atendimento_humano?
+        if @lead.modo_atendimento_humano?
+          claim_pending_responsavel!(user_id) if @lead.responsavel_atual_id.nil?
+          next
+        end
 
         @lead.update!(
           modo_atendimento: 'humano',
@@ -38,24 +50,18 @@ module OperationalEngine
           proxima_recuperacao_em: nil
         )
         write_event('intervencao_humana_iniciada', responsavel_atual_id: user_id)
-        changed = true
-        @lead
-      end.tap do
-        # Fora do with_lock de propósito: a sincronização visual toca o Postgres nativo, um banco
-        # diferente do Supabase -- não vale segurar o lock de linha do Engine pela viagem de rede
-        # extra. Só quando muda de verdade (§20.1: a tag HUMANO/LAVÍNIA no card depende disso).
-        next unless changed
-
-        OperationalEngine::SalesProjectionSync.call(@lead)
-        OperationalEngine::ComercialProjectionSync.call(@lead)
+        OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'assumir')
       end
+
+      # Fora do with_lock de propósito: a sincronização visual toca o Postgres nativo, um banco
+      # diferente do Supabase -- não vale segurar o lock de linha do Engine pela viagem de rede extra.
+      OperationalEngine::ProjectionReconciler.flush(@lead)
+      @lead
     end
 
     def devolver!
-      changed = false
-
       @lead.with_lock do
-        next @lead if @lead.modo_atendimento_lavinia?
+        next if @lead.modo_atendimento_lavinia?
 
         previous_responsavel = @lead.responsavel_atual_id
         @lead.update!(
@@ -67,17 +73,20 @@ module OperationalEngine
         # propósito. Um novo timer, quando existir (Fase 7), nasce do estado atual do lead, não
         # de um valor congelado antes do humano assumir.
         write_event('intervencao_humana_encerrada', responsavel_atual_id: previous_responsavel)
-        changed = true
-        @lead
-      end.tap do
-        next unless changed
-
-        OperationalEngine::SalesProjectionSync.call(@lead)
-        OperationalEngine::ComercialProjectionSync.call(@lead)
+        OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'devolver')
       end
+
+      OperationalEngine::ProjectionReconciler.flush(@lead)
+      @lead
     end
 
     private
+
+    def claim_pending_responsavel!(user_id)
+      @lead.update!(responsavel_atual_id: user_id)
+      write_event('responsavel_alterado', de: nil, para: user_id, motivo: 'assumir_responsavel_pendente')
+      OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'assumir')
+    end
 
     # Grava direto (não via EventWriter/IdempotencyGuard): esta não é uma "entrada" de evento
     # externo pra deduplicar -- é a consequência de uma transição de estado que o `with_lock` +

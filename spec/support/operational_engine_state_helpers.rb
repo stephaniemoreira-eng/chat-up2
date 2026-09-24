@@ -15,6 +15,18 @@ module OperationalEngineStateHelpers
       qualificacao_status: 'qualificado', etapa_comercial: 'oportunidade'
     }
   end
+
+  # CP-05 (P2-025-01; SSOT §17.2, §8.4): oportunidade Comercial COMPLETA, como o handoff real a
+  # deixa -- Prospect Qualificado, frente Comercial, humano responsável, recovery encerrada. Nunca
+  # "etapa_comercial: 'oportunidade'" solto sobre um lead em Backlog.
+  def comercial_opportunity_attributes(etapa_comercial: 'oportunidade', responsavel_atual_id: 77)
+    {
+      etapa_prospect: 'qualificado', qualificacao_status: 'qualificado', qualificado_em: 2.days.ago.change(usec: 0),
+      frente_operacional: 'comercial', modo_atendimento: 'humano', responsavel_atual_id: responsavel_atual_id,
+      motivo_handoff: 'avanco_comercial', etapa_comercial: etapa_comercial, resultado_comercial: 'em_aberto',
+      recuperacao_status: 'inativa', proxima_recuperacao_em: nil, aguardando_resposta: false
+    }
+  end
 end
 
 RSpec.configure do |config|

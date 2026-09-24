@@ -54,10 +54,12 @@ module OperationalEngine
             source: 'lavinia',
             metadata: { calendar_event_id: @event_id, correlation_id: SecureRandom.uuid }
           )
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'reuniao_cancelada')
         end
 
-        # Fora do with_lock (mesma razão do ScheduleMeetingService/TakeoverService).
-        OperationalEngine::SalesProjectionSync.call(lead)
+        # Fora do with_lock (mesma razão do ScheduleMeetingService/TakeoverService). CP-05: projeção
+        # durável via OperationalEngine::ProjectionReconciler.
+        OperationalEngine::ProjectionReconciler.flush(lead)
       end
     end
   end

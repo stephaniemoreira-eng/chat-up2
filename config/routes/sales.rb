@@ -38,6 +38,9 @@ resources :leads, module: :sales, path: 'crm/leads' do
     post :register_no_show
     post :set_propensao
     post :register_resultado_comercial
+    # CP-05 (§8.4/§21.2, §20.3): movimentação Comercial via Engine e remoção manual do NO-SHOW.
+    post :advance_etapa_comercial
+    post :remove_no_show
     # Fase 3 (§21.2): Assumir/Devolver.
     post :assumir
     post :devolver
