@@ -160,7 +160,12 @@ const recoveryStats = computed(() => {
     {
       key: 'rate',
       label: t('UP_SALES.DASHBOARD.PROSPECT.RECOVERY.RATE'),
-      value: formatRate(data.taxa),
+      value: formatRate(data.taxa_recovery),
+    },
+    {
+      key: 'success',
+      label: t('UP_SALES.DASHBOARD.PROSPECT.RECOVERY.SUCCESS_RATE'),
+      value: formatRate(data.taxa_sucesso),
     },
     {
       key: 'after',

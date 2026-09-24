@@ -181,6 +181,10 @@ module OperationalEngine
     # §22.7: precisou = teve ciclo de recovery (qualquer evento do grupo Recuperação, ou recovery
     # ativa agora); recuperado = recuperacao_respondida; conversão após recovery = sequência
     # temporal (conversao_em depois da primeira recuperação), não atribuição causal.
+    #
+    # Denominadores (lacuna do §22.7) decididos em 24/09/2026 pela Stéphanie, por recomendação do
+    # Igor: taxa_recovery = precisaram ÷ todos os leads da coorte; taxa_sucesso = recuperados ÷
+    # precisaram.
     def recovery(leads, eventos)
       precisaram = leads.select { |lead| recovery_eventos(eventos, lead).any? || lead.recuperacao_status == 'ativa' }
       recuperados = precisaram.filter_map do |lead|
@@ -190,7 +194,8 @@ module OperationalEngine
       {
         precisaram: precisaram.size,
         recuperados: recuperados.size,
-        taxa: taxa(recuperados.size, precisaram.size),
+        taxa_recovery: taxa(precisaram.size, leads.size),
+        taxa_sucesso: taxa(recuperados.size, precisaram.size),
         conversoes_apos_recovery: recuperados.count { |lead, primeira| lead.conversao_em.present? && lead.conversao_em >= primeira }
       }
     end

@@ -74,9 +74,10 @@
           "TITLE": "Recovery",
           "NEEDED": "Needed recovery",
           "RECOVERED": "Recovered",
-          "RATE": "Recovery rate",
+          "RATE": "Recovery rate (of the period leads)",
+          "SUCCESS_RATE": "Recovery success rate",
           "CONVERSIONS_AFTER": "Conversions after recovery",
-          "HINT": "Conversion after recovery is a time sequence, not causal attribution. The numbers depend on the Engine recovery events (Phase 7 cadence still being built)."
+          "HINT": "Recovery rate = leads that needed recovery ÷ all leads in the period. Success rate = leads that interacted again ÷ leads that needed recovery. Conversion after recovery is a temporal sequence, not causal attribution."
         }
       }
     },
