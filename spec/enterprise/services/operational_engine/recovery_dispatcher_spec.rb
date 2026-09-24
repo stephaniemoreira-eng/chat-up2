@@ -137,19 +137,43 @@ RSpec.describe OperationalEngine::RecoveryDispatcher do
       expect(events(lead, 'lead_encerrado').sole.metadata).to include('de' => 'ativo', 'para' => 'encerrado', 'motivo' => 'sem_resposta')
     end
 
-    it 'com e-mail disponível, a tentativa 3 sai por e-mail e o ciclo esgota em seguida' do
-      stub_recover
-      lead.reload.update!(email: 'compras@hotel.example.com')
-      [sp(2026, 9, 25, 10, 0), sp(2026, 9, 30, 10, 0)].each { |at| tick(at) }
+    # O canal de e-mail depende do método de entrega real: sem SMTP_ADDRESS o Rails cai em :sendmail
+    # (tratado como canal indisponível). Os dois cenários ficam explícitos aqui.
+    describe 'tentativa 3 por e-mail' do
+      around do |example|
+        original = ActionMailer::Base.delivery_method
+        example.run
+      ensure
+        ActionMailer::Base.delivery_method = original
+      end
 
-      expect { tick(sp(2026, 10, 7, 10, 0)) }.to change(ActionMailer::Base.deliveries, :count).by(1)
-      expect(ActionMailer::Base.deliveries.last.to).to eq(['compras@hotel.example.com'])
-      expect(events(lead, 'recuperacao_email_enviado').sole.metadata).to include('tentativa' => 3, 'canal' => 'email')
-      expect(cycle(lead)).to include(tentativa_recuperacao: 3, lead_status: 'ativo')
+      before do
+        stub_recover
+        lead.reload.update!(email: 'compras@hotel.example.com')
+        [sp(2026, 9, 25, 10, 0), sp(2026, 9, 30, 10, 0)].each { |at| tick(at) }
+      end
 
-      tick(sp(2026, 10, 7, 10, 5))
-      expect(cycle(lead)).to include(lead_status: 'encerrado', motivo_encerramento: 'sem_resposta')
-      expect(events(lead, 'recuperacao_esgotada').sole.metadata).to include('tentativas' => 3)
+      it 'com e-mail e canal configurado, a tentativa 3 sai por e-mail e o ciclo esgota em seguida' do
+        ActionMailer::Base.delivery_method = :test
+
+        expect { tick(sp(2026, 10, 7, 10, 0)) }.to change(ActionMailer::Base.deliveries, :count).by(1)
+        expect(ActionMailer::Base.deliveries.last.to).to eq(['compras@hotel.example.com'])
+        expect(events(lead, 'recuperacao_email_enviado').sole.metadata).to include('tentativa' => 3, 'canal' => 'email')
+        expect(cycle(lead)).to include(tentativa_recuperacao: 3, lead_status: 'ativo')
+
+        tick(sp(2026, 10, 7, 10, 5))
+        expect(cycle(lead)).to include(lead_status: 'encerrado', motivo_encerramento: 'sem_resposta')
+        expect(events(lead, 'recuperacao_esgotada').sole.metadata).to include('tentativas' => 3)
+      end
+
+      it 'com e-mail mas sem canal real (sendmail, sem SMTP), pula a ação sem fingir envio e esgota' do
+        ActionMailer::Base.delivery_method = :sendmail
+
+        expect { tick(sp(2026, 10, 7, 10, 0)) }.not_to change(ActionMailer::Base.deliveries, :count)
+        expect(events(lead, 'recuperacao_email_enviado')).to be_empty
+        expect(events(lead, 'recuperacao_esgotada').sole.metadata).to include('motivo_pulo' => 'canal_email_nao_configurado')
+        expect(cycle(lead)).to include(lead_status: 'encerrado', motivo_encerramento: 'sem_resposta')
+      end
     end
 
     it 'a resposta do lead zera e cancela as tentativas futuras (§15.9)' do

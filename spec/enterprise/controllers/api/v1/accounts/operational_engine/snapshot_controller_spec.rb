@@ -159,7 +159,10 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Snapshot', type: :request 
         expect(response).to have_http_status(:ok)
         expect(body['snapshot']['continuidade']).to include('contexto_execucao' => 'recuperacao', 'ultimo_ponto' => 'aguardando_volume')
         expect(body['snapshot']['mensagem_atual']).to be_nil
-        expect(body['snapshot']['mensagens_recentes_relevantes'].pluck('message_id')).to eq([pergunta.id.to_s, resposta.id.to_s])
+        # o histórico termina na última mensagem pública e inclui a pergunta do lead (o widget pode ter
+        # criado mensagens próprias no meio, que também são conversa pública)
+        recentes = body['snapshot']['mensagens_recentes_relevantes'].pluck('message_id')
+        expect(recentes.first(1) + recentes.last(1)).to eq([pergunta.id.to_s, resposta.id.to_s])
       end
 
       it 'recusa recuperação sem ativação, com ativação alheia, já usada ou com mensagem disparadora' do

@@ -28,7 +28,7 @@ module OperationalEngine
     # abertura e recovery disputam o mesmo espaçamento, nunca saem juntas. A conversa de recovery pode
     # ser antiga (criada há mais de LOOKBACK), então o recorte dela é pela última atividade.
     def self.last_attempt_at(inbox_id)
-      [origination_attempt_at(inbox_id), recovery_attempt_at(inbox_id)].compact.max&.in_time_zone
+      [origination_attempt_at(inbox_id), recovery_attempt_at(inbox_id)].compact.map(&:in_time_zone).max
     end
 
     def self.origination_attempt_at(inbox_id)
