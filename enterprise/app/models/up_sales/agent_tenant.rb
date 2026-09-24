@@ -53,15 +53,42 @@ class UpSales::AgentTenant < ApplicationRecord
   validates :account_id, presence: true, uniqueness: true
   validates :agents_tenant_id, presence: true
   validates :api_key, presence: true
+  validate :whatsapp_inbox_must_be_prospecting_channel
 
   # A Fase 6 do dispatcher só é elegível quando as duas peças estão configuradas -- faltando
   # qualquer uma, OperationalEngine::Dispatcher pula a conta inteira (falha explícita, não
   # tenta adivinhar qual inbox/agente usar).
+  #
+  # CP-07 (P1-027-01/P1-027-02): a inbox precisa ser WhatsApp DA MESMA conta (defesa contra linha
+  # gravada por outro caminho que não o form) e o agente de prospecção precisa vir de um slot SDR
+  # HABILITADO. Desativar o SDR preserva up2_agents_agent_id no slot (UpsertAgentService), então
+  # "tem id" não significa "está ativo". A mesma regra vale pra UI, pro DispatcherJob e pra
+  # resolução do agent id na originação -- todos passam por aqui.
   def dispatcher_ready?
-    whatsapp_inbox_id.present? && prospecting_agent_up2_id.present?
+    valid_prospecting_inbox? && prospecting_agent_up2_id.present?
   end
 
   def prospecting_agent_up2_id
-    account.up_sales_agent_slots.find_by(agent_type: PROSPECTING_AGENT_SLOT_TYPE)&.up2_agents_agent_id
+    slot = account.up_sales_agent_slots.find_by(agent_type: PROSPECTING_AGENT_SLOT_TYPE)
+    slot.up2_agents_agent_id.presence if slot&.enabled?
+  end
+
+  def valid_prospecting_inbox?
+    whatsapp_inbox.present? && whatsapp_inbox.account_id == account_id && whatsapp_inbox.channel_type == 'Channel::Whatsapp'
+  end
+
+  private
+
+  def whatsapp_inbox_must_be_prospecting_channel
+    return if whatsapp_inbox_id.blank?
+
+    inbox = Inbox.find_by(id: whatsapp_inbox_id)
+    if inbox.nil?
+      errors.add(:whatsapp_inbox_id, 'não existe')
+    elsif inbox.account_id != account_id
+      errors.add(:whatsapp_inbox_id, 'pertence a outra conta')
+    elsif inbox.channel_type != 'Channel::Whatsapp'
+      errors.add(:whatsapp_inbox_id, 'não é uma inbox WhatsApp')
+    end
   end
 end

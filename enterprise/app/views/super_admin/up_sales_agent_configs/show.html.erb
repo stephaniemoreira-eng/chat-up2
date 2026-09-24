@@ -98,9 +98,9 @@
           prospecção (slot SDR) configurados.
         <% else %>
           <span class="text-amber-600 font-bold">incompleto</span> — falta
-          <%= @agent_tenant.whatsapp_inbox_id.present? ? '' : 'a inbox WhatsApp' %>
-          <%= @agent_tenant.whatsapp_inbox_id.present? || @agent_tenant.prospecting_agent_up2_id.present? ? '' : ' e ' %>
-          <%= @agent_tenant.prospecting_agent_up2_id.present? ? '' : 'o slot SDR ativado abaixo' %>.
+          <%= @agent_tenant.valid_prospecting_inbox? ? '' : 'a inbox WhatsApp' %>
+          <%= @agent_tenant.valid_prospecting_inbox? || @agent_tenant.prospecting_agent_up2_id.present? ? '' : ' e ' %>
+          <%= @agent_tenant.prospecting_agent_up2_id.present? ? '' : 'o slot SDR ativado e sincronizado abaixo' %>.
         <% end %>
       </p>
     <% end %>
