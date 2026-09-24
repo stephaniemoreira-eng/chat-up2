@@ -14,6 +14,17 @@
 module OperationalEngine
   class OutboundEligibility
     TELEFONE_E164 = /\A\+[1-9]\d{1,14}\z/
+    FONTE_BUSCA = 'busca_prospeccao'.freeze
+
+    # CP-17 (P1-VAL-21; SSOT §10.1 "aplicar proteções", §10.2 "modo operacional compatível"): a
+    # trava "Permitir contato automático do agente" da Busca (Sales::ProspectingConfig
+    # #auto_contact_enabled, padrão DESLIGADO) é gravada em dados_origem de cada lead nascido
+    # dela. Desligada = o lead só entra no Kanban, sem nenhuma mensagem automática. Antes deste
+    # pacote o Dispatcher ignorava a trava. Leads de outras fontes não são afetados.
+    def self.auto_contact_blocked?(lead)
+      origem = lead.dados_origem || {}
+      origem['fonte'] == FONTE_BUSCA && origem['auto_contact_enabled'] != true
+    end
 
     def self.origination_blockers(lead)
       new(lead).origination_blockers
@@ -36,6 +47,7 @@ module OperationalEngine
         blockers << 'nao_contatar' if @lead.nao_contatar?
         blockers << 'cliente_atual' if @lead.relacao_atual == 'cliente_atual'
         blockers << 'lead_encerrado' unless @lead.lead_status_ativo?
+        blockers << 'contato_automatico_nao_liberado' if self.class.auto_contact_blocked?(@lead)
       end
     end
 
