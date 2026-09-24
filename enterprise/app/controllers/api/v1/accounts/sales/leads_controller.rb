@@ -24,6 +24,7 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   rescue_from OperationalEngine::ComercialActionGuard::InvalidContextError, with: :render_action_error
   rescue_from OperationalEngine::SetPropensaoService::InvalidPropensaoError, with: :render_action_error
   rescue_from OperationalEngine::DevolucaoSync::SyncError, with: :render_action_error
+  rescue_from Sales::Leads::EngineManagedAttributesGuard::ChangeError, with: :render_action_error
 
   def index
     @leads = filtered_leads.ordered
@@ -46,8 +47,10 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @lead = Sales::Leads::CreateService.new(account: Current.account, params: lead_params).perform
   end
 
+  # CP-09 (P2-VAL-07, teste 28.39): num card vinculado ao Engine, tags/filtros geridos pelo Engine
+  # não são editáveis por aqui (ver Sales::Leads::EngineManagedAttributesGuard); o resto continua.
   def update
-    @lead.update!(lead_update_params)
+    @lead.update!(Sales::Leads::EngineManagedAttributesGuard.apply!(lead: @lead, attributes: lead_update_params))
   end
 
   def destroy
