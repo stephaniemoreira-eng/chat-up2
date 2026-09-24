@@ -52,7 +52,8 @@ const payload = {
   recovery: {
     precisaram: 1,
     recuperados: 1,
-    taxa: 1,
+    taxa_recovery: 0.2,
+    taxa_sucesso: 1,
     conversoes_apos_recovery: 1,
   },
   opcoes_filtro: {

@@ -74,9 +74,10 @@
           "TITLE": "Recovery",
           "NEEDED": "Necesitaron recovery",
           "RECOVERED": "Recuperados",
-          "RATE": "Tasa de recovery",
+          "RATE": "Tasa de recovery (de los leads del período)",
+          "SUCCESS_RATE": "Tasa de éxito del recovery",
           "CONVERSIONS_AFTER": "Conversiones después del recovery",
-          "HINT": "La conversión después del recovery es una secuencia temporal, no una atribución causal. Los números dependen de los eventos de recovery del Engine (cadencia de la Fase 7 aún en construcción)."
+          "HINT": "Tasa de recovery = leads que necesitaron recovery ÷ todos los leads del período. Tasa de éxito = leads que volvieron a interactuar ÷ leads que necesitaron recovery. La conversión después del recovery es una secuencia temporal, no una atribución causal."
         }
       }
     },

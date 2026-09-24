@@ -174,13 +174,13 @@ RSpec.describe OperationalEngine::ProspectDashboardMetrics do
       expect(resultado[:big_numbers][:em_conversa]).to eq(absoluto: 2, taxa: 1.0)
       expect(resultado[:tempos_medios][:entrada_ate_em_conversa]).to eq(media_segundos: 0, amostra: 2)
       expect(resultado[:tempos_medios][:entrada_ate_conversao][:amostra]).to eq(0)
-      expect(resultado[:recovery]).to eq(precisaram: 0, recuperados: 0, taxa: nil, conversoes_apos_recovery: 0)
+      expect(resultado[:recovery]).to eq(precisaram: 0, recuperados: 0, taxa_recovery: 0.0, taxa_sucesso: nil, conversoes_apos_recovery: 0)
     end
 
     it 'outbound, origem_lead, segmento e inbox_entrada_id restringem a população de todos os indicadores' do
       outbound = metrics(modo: 'outbound')
       expect(funil_absoluto(outbound)).to eq('iniciaram' => 3, 'em_conversa' => 2, 'qualificados' => 1, 'convertidos' => 1)
-      expect(outbound[:recovery]).to eq(precisaram: 1, recuperados: 1, taxa: 1.0, conversoes_apos_recovery: 1)
+      expect(outbound[:recovery]).to eq(precisaram: 1, recuperados: 1, taxa_recovery: 0.3333, taxa_sucesso: 1.0, conversoes_apos_recovery: 1)
 
       expect(funil_absoluto(metrics(origem_lead: 'indicacao'))).to eq('iniciaram' => 1, 'em_conversa' => 1, 'qualificados' => 0, 'convertidos' => 0)
       expect(funil_absoluto(metrics(segmento: 'hotel', modo: 'outbound')))
@@ -220,7 +220,11 @@ RSpec.describe OperationalEngine::ProspectDashboardMetrics do
       outbound!(entrada: '2026-09-02 11:00', recuperacao_status: 'ativa')
       outbound!(entrada: '2026-09-02 12:00')
 
-      expect(metrics[:recovery]).to eq(precisaram: 4, recuperados: 2, taxa: 0.5, conversoes_apos_recovery: 1)
+      resultado = metrics
+      expect(resultado[:recovery]).to include(precisaram: 4, recuperados: 2, taxa_sucesso: 0.5, conversoes_apos_recovery: 1)
+      # Decisão de 24/09/2026 (recomendação do Igor): taxa de recovery sobre TODOS os leads da coorte.
+      total = resultado[:big_numbers][:leads_iniciados]
+      expect(resultado[:recovery][:taxa_recovery]).to eq((4.0 / total).round(4))
     end
   end
 
