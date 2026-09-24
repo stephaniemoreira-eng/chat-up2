@@ -2,30 +2,35 @@
 # confirmada. Mesma checagem de sanidade do UpdateMeetingService (event_id da URL == calendar_event_id
 # atual do lead).
 #
-# Volta agendamento_status pra cancelado e etapa_prospect pra qualificado (a etapa logo antes de
-# agendado -- sem reunião confirmada, o lead volta a ser "só" qualificado). NÃO toca
-# conversao_em/tipo_conversao: são write-once no banco (a trigger recusaria) e, mais importante,
-# cancelar uma reunião não desfaz o fato histórico de que uma conversão aconteceu naquele momento --
-# é uma métrica de "tempo até converter", não um estado que reflete a reunião em si. calendar_event_id
-# também fica como está (referência histórica); uma chamada futura de schedule_meeting sobrescreve
-# normalmente quando uma nova reunião for confirmada.
+# CP-04 (P1-023-01, SSOT §28.29 "não voltar automaticamente Agendado→Qualificado"): grava só
+# agendamento_status=cancelado + evento reuniao_cancelada. A etapa Prospect NÃO regride -- a reunião
+# real existiu e o Agendado continua sendo o fato histórico do funil. calendar_event_id, agendado_em
+# e conversao_em/tipo_conversao também ficam intactos (§6.3: fatos históricos; conversão é
+# write-once). Uma nova reunião confirmada depois sobrescreve normalmente via ScheduleMeetingService.
+#
+# CP-10 (P1-VAL-03): é a ferramenta "Cancelar evento" da Lavínia no modo agent. `event_id` opcional
+# (mesmo motivo do UpdateMeetingService). Guarda só de modo humano: o lead que pediu não-contatar e
+# quer desmarcar a reunião não deve ficar com um compromisso que ele recusou -- e, de todo modo, o
+# Engine não chama a Lavínia para um lead em não-contatar.
 module OperationalEngine
   module Tools
     class CancelMeetingService
       def initialize(account:, conversation_id:, event_id:)
         @account = account
         @conversation_id = conversation_id
-        @event_id = event_id
+        @event_id = event_id.presence
       end
 
       def call
         lead = OperationalEngine::Tools::ResolveLeadFromConversation.call(account: @account, conversation_id: @conversation_id)
+        reason = OperationalEngine::Tools::LaviniaActionGuard.blocked_reason(lead)
+        return { ok: false, reason: reason } if reason
+
+        @event_id ||= lead.calendar_event_id
         return not_the_confirmed_meeting unless matches_confirmed_meeting?(lead)
 
         agent_tenant = @account.up_sales_agent_tenant
-        if agent_tenant.blank? || agent_tenant.calendar_integration_instance_id.blank?
-          return { ok: false, reason: 'agenda não conectada para esta conta' }
-        end
+        return { ok: false, reason: 'agenda não conectada para esta conta' } unless calendar_connected?(agent_tenant)
 
         UpSales::Agents::CancelCalendarEventService.new(agent_tenant: agent_tenant, event_id: @event_id).perform
 
@@ -40,7 +45,11 @@ module OperationalEngine
       private
 
       def matches_confirmed_meeting?(lead)
-        lead.agendamento_status_confirmado? && lead.calendar_event_id == @event_id
+        @event_id.present? && lead.agendamento_status_confirmado? && lead.calendar_event_id == @event_id
+      end
+
+      def calendar_connected?(agent_tenant)
+        agent_tenant.present? && agent_tenant.calendar_integration_instance_id.present?
       end
 
       def not_the_confirmed_meeting
@@ -49,17 +58,19 @@ module OperationalEngine
 
       def persist_cancellation(lead)
         lead.with_lock do
-          lead.update!(agendamento_status: 'cancelado', etapa_prospect: 'qualificado')
+          lead.update!(agendamento_status: 'cancelado')
           OperationalEngine::LeadEvent.create!(
             lead: lead,
             event_type: 'reuniao_cancelada',
             source: 'lavinia',
             metadata: { calendar_event_id: @event_id, correlation_id: SecureRandom.uuid }
           )
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'reuniao_cancelada')
         end
 
-        # Fora do with_lock (mesma razão do ScheduleMeetingService/TakeoverService).
-        OperationalEngine::SalesProjectionSync.call(lead)
+        # Fora do with_lock (mesma razão do ScheduleMeetingService/TakeoverService). CP-05: projeção
+        # durável via OperationalEngine::ProjectionReconciler.
+        OperationalEngine::ProjectionReconciler.flush(lead)
       end
     end
   end

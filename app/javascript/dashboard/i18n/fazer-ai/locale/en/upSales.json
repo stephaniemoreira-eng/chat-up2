@@ -18,7 +18,67 @@
       "LAST_SEARCH_EMPTY": "— (no search yet)",
       "MEETINGS_SCHEDULED": "Agenda appointments (month)",
       "MEETINGS_PLACEHOLDER": "— (no agenda data)",
-      "DEALS_WON": "Deals won"
+      "DEALS_WON": "Deals won",
+      "CRM_SECTION_TITLE": "CRM overview",
+      "CRM_SECTION_HINT": "Current snapshot of the CRM cards, outside the cohort. Each lead counts once, even with a Prospect and a Commercial card.",
+      "PROSPECT": {
+        "TITLE": "Prospect dashboard",
+        "HINT": "Historical performance by cohort: the population is selected once by the operation entry date, and every indicator uses the same leads.",
+        "LOADING": "Computing the cohort…",
+        "ERROR": "Could not compute the dashboard right now.",
+        "EMPTY_VALUE": "—",
+        "FILTERS": {
+          "START": "Entry from",
+          "END": "to",
+          "MODE": "Mode",
+          "ORIGIN": "Origin",
+          "SEGMENT": "Segment",
+          "INBOX": "Entry inbox",
+          "ALL": "All"
+        },
+        "MODES": {
+          "CONSOLIDADO": "Consolidated",
+          "OUTBOUND": "Outbound",
+          "INBOUND": "Inbound"
+        },
+        "BIG_NUMBERS": {
+          "STARTED": "Leads started",
+          "CONVERSATION_RATE": "Conversation rate",
+          "QUALIFICATION_RATE": "Qualification rate",
+          "CONVERSION_RATE": "Conversion rate",
+          "ABSOLUTE": "{count} leads"
+        },
+        "FUNNEL": {
+          "TITLE": "Funnel",
+          "INICIARAM": "Started the operation",
+          "EM_CONVERSA": "In conversation",
+          "QUALIFICADOS": "Qualified",
+          "CONVERTIDOS": "Converted",
+          "EFFICIENCY": "{rate} of the previous step",
+          "COMPOSITION": "Conversion detail: {meetings} meeting(s) scheduled · {callbacks} callback(s) done"
+        },
+        "TIMES": {
+          "TITLE": "Average times",
+          "ENTRY_TO_CONVERSATION": "Entry → first conversation",
+          "CONVERSATION_TO_QUALIFICATION": "Conversation → first qualification",
+          "QUALIFICATION_TO_CONVERSION": "Qualification → conversion",
+          "ENTRY_TO_CONVERSION": "Entry → conversion",
+          "SAMPLE": "average of {count} leads that reached the milestone"
+        },
+        "DURATION": {
+          "MINUTES": "{m} min",
+          "HOURS": "{h} h {m} min",
+          "DAYS": "{d} d {h} h"
+        },
+        "RECOVERY": {
+          "TITLE": "Recovery",
+          "NEEDED": "Needed recovery",
+          "RECOVERED": "Recovered",
+          "RATE": "Recovery rate",
+          "CONVERSIONS_AFTER": "Conversions after recovery",
+          "HINT": "Conversion after recovery is a time sequence, not causal attribution. The numbers depend on the Engine recovery events (Phase 7 cadence still being built)."
+        }
+      }
     },
     "AGENDA": {
       "TITLE": "Agenda",

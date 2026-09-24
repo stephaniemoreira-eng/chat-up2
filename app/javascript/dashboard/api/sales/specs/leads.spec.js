@@ -131,14 +131,33 @@ describe('#SalesLeadsAPI', () => {
       );
     });
 
+    it('#advanceEtapaComercial posts the target commercial stage', () => {
+      salesLeadsAPI.advanceEtapaComercial(1, 'em_acompanhamento');
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/advance_etapa_comercial',
+        { etapa_comercial: 'em_acompanhamento' }
+      );
+    });
+
+    it('#removeNoShow posts with no body', () => {
+      salesLeadsAPI.removeNoShow(1);
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/remove_no_show'
+      );
+    });
+
     it('#assumir posts with no body', () => {
       salesLeadsAPI.assumir(1);
-      expect(axiosMock.post).toHaveBeenCalledWith('/api/v1/crm/leads/1/assumir');
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/assumir'
+      );
     });
 
     it('#devolver posts with no body', () => {
       salesLeadsAPI.devolver(1);
-      expect(axiosMock.post).toHaveBeenCalledWith('/api/v1/crm/leads/1/devolver');
+      expect(axiosMock.post).toHaveBeenCalledWith(
+        '/api/v1/crm/leads/1/devolver'
+      );
     });
   });
 });

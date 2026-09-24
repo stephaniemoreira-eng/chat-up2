@@ -1,19 +1,28 @@
 # Monta o Snapshot de entrada da Lavínia -- SSOT §12.3, S-4 do plano do Marco 1. Espelha
 # `leadSnapshotSchema` (up2-agents, `src/modules/operational-engine/contracts.ts`) campo a campo:
 # qualquer mudança de forma tem que mudar os dois lados juntos, são o mesmo contrato em dois
-# repositórios. Só o "estado operacional" -- histórico de mensagens e a mensagem atual são
-# montados pelo próprio up2-agents (checkpointer do LangGraph + webhook do Chatwoot), não
-# passam por aqui: "não despejar toda a tabela, todo o histórico... em todo turno" (§12.3).
+# repositórios.
+#
+# CP-03 (P1-017-01/P1-017-02/P1-021-03/P1-022-02): o Snapshot agora é do TURNO, não só do lead --
+# quem conhece o disparador (o orquestrador) informa `contexto_execucao` e a mensagem que disparou
+# o turno; o Engine resolve `mensagem_atual` e `mensagens_recentes_relevantes` em torno dela
+# (OperationalEngine::TurnMessages) e valida a coerência. O contexto não é mais inferido da
+# fotografia do lead: o mesmo estado produz contextos diferentes conforme o gatilho.
 module OperationalEngine
   class SnapshotBuilder
     CONTRACT_VERSION = 1
+    CONTEXTOS = %w[conversa primeiro_contato recuperacao agenda].freeze
+    CONTEXTO_PADRAO = 'conversa'.freeze
 
-    def self.call(lead)
-      new(lead).call
+    # trigger: { contexto_execucao:, mensagem_atual:, mensagens_recentes_relevantes: } (ver
+    # SnapshotController). Sem trigger (chamador legado) = conversa sem mensagem resolvida.
+    def self.call(lead, trigger: {})
+      new(lead, trigger).call
     end
 
-    def initialize(lead)
+    def initialize(lead, trigger = {})
       @lead = lead
+      @trigger = trigger || {}
     end
 
     def call
@@ -24,6 +33,8 @@ module OperationalEngine
         estado: estado,
         conhecimento: conhecimento,
         continuidade: continuidade,
+        mensagens_recentes_relevantes: @trigger[:mensagens_recentes_relevantes] || [],
+        mensagem_atual: @trigger[:mensagem_atual],
         source: 'engine'
       }
     end
@@ -88,17 +99,8 @@ module OperationalEngine
       }
     end
 
-    # Não é coluna do lead -- é lido do estado atual (§12.3: "conversa|primeiro_contato|
-    # recuperacao|agenda"). Hoje só existe chamador para o turno inbound (mensagem do lead
-    # chegando), então "conversa" é o valor honesto na esmagadora maioria dos casos; as duas
-    # exceções que já são decidíveis a partir do lead sozinho ficam explícitas. "primeiro_contato"
-    # e a semântica completa de "recuperacao" pertencem ao dispatcher outbound (Fase 6/§10.5, que
-    # ainda não chama este builder) e não são simuladas aqui.
     def contexto_execucao
-      return 'agenda' if lead.agendamento_status_em_andamento?
-      return 'recuperacao' if lead.recuperacao_status_ativa? && lead.etapa_prospect_contatado?
-
-      'conversa'
+      @trigger[:contexto_execucao].presence || CONTEXTO_PADRAO
     end
   end
 end

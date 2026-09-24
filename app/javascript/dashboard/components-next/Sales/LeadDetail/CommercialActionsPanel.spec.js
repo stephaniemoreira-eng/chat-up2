@@ -12,17 +12,68 @@ vi.mock('vue-i18n', () => ({
 }));
 
 describe('CommercialActionsPanel', () => {
-  it('renderiza os botões de ação (propensão, callback, no-show, ganho/perdido) sem quebrar', () => {
-    const wrapper = mount(CommercialActionsPanel, {
-      props: { engineTags: ['callback'], engineStageKey: 'oportunidade', isSaving: false },
-    });
+  const labelsFor = props =>
+    mount(CommercialActionsPanel, { props: { isSaving: false, ...props } })
+      .findAll('button')
+      .map(button => button.text());
 
-    const labels = wrapper.findAll('button').map(button => button.text());
+  it('renderiza os botões de ação (propensão, callback, no-show, ganho/perdido) sem quebrar', () => {
+    const labels = labelsFor({
+      engineTags: ['callback'],
+      engineStageKey: 'em_acompanhamento',
+    });
 
     expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_WON');
     expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_LOST');
     expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.CALLBACK_REALIZADO');
     expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.NO_SHOW');
+  });
+
+  // CP-05 (P1-025-02, §8.4): Ganho/Perdido só a partir de Em acompanhamento -- em Oportunidade o
+  // painel oferece a movimentação Comercial (ação do Engine) no lugar.
+  it('em Oportunidade oferece mover para Em acompanhamento e esconde Ganho/Perdido', () => {
+    const labels = labelsFor({
+      engineTags: [],
+      engineStageKey: 'oportunidade',
+    });
+
+    expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.START_ACOMPANHAMENTO');
+    expect(labels).not.toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_WON');
+    expect(labels).not.toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_LOST');
+  });
+
+  it('emite advance-etapa-comercial com em_acompanhamento', async () => {
+    const wrapper = mount(CommercialActionsPanel, {
+      props: {
+        engineTags: [],
+        engineStageKey: 'oportunidade',
+        isSaving: false,
+      },
+    });
+    const button = wrapper
+      .findAll('button')
+      .find(
+        b => b.text() === 'CRM.LEAD.DETAIL.COMMERCIAL.START_ACOMPANHAMENTO'
+      );
+
+    await button.trigger('click');
+
+    expect(wrapper.emitted('advance-etapa-comercial')).toEqual([
+      ['em_acompanhamento'],
+    ]);
+  });
+
+  // CP-05 (P2-025-03, §20.3): remoção manual da tag NO-SHOW só quando ela está presente.
+  it('mostra Remover NO-SHOW apenas quando a tag no_show está no card', () => {
+    expect(
+      labelsFor({
+        engineTags: ['no_show'],
+        engineStageKey: 'em_acompanhamento',
+      })
+    ).toContain('CRM.LEAD.DETAIL.COMMERCIAL.REMOVE_NO_SHOW');
+    expect(
+      labelsFor({ engineTags: [], engineStageKey: 'em_acompanhamento' })
+    ).not.toContain('CRM.LEAD.DETAIL.COMMERCIAL.REMOVE_NO_SHOW');
   });
 
   it('esconde as ações e mostra o texto de resolução quando já é ganho/perdido', () => {

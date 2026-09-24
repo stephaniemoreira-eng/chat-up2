@@ -9,7 +9,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
   end
 
   def perform
-    described_class.new(account: account, conversation_id: conversation.id).call
+    described_class.new(account: account, conversation_id: conversation.display_id).call
   end
 
   it 'retorna erro quando a conversa não existe' do
@@ -25,6 +25,8 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
     lead.reload
     expect(lead.lead_status).to eq('encerrado')
     expect(lead.motivo_encerramento).to eq('sem_interesse')
+    # 28.27 (P2-VAL-02): sem interesse encerra o ciclo SEM ativar nao_contatar.
+    expect(lead.nao_contatar).to be(false)
   end
 
   it 'não mexe em qualificacao_status' do
@@ -36,7 +38,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
   end
 
   it 'recusa quando já existe um agendamento confirmado' do
-    lead.update!(agendamento_status: 'confirmado')
+    lead.update!(confirmed_meeting_attributes)
 
     expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
     expect(lead.reload.lead_status).to eq('ativo')
@@ -47,5 +49,23 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
     perform
 
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'encerrado_sem_interesse').count).to eq(1)
+  end
+
+  # CP-01 -- P1-018-05: estado mais novo vence a ação antiga que esperava o lock.
+  describe 'corrida com fato mais novo' do
+    it 'reunião confirmada enquanto a ação esperava: não encerra' do
+      persist_newer_fact_before_lock(**confirmed_meeting_attributes)
+
+      expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
+      expect(lead.reload.lead_status).to eq('ativo')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'encerrado_sem_interesse')).to be_empty
+    end
+
+    it 'humano assumiu enquanto a ação esperava: a Lavínia não altera o estado' do
+      persist_newer_fact_before_lock(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+      expect(lead.reload.lead_status).to eq('ativo')
+    end
   end
 end

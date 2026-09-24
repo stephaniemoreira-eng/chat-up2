@@ -121,7 +121,19 @@ RSpec.describe Sales::Leads::MoveStageService do
       expect(lead.reload.sales_stage_id).to eq(open_stage.id)
     end
 
-    it 'nao bloqueia mover PRA FORA do Agendado por um humano' do
+    # CP-05 (P2-023-01 pendente, P1-023-03; SSOT §4, §21.2, §28.29): num card gerido pelo Engine a
+    # etapa é reflexo do Supabase -- humano não tira o card de Agendado pelo CRM (a reunião real
+    # continua tendo existido; o Engine não volta Agendado→Qualificado).
+    it 'bloqueia um humano mover PRA FORA do Agendado um card gerido pelo Engine' do
+      lead.update!(operational_lead_id: SecureRandom.uuid)
+      described_class.new(lead: lead, stage: agendado_stage, user: nil, system_source: :operational_engine).perform
+
+      expect { described_class.new(lead: lead, stage: open_stage, user: user).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError, /gerido pelo Operational Engine/)
+      expect(lead.reload.sales_stage_id).to eq(agendado_stage.id)
+    end
+
+    it 'card nativo (sem vínculo com o Engine) mantém o comportamento próprio fora das stages protegidas' do
       described_class.new(lead: lead, stage: agendado_stage, user: nil, system_source: :operational_engine).perform
 
       moved = described_class.new(lead: lead, stage: open_stage, user: user).perform
@@ -153,6 +165,26 @@ RSpec.describe Sales::Leads::MoveStageService do
 
       expect(moved.stage).to eq(ganho_stage)
       expect(moved).to be_won
+    end
+  end
+
+  # CP-05 (P1-023-03): card gerido pelo Engine nunca muda de coluna só no CRM.
+  describe 'card gerido pelo Operational Engine' do
+    let(:other_open_stage) { create(:sales_stage, pipeline: pipeline) }
+
+    before { lead.update!(operational_lead_id: SecureRandom.uuid) }
+
+    it 'recusa qualquer mudança de coluna feita por humano, mesmo entre stages abertas' do
+      expect { described_class.new(lead: lead, stage: other_open_stage, user: user).perform }
+        .to raise_error(Sales::Leads::MoveStageService::ProtectedTransitionError)
+      expect(lead.reload.sales_stage_id).to eq(open_stage.id)
+      expect(lead.stage_transitions).to be_empty
+    end
+
+    it 'aceita a projeção do Engine (system_source: :operational_engine)' do
+      moved = described_class.new(lead: lead, stage: other_open_stage, user: nil, system_source: :operational_engine).perform
+
+      expect(moved.stage).to eq(other_open_stage)
     end
   end
 end

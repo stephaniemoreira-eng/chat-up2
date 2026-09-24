@@ -7,7 +7,8 @@ RSpec.describe OperationalEngine::RegisterCallbackRealizadoService do
   def build_lead(**overrides)
     OperationalEngine::Lead.create!({
       conta_id: account.id, telefone: "+551399#{rand(1_000_000..9_999_999)}", upsales_contact_id: contact.id,
-      etapa_comercial: 'oportunidade', agendamento_status: 'callback_registrado'
+      # CP-04 (P2-018-01): callback registrado completo -- Prospect Qualificado + oportunidade (§16.2).
+      **pending_callback_attributes
     }.merge(overrides))
   end
 
@@ -53,5 +54,39 @@ RSpec.describe OperationalEngine::RegisterCallbackRealizadoService do
 
     sales_lead = comercial_sales_lead(lead)
     expect(sales_lead.custom_attributes['engine_tags']).not_to include('callback')
+  end
+
+  # CP-04 -- P1-025-01 (SSOT §16.5, §28.17, §28.18).
+  describe 'conversão Prospect' do
+    let(:lead) { build_lead }
+
+    it 'callback realizado como primeiro marco preenche conversao_em (= callback_realizado_em) e tipo callback' do
+      described_class.call!(lead: lead, user_id: 1)
+
+      lead.reload
+      expect(lead.conversao_em).to eq(lead.callback_realizado_em)
+      expect(lead.tipo_conversao).to eq('callback')
+    end
+
+    it 'reunião anterior já converteu: preserva a conversão e ainda registra o callback realizado' do
+      original = 3.days.ago.change(usec: 0)
+      lead.update!(conversao_em: original, tipo_conversao: 'agendamento')
+
+      described_class.call!(lead: lead, user_id: 1)
+
+      lead.reload
+      expect(lead.conversao_em).to eq(original)
+      expect(lead.tipo_conversao).to eq('agendamento')
+      expect(lead.callback_realizado_em).to be_present
+    end
+
+    it 'reprocessamento não duplica o evento nem mexe no primeiro marco' do
+      described_class.call!(lead: lead, user_id: 1)
+      marco = lead.reload.conversao_em
+
+      expect { described_class.call!(lead: lead, user_id: 1) }.to raise_error(described_class::InvalidTransitionError)
+      expect(lead.reload.conversao_em).to eq(marco)
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'callback_realizado').count).to eq(1)
+    end
   end
 end

@@ -13,6 +13,10 @@
 post 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#schedule_meeting'
 patch 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_engine/tools#update_meeting'
 delete 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_engine/tools#cancel_meeting'
+# CP-10 (P1-VAL-03): as mesmas ações sem :event_id -- é o caminho das ferramentas "Atualizar evento"/
+# "Cancelar evento" da Lavínia no modo agent; o Engine resolve a reunião confirmada do próprio lead.
+patch 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#update_meeting'
+delete 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#cancel_meeting'
 post 'operational_engine/tools/register_callback', to: 'operational_engine/tools#register_callback'
 get 'operational_engine/tools/availability', to: 'operational_engine/tools#availability'
 
@@ -33,3 +37,8 @@ post 'operational_engine/actions/handoff_comercial', to: 'operational_engine/act
 post 'operational_engine/actions/encerrar_sem_interesse', to: 'operational_engine/actions#encerrar_sem_interesse'
 post 'operational_engine/actions/encerrar_nao_qualificado', to: 'operational_engine/actions#encerrar_nao_qualificado'
 post 'operational_engine/actions/ativar_nao_contatar', to: 'operational_engine/actions#ativar_nao_contatar'
+
+# CP-03 (P1-021-02): commit da saída estruturada do turno (dados_extraidos, decisao_qualificacao,
+# aguardando_resposta, ultimo_ponto, resumo_oportunidade) -- o up2-agents chama ANTES de despachar a
+# acao_sugerida, com a mesma identidade de turno (turn_id).
+post 'operational_engine/turno', to: 'operational_engine/actions#saida_estruturada'

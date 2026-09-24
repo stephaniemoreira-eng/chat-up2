@@ -108,12 +108,226 @@ RSpec.describe OperationalEngine::Dispatcher do
     expect(event.metadata['motivo']).to eq('up2-agents fora do ar')
   end
 
-  it 'a conversa ja existir conta como reivindicada mesmo se a chamada ao up2-agents falhar (nao tenta nao-atomicamente de novo no mesmo tick)' do
-    stub_originate(status: 500, body: { error: 'boom' })
-    build_lead(telefone: '+5513991234567')
+  describe 'autorizacao final antes do post (CP-01, P0-024-01/P0-022-02)' do
+    let(:agent_bot) { create(:agent_bot) }
+    let(:json) { { 'Content-Type' => 'application/json' } }
 
-    described_class.call(conta_id: account.id)
+    # Simula o up2-agents: durante a "geracao" um fato novo pode entrar; depois ele tenta gravar a
+    # abertura pelo mesmo caminho do post real (OutboundSendGate).
+    def stub_originate_posting(before_post: nil)
+      stub_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate').to_return do
+        before_post&.call
+        conversation = Conversation.find_by!(account_id: account.id, inbox_id: inbox.id)
+        OperationalEngine::OutboundSendGate.authorize!(conversation: conversation) do
+          create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                           sender: agent_bot, content: 'Oi, aqui e a Lavinia!')
+        end
+        { status: 200, body: { ok: true, outcome: 'posted' }.to_json, headers: json }
+      rescue OperationalEngine::OutboundSendGate::Blocked => e
+        { status: 200, body: { ok: false, outcome: 'blocked', reason: e.reason }.to_json, headers: json }
+      end
+    end
 
-    expect(Conversation.where(account_id: account.id).count).to eq(1)
+    def outgoing_messages
+      Message.where(account_id: account.id, message_type: 'outgoing')
+    end
+
+    it 'grava a autorizacao da ativacao na conversa reivindicada' do
+      stub_originate
+      lead = build_lead(telefone: '+5513991234567')
+
+      described_class.call(conta_id: account.id)
+
+      activation = OperationalEngine::OriginationActivation.for(Conversation.find_by!(account_id: account.id))
+      expect(activation.status).to eq('authorized')
+      expect(activation.lead_id).to eq(lead.lead_id)
+      expect(activation.activation_id).to be_present
+      # CP-03 (P1-022-02): a mesma identidade vai para o up2-agents (Snapshot primeiro_contato + turn_id).
+      expect(
+        a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+          .with(body: hash_including('activationId' => activation.activation_id))
+      ).to have_been_made.once
+    end
+
+    it 'lead elegivel: a abertura sai e consome a ativacao' do
+      build_lead(telefone: '+5513991234567')
+      stub_originate_posting
+
+      described_class.call(conta_id: account.id)
+
+      expect(outgoing_messages.count).to eq(1)
+      expect(OperationalEngine::OriginationActivation.for(Conversation.find_by!(account_id: account.id)).status).to eq('consumed')
+    end
+
+    it 'opt-out entra enquanto a abertura e gerada: nenhuma mensagem sai' do
+      lead = build_lead(telefone: '+5513991234567')
+      stub_originate_posting(before_post: -> { OperationalEngine::Lead.find(lead.lead_id).update!(nao_contatar: true) })
+
+      described_class.call(conta_id: account.id)
+
+      expect(outgoing_messages).to be_empty
+    end
+
+    it 'humano assume enquanto a abertura e gerada: nenhuma mensagem automatica sai' do
+      lead = build_lead(telefone: '+5513991234567')
+      user = create(:user, account: account)
+      stub_originate_posting(before_post: lambda {
+        OperationalEngine::TakeoverService.assumir!(lead: OperationalEngine::Lead.find(lead.lead_id), user_id: user.id)
+      })
+
+      described_class.call(conta_id: account.id)
+
+      expect(outgoing_messages).to be_empty
+    end
+
+    it 'lead vira cliente atual / e encerrado enquanto a abertura e gerada: nenhuma mensagem sai' do
+      lead = build_lead(telefone: '+5513991234567')
+      stub_originate_posting(before_post: lambda {
+        OperationalEngine::Lead.find(lead.lead_id).update!(relacao_atual: 'cliente_atual', lead_status: 'encerrado',
+                                                           motivo_encerramento: 'cliente_atual')
+      })
+
+      described_class.call(conta_id: account.id)
+
+      expect(outgoing_messages).to be_empty
+    end
+  end
+
+  # CP-02 -- P1-024-01, P1-024-02, P1-024-03, P1-024-04, P0-022-01, P2-024-01.
+  describe 'fila outbound confiável' do
+    let(:originate_url) { 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate' }
+    let(:json) { { 'Content-Type' => 'application/json' } }
+
+    def ok_response
+      { status: 200, body: { ok: true, outcome: 'posted' }.to_json, headers: json }
+    end
+
+    def fail_response
+      { status: 500, body: { error: 'up2-agents fora do ar' }.to_json, headers: json }
+    end
+
+    def activation_for(lead)
+      contact = Contact.find_by!(account_id: account.id, phone_number: lead.telefone)
+      OperationalEngine::OriginationActivation.for(Conversation.where(contact_id: contact.id).order(:id).last)
+    end
+
+    it 'falha antes do envio: o lead fica em Backlog e o próximo tick retoma a MESMA ativação na mesma conversa' do
+      stub_request(:post, originate_url).to_return(fail_response, ok_response)
+      lead = build_lead(telefone: '+5513991234567')
+
+      described_class.call(conta_id: account.id)
+      expect(lead.reload.etapa_prospect).to eq('backlog')
+      # 28.2 (P2-VAL-02): falha no primeiro envio não preenche nenhum timestamp de sucesso.
+      expect(lead.attributes.slice('entrada_operacao_em', 'primeiro_contato_em')).to eq('entrada_operacao_em' => nil, 'primeiro_contato_em' => nil)
+      activation_id = activation_for(lead).activation_id
+
+      travel_to(business_hours + OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute)
+      described_class.call(conta_id: account.id)
+
+      expect(a_request(:post, originate_url)).to have_been_made.twice
+      expect(Conversation.where(account_id: account.id).count).to eq(1)
+      expect(activation_for(lead).activation_id).to eq(activation_id)
+    end
+
+    it 'retries limitados: esgotadas as tentativas a ativação vira failed com evento terminal visível' do
+      stub_request(:post, originate_url).to_return(fail_response)
+      lead = build_lead(telefone: '+5513991234567')
+
+      4.times do |tick|
+        travel_to(business_hours + ((OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute) * tick))
+        described_class.call(conta_id: account.id)
+      end
+
+      expect(a_request(:post, originate_url)).to have_been_made.times(OperationalEngine::OriginationActivation::MAX_ATTEMPTS)
+      expect(activation_for(lead).status).to eq('failed')
+      falhas = lead.events.where(event_type: 'primeiro_contato_falhou').map(&:metadata)
+      expect(falhas.pluck('tentativa')).to contain_exactly(1, 2, OperationalEngine::OriginationActivation::MAX_ATTEMPTS)
+      expect(falhas.select { |m| m['terminal'] }.pluck('tentativa')).to eq([OperationalEngine::OriginationActivation::MAX_ATTEMPTS])
+    end
+
+    describe 'com pacing desligado' do
+      before { allow(OperationalEngine::DispatchPacing).to receive(:interval).and_return(0.seconds) }
+
+      it 'a ordem REAL das chamadas segue etapa_entrou_em ASC, independente das PKs' do
+        phones = []
+        stub_request(:post, originate_url).to_return do |request|
+          phones << JSON.parse(request.body)['contactPhone']
+          ok_response
+        end
+        build_lead(telefone: '+5513990000003', etapa_entrou_em: 1.hour.ago)
+        build_lead(telefone: '+5513990000001', etapa_entrou_em: 5.hours.ago)
+        build_lead(telefone: '+5513990000002', etapa_entrou_em: 3.hours.ago)
+
+        described_class.call(conta_id: account.id)
+
+        expect(phones).to eq(%w[+5513990000001 +5513990000002 +5513990000003])
+      end
+
+      it 'um lead com falha não bloqueia os seguintes da fila (sem head-of-line blocking)' do
+        stub_request(:post, originate_url).to_return do |request|
+          JSON.parse(request.body)['contactPhone'] == '+5513990000001' ? fail_response : ok_response
+        end
+        build_lead(telefone: '+5513990000001', etapa_entrou_em: 5.hours.ago)
+        build_lead(telefone: '+5513990000002', etapa_entrou_em: 1.hour.ago)
+
+        described_class.call(conta_id: account.id)
+
+        expect(a_request(:post, originate_url).with(body: hash_including('contactPhone' => '+5513990000002'))).to have_been_made.once
+      end
+    end
+
+    it 'pacing: com vagas livres, só uma abordagem por intervalo -- sem rajada nem compensação' do
+      stub_request(:post, originate_url).to_return(ok_response)
+      3.times { |i| build_lead(telefone: "+551399000000#{i}", etapa_entrou_em: (5 - i).hours.ago) }
+
+      described_class.call(conta_id: account.id)
+      described_class.call(conta_id: account.id)
+      expect(a_request(:post, originate_url)).to have_been_made.once
+
+      travel_to(business_hours + OperationalEngine::DispatchPacing.interval + 1.second)
+      described_class.call(conta_id: account.id)
+      expect(a_request(:post, originate_url)).to have_been_made.twice
+    end
+
+    it 'telefone inválido ou lead já abordado no ciclo não entram na fila' do
+      stub_request(:post, originate_url).to_return(ok_response)
+      build_lead.update_column(:telefone, '13 99123-4567') # rubocop:disable Rails/SkipsModelValidations
+      build_lead(primeiro_contato_em: 1.day.ago)
+
+      described_class.call(conta_id: account.id)
+
+      expect(a_request(:post, originate_url)).not_to have_been_made
+    end
+
+    it 'ativação com abertura já gravada nunca é reoriginada (retry depois do envio não gera segunda mensagem)' do
+      agent_bot = create(:agent_bot)
+      stub_request(:post, originate_url).to_return do
+        conversation = Conversation.find_by!(account_id: account.id)
+        OperationalEngine::OutboundSendGate.authorize!(conversation: conversation) do
+          create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                           sender: agent_bot, content: 'Oi!')
+        end
+        { status: 504, body: { error: 'timeout depois do envio' }.to_json, headers: json }
+      end
+      lead = build_lead(telefone: '+5513991234567')
+
+      described_class.call(conta_id: account.id)
+      travel_to(business_hours + OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute)
+      described_class.call(conta_id: account.id)
+
+      expect(a_request(:post, originate_url)).to have_been_made.once
+      expect(Message.where(account_id: account.id, message_type: 'outgoing').count).to eq(1)
+      expect(activation_for(lead).status).to eq('consumed')
+    end
+
+    it 'duas execuções concorrentes da mesma ativação: só uma ganha a tentativa (lease)' do
+      lead = build_lead(telefone: '+5513991234567')
+      conversation = create(:conversation, account: account, inbox: inbox,
+                                           additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+      primeira = OperationalEngine::OriginationActivation.for(conversation)
+      segunda = OperationalEngine::OriginationActivation.for(Conversation.find(conversation.id))
+
+      expect([primeira.claim_attempt!, segunda.claim_attempt!]).to eq([true, false])
+    end
   end
 end

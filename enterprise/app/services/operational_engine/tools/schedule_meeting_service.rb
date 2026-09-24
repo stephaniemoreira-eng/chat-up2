@@ -18,13 +18,21 @@ module OperationalEngine
       def call
         lead = OperationalEngine::Tools::ResolveLeadFromConversation.call(account: @account, conversation_id: @conversation_id)
 
+        # CP-10 (P1-VAL-03; SSOT §12.4/§23.2): esta rota agora é chamada pela ferramenta "Criar
+        # evento" da Lavínia no modo agent -- as mesmas guardas do iniciar_agendamento valem aqui,
+        # e ANTES do Calendar: um lead em atendimento humano/não-contatar/encerrado não pode ganhar
+        # um evento real que depois ninguém confirmaria.
+        reason = blocked_reason(lead)
+        return { ok: false, reason: reason } if reason
+
+        # `ja_existia`: a reunião confirmada é a de antes, nada novo foi criado. O chamador precisa
+        # saber disso para não anunciar um horário diferente como "agendado" (reagendar é o
+        # UpdateMeetingService).
         already_confirmed = lead.agendamento_status_confirmado? && lead.calendar_event_id.present?
-        return { ok: true, event_id: lead.calendar_event_id } if already_confirmed
+        return { ok: true, event_id: lead.calendar_event_id, ja_existia: true } if already_confirmed
 
         agent_tenant = @account.up_sales_agent_tenant
-        if agent_tenant.blank? || agent_tenant.calendar_integration_instance_id.blank?
-          return { ok: false, reason: 'agenda não conectada para esta conta' }
-        end
+        return { ok: false, reason: 'agenda não conectada para esta conta' } unless calendar_connected?(agent_tenant)
 
         create_and_persist(lead, agent_tenant)
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
@@ -35,6 +43,22 @@ module OperationalEngine
       end
 
       private
+
+      # Lido fora do lock de propósito: o Calendar é chamado depois, e segurar o lock do lead pela
+      # viagem de rede ao up2-agents/Google não compensa. Se um humano assumir entre esta leitura e a
+      # gravação, o evento JÁ existe no Calendar (fonte real, §3.6) -- confirmá-lo continua verdadeiro;
+      # o que a guarda impede é a Lavínia CRIAR um compromisso para um lead que não é mais dela.
+      def blocked_reason(lead)
+        reason = OperationalEngine::Tools::LaviniaActionGuard.blocked_reason(lead, nao_contatar: true)
+        return reason if reason
+        return 'lead encerrado' if lead.lead_status_encerrado?
+
+        'lead não qualificado' if lead.qualificacao_status_nao_qualificado?
+      end
+
+      def calendar_connected?(agent_tenant)
+        agent_tenant.present? && agent_tenant.calendar_integration_instance_id.present?
+      end
 
       def create_and_persist(lead, agent_tenant)
         event = UpSales::Agents::CreateCalendarEventService.new(
@@ -63,25 +87,39 @@ module OperationalEngine
         # essa igualdade por um detalhe de timing, não por regra de negócio.
         now = Time.current
         lead.with_lock do
-          lead.update!(
-            calendar_event_id: event_id,
-            agendamento_status: 'confirmado',
-            agendado_em: now,
-            etapa_prospect: 'agendado',
-            **(lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'agendamento' } : {})
-          )
-          OperationalEngine::LeadEvent.create!(
-            lead: lead,
-            event_type: 'reuniao_agendada',
-            source: 'lavinia',
-            metadata: { calendar_event_id: event_id, correlation_id: SecureRandom.uuid }
-          )
+          # CP-09 (P1-VAL-05; SSOT §16.1 "Prospect continua Qualificado" até o sucesso real, §13.2
+          # rota curta, §13.3): uma reunião realmente criada no Calendar é evidência de oportunidade
+          # real -- se o lead ainda não estava Qualificado, a qualificação é persistida no MESMO lock,
+          # antes do Agendado (nenhum lead chega a Agendado sem ter passado por Qualificado).
+          OperationalEngine::QualificationService.qualificar!(lead, source: 'lavinia')
+          confirm_meeting!(lead, event_id, now)
+          # CP-09 (P1-VAL-05; §16.1 "criar/manter oportunidade Comercial"): mesmo caminho do callback
+          # e do handoff -- cria só se não havia, nunca rebaixa. Frente operacional e modo de
+          # atendimento não mudam: reunião confirmada não é handoff (§17.2).
+          OperationalEngine::ComercialOpportunity.garantir!(lead, source: 'lavinia', motivo: 'reuniao_agendada')
+          OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'reuniao_agendada')
         end
 
         # Fora do with_lock de propósito (mesma razão do TakeoverService): a sincronização toca o
         # Postgres nativo, um banco diferente do Supabase -- não vale segurar o lock pela viagem
-        # de rede extra.
-        OperationalEngine::SalesProjectionSync.call(lead)
+        # de rede extra. CP-05: projeção durável via OperationalEngine::ProjectionReconciler.
+        OperationalEngine::ProjectionReconciler.flush(lead)
+      end
+
+      def confirm_meeting!(lead, event_id, now)
+        lead.update!(
+          calendar_event_id: event_id,
+          agendamento_status: 'confirmado',
+          agendado_em: now,
+          etapa_prospect: 'agendado',
+          **(lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'agendamento' } : {})
+        )
+        OperationalEngine::LeadEvent.create!(
+          lead: lead,
+          event_type: 'reuniao_agendada',
+          source: 'lavinia',
+          metadata: { calendar_event_id: event_id, correlation_id: SecureRandom.uuid }
+        )
       end
     end
   end

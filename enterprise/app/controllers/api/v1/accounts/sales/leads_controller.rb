@@ -3,29 +3,44 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   before_action :set_lead, only: [
     :show, :update, :destroy, :move, :link_conversation, :unlink_conversation, :timeline, :update_summary,
     :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial,
-    :assumir, :devolver
+    :advance_etapa_comercial, :remove_no_show, :assumir, :devolver
   ]
   before_action :set_operational_lead, only: [
     :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial,
-    :assumir, :devolver
+    :advance_etapa_comercial, :remove_no_show, :assumir, :devolver
+  ]
+  # CP-05 (P1-025-02, §21.3): ações Comerciais só pelo card do pipeline Comercial -- um card
+  # Prospect vinculado ao mesmo lead não serve de atalho. As guardas de domínio de verdade ficam no
+  # Engine (OperationalEngine::ComercialActionGuard); esta é só a fronteira da UI.
+  before_action :ensure_comercial_card, only: [
+    :register_callback_realizado, :register_no_show, :set_propensao, :register_resultado_comercial,
+    :advance_etapa_comercial, :remove_no_show
   ]
 
   rescue_from Sales::Leads::MoveStageService::ProtectedTransitionError, with: :render_protected_transition_error
   rescue_from OperationalEngine::RegisterCallbackRealizadoService::InvalidTransitionError, with: :render_action_error
   rescue_from OperationalEngine::RegisterResultadoComercialService::AlreadyResolvedError, with: :render_action_error
   rescue_from OperationalEngine::RegisterResultadoComercialService::InvalidResultadoError, with: :render_action_error
+  rescue_from OperationalEngine::ComercialActionGuard::InvalidContextError, with: :render_action_error
+  rescue_from OperationalEngine::SetPropensaoService::InvalidPropensaoError, with: :render_action_error
+  rescue_from OperationalEngine::DevolucaoSync::SyncError, with: :render_action_error
+  rescue_from Sales::Leads::EngineManagedAttributesGuard::ChangeError, with: :render_action_error
 
   def index
     @leads = filtered_leads.ordered
   end
 
   # Indicadores do Dashboard (Up Sales). Ver docs/fork/ADR-0004-up-sales-reskin.md.
+  # CP-11 (P1-VAL-09; 28.34/28.40): um lead do Engine tem dois cards (Prospect + Comercial), então
+  # a contagem é por lead único -- cards do Engine deduplicados por operational_lead_id, cards
+  # nativos (sem lead do Engine) um a um. As métricas de negócio por coorte ficam no
+  # ProspectDashboardController (§22), sobre o Engine.
   def summary
     leads = Current.account.sales_leads
 
     render json: {
-      leads_count: leads.count,
-      deals_won_count: leads.won.count,
+      leads_count: unique_lead_count(leads),
+      deals_won_count: unique_lead_count(leads.won),
       last_search_at: leads.where(source: 'busca_prospeccao').maximum(:created_at)
     }
   end
@@ -36,8 +51,10 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @lead = Sales::Leads::CreateService.new(account: Current.account, params: lead_params).perform
   end
 
+  # CP-09 (P2-VAL-07, teste 28.39): num card vinculado ao Engine, tags/filtros geridos pelo Engine
+  # não são editáveis por aqui (ver Sales::Leads::EngineManagedAttributesGuard); o resto continua.
   def update
-    @lead.update!(lead_update_params)
+    @lead.update!(Sales::Leads::EngineManagedAttributesGuard.apply!(lead: @lead, attributes: lead_update_params))
   end
 
   def destroy
@@ -45,8 +62,14 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     head :ok
   end
 
+  # CP-05 (P1-023-03, §21.2): num card Comercial gerido pelo Engine o drag vira a ação
+  # Engine-controlled de movimentação Comercial (o Engine valida, persiste etapa + evento e só então
+  # projeta); qualquer outro card gerido pelo Engine é recusado pelo MoveStageService. Cards nativos
+  # seguem o fluxo de sempre.
   def move
     stage = @lead.pipeline.stages.find(params.require(:sales_stage_id))
+    return move_via_engine(stage) if @lead.operational_lead_id.present? && comercial_card?
+
     @lead = Sales::Leads::MoveStageService.new(lead: @lead, stage: stage, position: params[:position], user: Current.user).perform
   end
 
@@ -100,6 +123,20 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @lead.reload
   end
 
+  # CP-05 (P1-023-03, §8.4, §21.2): movimentação Comercial permitida como ação do Engine (botão).
+  def advance_etapa_comercial
+    OperationalEngine::AdvanceEtapaComercialService.call!(
+      lead: @operational_lead, etapa: params.require(:etapa_comercial), user_id: Current.user.id
+    )
+    @lead.reload
+  end
+
+  # CP-05 (P2-025-03, §20.3): remoção manual da tag NO-SHOW -- o evento reuniao_no_show permanece.
+  def remove_no_show
+    OperationalEngine::RemoveNoShowTagService.call!(lead: @operational_lead, user_id: Current.user.id)
+    @lead.reload
+  end
+
   # Fase 3 (§18.2/§18.3, §21.2): Assumir/Devolver. O serviço já é idempotente e trava por linha
   # (OperationalEngine::TakeoverService) -- só faltava o caminho de UI até aqui.
   def assumir
@@ -107,12 +144,36 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @lead.reload
   end
 
+  # CP-06 (P1-026-01): a devolução sincroniza antes de reativar a Lavínia; se a sincronização
+  # falhar, o lead continua humano e o operador recebe 422 com o motivo (pode repetir).
   def devolver
-    OperationalEngine::TakeoverService.devolver!(lead: @operational_lead)
+    OperationalEngine::TakeoverService.devolver!(lead: @operational_lead, user_id: Current.user.id)
     @lead.reload
   end
 
   private
+
+  def unique_lead_count(scope)
+    scope.where(operational_lead_id: nil).count + scope.where.not(operational_lead_id: nil).distinct.count(:operational_lead_id)
+  end
+
+  def move_via_engine(stage)
+    operational_lead = OperationalEngine::Lead.find_by(lead_id: @lead.operational_lead_id)
+    return render json: { error: 'lead do Operational Engine não encontrado' }, status: :not_found unless operational_lead
+
+    OperationalEngine::AdvanceEtapaComercialService.call!(lead: operational_lead, etapa: stage.engine_stage_key, user_id: Current.user.id)
+    @lead.reload
+  end
+
+  def comercial_card?
+    @lead.pipeline.engine_kind == Sales::Pipelines::SeedComercialPipelineService::ENGINE_KIND
+  end
+
+  def ensure_comercial_card
+    return if comercial_card?
+
+    render json: { error: 'ação Comercial só pode ser feita pelo card do pipeline Comercial' }, status: :unprocessable_entity
+  end
 
   def set_operational_lead
     unless @lead.operational_lead_id

@@ -55,6 +55,36 @@ RSpec.describe 'Super Admin Up Sales agent config', type: :request do
 
       expect(response.body).to include('pronto')
     end
+
+    # CP-07 -- P1-027-01: SDR desativado nunca aparece como pronto.
+    it 'mostra o dispatcher como incompleto quando o slot sdr esta desabilitado' do
+      agent_tenant.update!(whatsapp_inbox: whatsapp_channel.inbox)
+      create(:up_sales_agent_slot, account: account, enabled: false, up2_agents_agent_id: '77')
+
+      get "/super_admin/accounts/#{account.id}/up_sales_agent_config"
+
+      expect(response.body).to include('incompleto')
+      expect(response.body).not_to include('>pronto<')
+    end
+
+    # CP-07 -- P1-027-02: request forjado é rejeitado antes de persistir.
+    it 'rejeita inbox WhatsApp de outra conta enviada por request forjado' do
+      forjada = create(:channel_whatsapp, account: create(:account), sync_templates: false, validate_provider_config: false).inbox
+
+      patch "/super_admin/accounts/#{account.id}/up_sales_agent_config", params: { agent_tenant: { whatsapp_inbox_id: forjada.id } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(agent_tenant.reload.whatsapp_inbox_id).to be_nil
+    end
+
+    it 'rejeita inbox nao-WhatsApp da mesma conta enviada por request forjado' do
+      widget = create(:inbox, account: account)
+
+      patch "/super_admin/accounts/#{account.id}/up_sales_agent_config", params: { agent_tenant: { whatsapp_inbox_id: widget.id } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(agent_tenant.reload.whatsapp_inbox_id).to be_nil
+    end
   end
 
   describe 'PATCH numa conta sem tenant ainda (achado testando ao vivo em teste., 23/09)' do

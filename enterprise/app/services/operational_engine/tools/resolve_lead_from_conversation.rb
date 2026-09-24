@@ -18,10 +18,19 @@ module OperationalEngine
         @conversation_id = conversation_id
       end
 
+      # `conversation_id` é o display_id do Chatwoot (o número por conta que a API do bot, o webhook
+      # e o up2-agents usam -- up2-agents src/modules/chatwoot/types.ts), NÃO a PK global. CP-03
+      # (achado novo fora dos IDs da auditoria): a busca por `id:` resolvia outra conversa ou
+      # nenhuma para toda chamada real do up2-agents; as specs passavam `conversation.id` e não
+      # percebiam.
+      def self.conversation(account:, conversation_id:)
+        account.conversations.find_by(display_id: conversation_id)
+      end
+
       def call
         # Escopado pela própria conta (não Conversation.find_by) -- garante que uma chave de uma
         # conta nunca resolve uma conversa de outra, mesmo que o conversation_id seja adivinhado.
-        conversation = @account.conversations.find_by(id: @conversation_id)
+        conversation = self.class.conversation(account: @account, conversation_id: @conversation_id)
         raise NotFound, 'conversa não encontrada' if conversation.blank?
 
         telefone = conversation.contact&.phone_number
