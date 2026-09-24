@@ -103,4 +103,37 @@ RSpec.describe OperationalEngine::BacklogSelector do
       expect(described_class.candidatos(conta_id: 1)).to eq([mais_antigo, *empatados, novo])
     end
   end
+
+  # CP-17 -- P1-VAL-21 (SSOT §10.1/§10.2): a trava "Permitir contato automático do agente" da Busca.
+  describe 'trava de contato automático da Busca' do
+    def busca_lead(auto_contact)
+      build_lead(dados_origem: { 'fonte' => 'busca_prospeccao', 'auto_contact_enabled' => auto_contact })
+    end
+
+    it 'lead de Busca com a trava desligada (padrão) não entra na fila nem é elegível' do
+      lead = busca_lead(false)
+
+      expect(OperationalEngine::BacklogSelector.candidatos(conta_id: lead.conta_id)).not_to include(lead)
+      expect(OperationalEngine::OutboundEligibility.origination_blockers(lead)).to include('contato_automatico_nao_liberado')
+    end
+
+    it 'lead de Busca sem a chave gravada também fica fora (desligado é o padrão)' do
+      lead = build_lead(dados_origem: { 'fonte' => 'busca_prospeccao' })
+
+      expect(OperationalEngine::BacklogSelector.candidatos(conta_id: lead.conta_id)).not_to include(lead)
+    end
+
+    it 'lead de Busca com a trava ligada segue elegível' do
+      lead = busca_lead(true)
+
+      expect(OperationalEngine::BacklogSelector.candidatos(conta_id: lead.conta_id)).to include(lead)
+      expect(OperationalEngine::OutboundEligibility.origination_blockers(lead)).not_to include('contato_automatico_nao_liberado')
+    end
+
+    it 'lead de outra fonte não é afetado pela trava' do
+      lead = build_lead(dados_origem: { 'fonte' => 'importacao' })
+
+      expect(OperationalEngine::BacklogSelector.candidatos(conta_id: lead.conta_id)).to include(lead)
+    end
+  end
 end

@@ -39,6 +39,12 @@ module OperationalEngine
     # E.164, o formato que PhoneNormalizer grava quando consegue normalizar (§10.2 "telefone
     # normalizado válido") -- um valor bruto que não normalizou fica fora da fila.
     TELEFONE_E164_SQL = %q(telefone ~ '^\+[1-9][0-9]{1,14}$').freeze
+    # CP-17 (P1-VAL-21): mesma regra de OutboundEligibility.auto_contact_blocked? -- lead de Busca
+    # sem "Permitir contato automático do agente" ligado nem entra na fila (não ocupa candidato).
+    AUTO_CONTACT_LIBERADO_SQL = <<~SQL.squish.freeze
+      NOT (COALESCE(dados_origem ->> 'fonte', '') = 'busca_prospeccao'
+           AND COALESCE(dados_origem ->> 'auto_contact_enabled', 'false') <> 'true')
+    SQL
 
     private
 
@@ -58,6 +64,7 @@ module OperationalEngine
         # confirmada no ciclo.
         .where(TELEFONE_E164_SQL)
         .where(primeiro_contato_em: nil)
+        .where(AUTO_CONTACT_LIBERADO_SQL)
     end
   end
 end
