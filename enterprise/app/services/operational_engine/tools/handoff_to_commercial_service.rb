@@ -22,6 +22,9 @@
 # Eventos (§7.4): `handoff_comercial` (motivo, de/para de cada dimensão, snapshot) + os canônicos de
 # cada semântica que mudou: frente_operacional_alterada, modo_atendimento_alterado,
 # responsavel_alterado, oportunidade_criada.
+#
+# CP-14 (P1-VAL-13): motivo `orcamento_personalizado` também grava `orcamento_status = personalizado`
+# (OperationalEngine::BudgetStatus), com evento próprio `orcamento_personalizado` (de/para/motivo).
 module OperationalEngine
   module Tools
     class HandoffToCommercialService
@@ -52,6 +55,7 @@ module OperationalEngine
         result = lead.with_lock do
           next { ok: false, reason: OperationalEngine::Tools::LaviniaActionGuard::NAO_CONTATAR } if lead.nao_contatar?
 
+          register_orcamento_personalizado(lead)
           apply_handoff(lead)
         end
         OperationalEngine::ProjectionReconciler.flush(lead) if result[:ok]
@@ -61,6 +65,16 @@ module OperationalEngine
       end
 
       private
+
+      # CP-14 (P1-VAL-13; §17.1, 28.13): handoff por orçamento personalizado reflete
+      # `orcamento_status = personalizado` ANTES do snapshot do §17.3, sem valor nenhum. Direto na
+      # transição (não em BudgetStatus.apply_turn!): o handoff vale também com humano na Prospecção
+      # (§18.4). No agent mode o commit do turno já costuma ter gravado -- aqui vira no-op.
+      def register_orcamento_personalizado(lead)
+        return unless @motivo_handoff == 'orcamento_personalizado'
+
+        OperationalEngine::BudgetStatus.personalizar!(lead, motivo: 'handoff_orcamento_personalizado')
+      end
 
       def apply_handoff(lead)
         changes = target_state(lead).reject { |field, value| lead.public_send(field) == value }

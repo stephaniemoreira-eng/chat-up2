@@ -14,7 +14,10 @@
 #   timer de recovery nasce no Engine a partir deste flag -- CP-13: como este commit roda ANTES do
 #   post, o timer é armado por OperationalEngine::RecoveryCycle quando o provedor confirma o envio
 #   real da mensagem deste turno (§23.3); ultimo_ponto nunca é apagado por null/vazio, 28.5);
-# - modo_atendimento=humano: nada é aplicado (§12.4 "nenhuma ação da Lavínia").
+# - modo_atendimento=humano: nada é aplicado (§12.4 "nenhuma ação da Lavínia");
+# - orcamento_status (CP-14, P1-VAL-13): `motivo_handoff = orcamento_personalizado` → personalizado;
+#   valor direto autorizado do §14.3 dito na `mensagem_resposta` de um turno conversacional com rota
+#   de orçamento ativa → informado. Regras e limites em OperationalEngine::BudgetStatus.
 #
 # Tudo dentro do lock do lead, num só commit. Chamado via TurnIdempotency pelo controller, com a
 # mesma identidade de turno das ações.
@@ -64,6 +67,7 @@ module OperationalEngine
       write_event(lead, 'lead_enriquecido', campos: facts.keys) if facts.keys.intersect?(changes.keys)
 
       warnings = apply_decisao(lead, decisao)
+      OperationalEngine::BudgetStatus.apply_turn!(lead, @saida)
       { ok: true, campos_atualizados: changes.keys, ignorados: ignored, avisos: warnings }
     end
 
