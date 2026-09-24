@@ -107,6 +107,95 @@ RSpec.describe OperationalEngine::ProspectingImporter do
     end
   end
 
+  # CP-09 -- P2-VAL-06 (SSOT §19.1, teste 28.24).
+  describe 'lead que ja e cliente atual achado na busca' do
+    let!(:cliente) do
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: '+5513999990001', origem_lead: 'csv', modo_entrada: 'outbound',
+                                      relacao_atual: 'cliente_atual', etapa_prospect: 'backlog', etapa_entrou_em: 1.day.ago)
+    end
+
+    def encerramentos
+      OperationalEngine::LeadEvent.where(lead: cliente, event_type: 'lead_encerrado')
+    end
+
+    it 'encerra o ciclo Prospect como cliente_atual em vez de deixar ativo em Backlog' do
+      import
+
+      cliente.reload
+      expect(cliente.lead_status).to eq('encerrado')
+      expect(cliente.motivo_encerramento).to eq('cliente_atual')
+      expect(cliente.etapa_prospect).to eq('backlog')
+      expect(cliente.relacao_atual).to eq('cliente_atual')
+    end
+
+    it 'registra lead_encerrado com de/para/motivo (§7.3) alem da nova_entrada' do
+      import
+
+      expect(encerramentos.count).to eq(1)
+      expect(encerramentos.first.metadata).to include('de' => 'ativo', 'para' => 'encerrado', 'motivo' => 'cliente_atual',
+                                                      'motivo_encerramento' => 'cliente_atual')
+      expect(encerramentos.first.source).to eq('import')
+      expect(OperationalEngine::LeadEvent.where(lead: cliente, event_type: 'nova_entrada').count).to eq(1)
+    end
+
+    it 'nao prospecta: o lead nao volta para a fila do Backlog' do
+      import
+
+      expect(OperationalEngine::BacklogSelector.candidatos(conta_id: account.id)).not_to include(cliente)
+    end
+
+    it 'tambem encerra um cliente atual em Contatado' do
+      cliente.update!(etapa_prospect: 'contatado')
+
+      import
+
+      expect(cliente.reload.motivo_encerramento).to eq('cliente_atual')
+    end
+
+    it 'reimportar (outro resultado da busca) nao encerra de novo nem duplica o evento' do
+      import
+      outro = search.results.create!(account: account, place_id: 'place-2', name: 'Lava Rapido do Ze', phone_number: '+5513999990001')
+
+      described_class.call(result: outro, contact: contact)
+
+      expect(encerramentos.count).to eq(1)
+    end
+
+    it 'nao encerra um cliente atual em conversa (interacao real, §19.1 permite responder)' do
+      cliente.update!(etapa_prospect: 'em_conversa')
+
+      import
+
+      expect(cliente.reload.lead_status).to eq('ativo')
+      expect(encerramentos).to be_empty
+    end
+
+    it 'nao encerra um cliente atual com oportunidade na frente Comercial' do
+      cliente.update!(comercial_opportunity_attributes)
+
+      import
+
+      expect(cliente.reload.lead_status).to eq('ativo')
+    end
+
+    it 'nao troca o motivo de um lead ja encerrado por outro motivo' do
+      cliente.update!(lead_status: 'encerrado', motivo_encerramento: 'nao_contatar', nao_contatar: true)
+
+      import
+
+      expect(cliente.reload.motivo_encerramento).to eq('nao_contatar')
+      expect(encerramentos).to be_empty
+    end
+
+    it 'prospect comum achado de novo continua ativo' do
+      cliente.update!(relacao_atual: 'prospect')
+
+      import
+
+      expect(cliente.reload.lead_status).to eq('ativo')
+    end
+  end
+
   it 'reprocessar o mesmo resultado nao registra o lead como achado de novo (teste 28.9)' do
     import
 

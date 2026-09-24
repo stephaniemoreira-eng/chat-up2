@@ -12,6 +12,8 @@
 module OperationalEngine
   class ProspectingImporter
     EXTERNAL_SOURCE = 'upsales_prospecting'.freeze
+    # CP-09 (P2-VAL-06): etapas do ciclo de prospecção fria -- ver encerrar_cliente_atual.
+    ETAPAS_PROSPECCAO_FRIA = %w[backlog contatado].freeze
 
     def self.call(...)
       new(...).call
@@ -63,7 +65,8 @@ module OperationalEngine
 
     # Vocabulário congelado do §5.2: `google_scraping` é a origem de quem veio de busca no Google,
     # e `prospect` é a fotografia atual de uma empresa que ainda não tem relação com o cliente --
-    # `cliente_atual`/`nao_contatar` são checados na seleção do Backlog (§10.2), não aqui.
+    # `cliente_atual`/`nao_contatar` são checados na seleção do Backlog (§10.2). Um lead que JÁ
+    # existe como cliente atual tem o ciclo Prospect encerrado em `encerrar_cliente_atual` (CP-09).
     def atributos_de_entrada
       {
         empresa: @result.name,
@@ -95,7 +98,33 @@ module OperationalEngine
       lead.update!(upsales_contact_id: @contact.id) if lead.upsales_contact_id.nil?
 
       write_event(lead, 'nova_entrada', **dados_origem)
+      encerrar_cliente_atual(lead)
       lead
+    end
+
+    # CP-09 (P2-VAL-06; SSOT §19.1, teste 28.24): lead achado na busca que já é cliente atual não é
+    # prospectado E tem o ciclo Prospect encerrado como `cliente_atual` -- antes ficava ativo em
+    # Backlog para sempre, só excluído da fila pelo BacklogSelector.
+    #
+    # Escopo estreito de propósito: só o ciclo de prospecção fria (frente Prospecção, Backlog ou
+    # Contatado). Um cliente atual em conversa (Em conversa em diante) ou com oportunidade na frente
+    # Comercial tem interação real que o §19.1 permite responder/encaminhar -- encerrar isso por
+    # causa de uma lista de scraping não é regra do SSOT. Sob lock (estado relido): o importador
+    # pode correr junto com o inbound do mesmo contato.
+    def encerrar_cliente_atual(lead)
+      lead.with_lock do
+        next unless cliente_atual_em_prospeccao_fria?(lead)
+
+        transicao = { de: lead.lead_status, para: 'encerrado', motivo: 'cliente_atual',
+                      motivo_encerramento_de: lead.motivo_encerramento, motivo_encerramento: 'cliente_atual' }
+        lead.update!(lead_status: 'encerrado', motivo_encerramento: 'cliente_atual')
+        write_event(lead, 'lead_encerrado', **transicao)
+      end
+    end
+
+    def cliente_atual_em_prospeccao_fria?(lead)
+      lead.relacao_atual == 'cliente_atual' && lead.lead_status_ativo? &&
+        lead.frente_operacional_prospeccao? && ETAPAS_PROSPECCAO_FRIA.include?(lead.etapa_prospect)
     end
 
     # external_id é o id do Sales::ProspectingResult, não o place_id: cada execução da busca grava
