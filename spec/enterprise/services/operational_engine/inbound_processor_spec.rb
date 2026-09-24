@@ -137,4 +137,85 @@ RSpec.describe OperationalEngine::InboundProcessor do
       expect(OperationalEngine::OriginationActivation.for(conversation.reload).status).to eq('consumed')
     end
   end
+
+  # CP-08 -- P1-VAL-01 (SSOT §11.3, testes 28.3 e 28.9).
+  describe 'outbound que responde (teste 28.3)' do
+    let!(:lead) do
+      OperationalEngine::Lead.create!(
+        conta_id: account.id, telefone: contact.phone_number, upsales_contact_id: contact.id, modo_entrada: 'outbound',
+        inbox_atual_id: conversation.inbox_id, etapa_prospect: 'contatado', etapa_entrou_em: 1.day.ago,
+        entrada_operacao_em: 1.day.ago, primeiro_contato_em: 1.day.ago,
+        recuperacao_status: 'ativa', proxima_recuperacao_em: 1.day.from_now
+      )
+    end
+
+    def events(type)
+      OperationalEngine::LeadEvent.where(lead: lead, event_type: type)
+    end
+
+    it 'vai de Contatado para Em conversa, preenche primeira_resposta_em e cancela a recovery' do
+      message = build_message
+
+      described_class.call(message: message)
+
+      lead.reload
+      expect(lead.etapa_prospect).to eq('em_conversa')
+      expect(lead.etapa_entrou_em).to be_within(1.second).of(message.created_at)
+      expect(lead.primeira_resposta_em).to be_within(1.second).of(message.created_at)
+      expect(lead.ultima_interacao_em).to be_within(1.second).of(message.created_at)
+      expect(lead.recuperacao_status).to eq('inativa')
+      expect(lead.proxima_recuperacao_em).to be_nil
+    end
+
+    it 'grava lead_respondeu, etapa_alterada (contatado -> em_conversa) e recuperacao_respondida' do
+      described_class.call(message: build_message)
+
+      expect(events('lead_respondeu').count).to eq(1)
+      expect(events('etapa_alterada').sole.metadata).to include('de' => 'contatado', 'para' => 'em_conversa', 'motivo' => 'lead_respondeu')
+      expect(events('recuperacao_respondida').count).to eq(1)
+    end
+
+    it 'webhook duplicado (28.9): o mesmo message_id processado duas vezes gera uma única transição' do
+      message = build_message
+
+      2.times { described_class.call(message: message) }
+
+      expect(events('lead_respondeu').count).to eq(1)
+      expect(events('etapa_alterada').count).to eq(1)
+    end
+
+    it 'não sobrescreve primeira_resposta_em já preenchida e não gera recuperacao_respondida sem recovery ativa' do
+      original = 3.days.ago.change(usec: 0)
+      lead.update!(primeira_resposta_em: original, recuperacao_status: 'inativa', proxima_recuperacao_em: nil)
+
+      described_class.call(message: build_message)
+
+      expect(lead.reload.primeira_resposta_em).to eq(original)
+      expect(events('recuperacao_respondida')).to be_empty
+    end
+
+    it 'segunda mensagem do lead já em conversa não repete a transição' do
+      described_class.call(message: build_message)
+      described_class.call(message: build_message)
+
+      expect(events('lead_respondeu').count).to eq(1)
+      expect(lead.reload.etapa_prospect).to eq('em_conversa')
+    end
+
+    it 'leva o card Prospect para Em conversa' do
+      described_class.call(message: build_message)
+
+      card = Sales::Lead.joins(:pipeline).find_by(operational_lead_id: lead.lead_id, sales_pipelines: { engine_kind: 'prospect' })
+      expect(card&.stage&.engine_stage_key).to eq('em_conversa')
+    end
+
+    it 'falha na projeção não derruba o inbound: o fato fica no Engine e a projeção fica pendente' do
+      allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_raise(ActiveRecord::StatementInvalid, 'CRM fora')
+
+      expect { described_class.call(message: build_message) }.not_to raise_error
+
+      expect(lead.reload.etapa_prospect).to eq('em_conversa')
+      expect(OperationalEngine::ProjectionRequest.find(lead.lead_id)).to be_status_pendente
+    end
+  end
 end
