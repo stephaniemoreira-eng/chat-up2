@@ -120,6 +120,46 @@ RSpec.describe OperationalEngine::Tools::HandoffToCommercialService do
     end
   end
 
+  # CP-14 -- P1-VAL-13 (SSOT §17.1, §17.3, 28.13).
+  describe 'orçamento personalizado' do
+    before { lead.update!(orcamento_status: 'em_dimensionamento', volume_mensal_kg: 600) }
+
+    it 'handoff por orcamento_personalizado grava personalizado sem valor, já no snapshot do §17.3' do
+      perform(motivo: 'orcamento_personalizado')
+
+      expect(lead.reload.orcamento_status).to eq('personalizado')
+      expect(events('orcamento_personalizado').sole.metadata).to include(
+        'de' => 'em_dimensionamento', 'para' => 'personalizado', 'motivo' => 'handoff_orcamento_personalizado'
+      )
+      expect(events('orcamento_personalizado').sole.metadata).not_to have_key('valor_informado')
+      expect(events('handoff_comercial').sole.metadata['snapshot']).to include('orcamento_status' => 'personalizado')
+    end
+
+    it 'outros motivos não mexem no orçamento' do
+      perform(motivo: 'avanco_comercial')
+
+      expect(lead.reload.orcamento_status).to eq('em_dimensionamento')
+      expect(events('orcamento_personalizado')).to be_empty
+    end
+
+    it 'commit do turno já gravou personalizado: o handoff não duplica o evento' do
+      lead.update!(orcamento_status: 'personalizado')
+
+      perform(motivo: 'orcamento_personalizado')
+
+      expect(lead.reload.orcamento_status).to eq('personalizado')
+      expect(events('orcamento_personalizado')).to be_empty
+    end
+
+    it 'não-contatar bloqueia também a transição do orçamento' do
+      persist_newer_fact_before_lock(nao_contatar: true)
+
+      perform(motivo: 'orcamento_personalizado')
+
+      expect(lead.reload.orcamento_status).to eq('em_dimensionamento')
+    end
+  end
+
   # CP-01 -- P1-018-05.
   it 'opt-out entrou enquanto a ação esperava: não faz handoff' do
     persist_newer_fact_before_lock(nao_contatar: true)
