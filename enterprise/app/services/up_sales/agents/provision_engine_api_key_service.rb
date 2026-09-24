@@ -6,10 +6,11 @@
 # segredo à mão, ele não passa por ToolDefinitions/prompt/frontend e nunca é impresso nem logado:
 # o retorno só traz status e identificadores.
 #
-# Ordem da rotação (RISK-020-02): 1) a chave nova é gravada no Vault do consumidor; 2) só então ela
-# passa a ser a aceita aqui -- a antiga só para de funcionar depois de o consumidor já ter a nova.
-# Se o passo 1 falha, nada muda. Se o passo 2 falha depois do 1, o Vault volta pra chave antiga
-# (compensação) antes do erro subir.
+# Ordem da rotação (RISK-020-02), CP-12: o digest da chave nova é gravado DENTRO de uma transação e
+# a escrita no Vault acontece antes do commit. Se o Vault recusar, a transação volta e nada muda
+# (a chave antiga segue valendo dos dois lados). Como aqui só existe o digest (P1-VAL-10), não há
+# mais "chave antiga" legível para compensar: se o Vault aceitar e o commit falhar (raro), o
+# consumidor fica com uma chave que este lado ainda não aceita -- basta rodar a rotação de novo.
 #
 # Mais de uma credencial `operational_engine` no tenant é ambiguidade (o up2-agents escolheria uma
 # arbitrária -- RISK-021-02): recusa e pede resolução manual, em vez de escolher por conta própria.
@@ -24,18 +25,17 @@ class UpSales::Agents::ProvisionEngineApiKeyService
   end
 
   def perform
-    previous_key = agent_tenant.engine_api_key
-    new_key = UpSales::AgentTenant.generate_unique_secure_token
-    entry_id = write_vault(existing_entry_id, new_key)
+    rotated = agent_tenant.engine_api_key_configured?
+    current_entry_id = existing_entry_id
+    entry_id = nil
 
-    begin
-      agent_tenant.update!(engine_api_key: new_key)
-    rescue StandardError
-      write_vault(entry_id, previous_key) if previous_key.present?
-      raise
+    agent_tenant.transaction do
+      new_key = agent_tenant.assign_new_engine_api_key
+      agent_tenant.save!
+      entry_id = write_vault(current_entry_id, new_key)
     end
 
-    { rotated: previous_key.present?, vault_entry_id: entry_id, account_id: agent_tenant.account_id }
+    { rotated: rotated, vault_entry_id: entry_id, account_id: agent_tenant.account_id }
   end
 
   private

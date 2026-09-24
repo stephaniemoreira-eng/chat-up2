@@ -7,7 +7,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Snapshot', type: :request 
   let(:conversation) { create(:conversation, account: account, contact: contact) }
   let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, nome: 'Danilo') }
 
-  let(:valid_headers) { { 'Authorization' => "Bearer #{agent_tenant.engine_api_key}" } }
+  let(:valid_headers) { { 'Authorization' => "Bearer #{agent_tenant.issued_engine_api_key}" } }
 
   describe 'GET health' do
     it 'usa a mesma autenticação servidor-a-servidor do Contrato B (S-5)' do

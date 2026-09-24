@@ -1,8 +1,7 @@
 # S-5/S-4 (plano do Marco 1, I-3): gera ou rotaciona o `engine_api_key` de um UpSales::AgentTenant
 # -- o segredo que o up2-agents apresenta ao chamar de volta as rotas
-# operational_engine/{tools,actions,snapshot} deste repositório (Contrato B/S-4). `has_secure_token`
-# só preenche sozinho na criação do registro; um tenant criado antes da coluna existir fica com
-# `engine_api_key` nulo até rodar isto.
+# operational_engine/{tools,actions,snapshot} deste repositório (Contrato B/S-4). Um tenant novo
+# não tem chave até rodar isto. CP-12 (P1-VAL-10): aqui fica só o SHA-256 da chave.
 #
 # CP-07 (P1-020-01/P2-020-01): a chave vai direto pro Vault do up2-agents
 # (UpSales::Agents::ProvisionEngineApiKeyService) -- nada de colar em ToolDefinitions, e o segredo
