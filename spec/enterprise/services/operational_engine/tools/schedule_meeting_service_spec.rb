@@ -14,7 +14,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
   def perform(**overrides)
     described_class.new(
       account: account,
-      conversation_id: conversation.id,
+      conversation_id: conversation.display_id,
       summary: 'Reunião com Lavínia',
       starts_at: '2026-09-22T14:00:00-03:00',
       ends_at: '2026-09-22T14:30:00-03:00',
@@ -117,5 +117,37 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
     expect(lead.conversao_em).to eq(original_conversao)
     expect(lead.tipo_conversao).to eq('callback')
     expect(lead.agendamento_status).to eq('confirmado')
+  end
+
+  # CP-04 -- P1-018-04 (SSOT §16.4): callback pendente substituído por reunião.
+  describe 'callback pendente seguido de reunião' do
+    before { lead.update!(pending_callback_attributes) }
+
+    it 'Calendar falha: callback continua pendente, sem confirmação falsa' do
+      stub_create_event(status: 422, body: { error: 'Calendário inválido' })
+
+      perform
+
+      lead.reload
+      expect(lead.agendamento_status).to eq('callback_registrado')
+      expect(lead.calendar_event_id).to be_nil
+      expect(lead.etapa_prospect).to eq('qualificado')
+      expect(lead.conversao_em).to be_nil
+    end
+
+    it 'Calendar confirma: Agendado real, reunião é a conversão e o callback fica no histórico' do
+      OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'callback_registrado', source: 'lavinia', metadata: {})
+      stub_create_event
+
+      perform
+
+      lead.reload
+      expect(lead.agendamento_status).to eq('confirmado')
+      expect(lead.calendar_event_id).to eq('evt_123')
+      expect(lead.agendado_em).to be_present
+      expect(lead.etapa_prospect).to eq('agendado')
+      expect(lead.tipo_conversao).to eq('agendamento')
+      expect(OperationalEngine::LeadEvent.where(lead: lead).pluck(:event_type)).to include('callback_registrado', 'reuniao_agendada')
+    end
   end
 end

@@ -112,4 +112,29 @@ RSpec.describe OperationalEngine::InboundProcessor do
       expect(comercial_card).to be_present
     end
   end
+
+  # CP-01 (§23.2, resposta nova): o contato falou antes da abertura do Dispatcher sair.
+  describe 'abertura outbound ainda pendente na conversa' do
+    let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog') }
+
+    it 'invalida a ativação (superseded) com o id da mensagem do contato' do
+      conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+      message = build_message
+
+      described_class.call(message: message)
+
+      activation = OperationalEngine::OriginationActivation.for(conversation.reload)
+      expect(activation.status).to eq('superseded')
+      expect(conversation.additional_attributes.dig('up_sales_origination', 'message_id')).to eq(message.id)
+    end
+
+    it 'não mexe numa ativação já consumida' do
+      conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+      OperationalEngine::OriginationActivation.for(conversation).transition!('consumed', message_id: 1)
+
+      described_class.call(message: build_message)
+
+      expect(OperationalEngine::OriginationActivation.for(conversation.reload).status).to eq('consumed')
+    end
+  end
 end

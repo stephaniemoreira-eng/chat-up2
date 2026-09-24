@@ -24,7 +24,15 @@ module OperationalEngine
           raise InvalidTransitionError, 'não há callback pendente registrado para este lead'
         end
 
-        @lead.update!(agendamento_status: 'callback_realizado', callback_realizado_em: Time.current)
+        now = Time.current
+        # CP-04 (P1-025-01, §16.5/§6.3/§28.17): se ainda não houve conversão, o callback realizado é o
+        # primeiro marco -- conversao_em = callback_realizado_em (mesmo instante) e
+        # tipo_conversao=callback. Se uma reunião já converteu antes, a conversão é preservada
+        # (write-once) e só o fato do callback é registrado.
+        @lead.update!(
+          agendamento_status: 'callback_realizado', callback_realizado_em: now,
+          **(@lead.conversao_em.nil? ? { conversao_em: now, tipo_conversao: 'callback' } : {})
+        )
         write_event
       end
 

@@ -120,6 +120,15 @@ describe OperationalEngineListener do
 
       expect(lead.reload.primeiro_contato_em).to be_nil
     end
+
+    # CP-02 -- P0-019-01: a transição é efêmera; a falha inline não pode perder o fato.
+    it 'falha na confirmação inline enfileira o retry durável pela message_id' do
+      outgoing = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      event = Events::Base.new(:message_updated, Time.zone.now, message: outgoing, previous_changes: { 'source_id' => [nil, 'wamid.abc'] })
+      allow(OperationalEngine::ConfirmOutboundSendService).to receive(:call).and_raise('Supabase fora')
+
+      expect { listener.message_updated(event) }.to have_enqueued_job(OperationalEngine::ConfirmOutboundSendJob).with(outgoing.id)
+    end
   end
 
   it 'nao deixa uma falha do Engine derrubar o dispatch' do

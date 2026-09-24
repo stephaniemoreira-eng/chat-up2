@@ -40,7 +40,10 @@ class UpSales::Agents::OriginateConversationService
       chatwootContactId: contact.id,
       contactInboxId: contact_inbox.id,
       contactName: contact.name,
-      contactPhone: contact.phone_number
+      contactPhone: contact.phone_number,
+      # CP-03 (P1-022-02): a identidade estável desta ativação (OriginationActivation, CP-01) --
+      # o up2-agents a devolve no Snapshot (contexto_execucao=primeiro_contato) e usa como turn_id.
+      activationId: OperationalEngine::OriginationActivation.for(conversation)&.activation_id
     }.compact
   end
 

@@ -99,31 +99,39 @@ RSpec.describe OperationalEngine::Lead do
     end
   end
 
-  describe 'constraint de banco: Agendado exige Calendar confirmado (SSOT §16.1/§21.2/§28.32)' do
-    it 'recusa etapa_prospect=agendado sem agendamento_status confirmado' do
-      expect { build_lead(etapa_prospect: 'agendado', agendamento_status: 'em_andamento') }
-        .to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_confirmed_calendar/)
-    end
-
+  # CP-04 (P1-023-01, P2-017-01/P2-018-01): duas regras separadas -- Agendado exige reunião real
+  # (mas sobrevive ao cancelamento, §28.29) e 'confirmado' exige reunião real (nada de fixture ou
+  # console "confirmando" sem Calendar, §28.14).
+  describe 'constraints de banco de reunião real (SSOT §16.1/§28.14/§28.29/§28.32)' do
     it 'recusa etapa_prospect=agendado sem calendar_event_id' do
-      expect do
-        build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', agendado_em: Time.current, calendar_event_id: nil)
-      end.to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_confirmed_calendar/)
+      expect { build_lead(etapa_prospect: 'agendado', agendado_em: Time.current, calendar_event_id: nil) }
+        .to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_real_meeting/)
     end
 
     it 'recusa etapa_prospect=agendado sem agendado_em' do
-      expect do
-        build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: nil)
-      end.to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_confirmed_calendar/)
+      expect { build_lead(etapa_prospect: 'agendado', calendar_event_id: 'evt_123', agendado_em: nil) }
+        .to raise_error(ActiveRecord::StatementInvalid, /chk_leads_agendado_requires_real_meeting/)
     end
 
-    it 'permite etapa_prospect=agendado quando os tres fatos do Calendar estao presentes' do
+    it 'recusa agendamento_status=confirmado sem Calendar real, em qualquer etapa' do
+      expect { build_lead(etapa_prospect: 'qualificado', agendamento_status: 'confirmado') }
+        .to raise_error(ActiveRecord::StatementInvalid, /chk_leads_confirmado_requires_real_meeting/)
+    end
+
+    it 'permite Agendado confirmado com os fatos do Calendar' do
       lead = build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
 
       expect(lead.etapa_prospect_agendado?).to be(true)
     end
 
-    it 'nao exige nada do Calendar quando etapa_prospect nao e agendado' do
+    it 'permite registrar o cancelamento de uma reunião real sem regredir a etapa (§28.29)' do
+      lead = build_lead(etapa_prospect: 'agendado', agendamento_status: 'confirmado', calendar_event_id: 'evt_123', agendado_em: Time.current)
+
+      expect { lead.update!(agendamento_status: 'cancelado') }.not_to raise_error
+      expect(lead.reload.etapa_prospect).to eq('agendado')
+    end
+
+    it 'nao exige nada do Calendar quando nao ha reuniao' do
       expect { build_lead(etapa_prospect: 'qualificado', agendamento_status: 'nao_iniciado') }.not_to raise_error
     end
   end

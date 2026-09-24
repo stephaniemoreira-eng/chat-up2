@@ -9,7 +9,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsUnqualifiedService do
   end
 
   def perform
-    described_class.new(account: account, conversation_id: conversation.id).call
+    described_class.new(account: account, conversation_id: conversation.display_id).call
   end
 
   it 'retorna erro quando a conversa não existe' do
@@ -29,7 +29,7 @@ RSpec.describe OperationalEngine::Tools::CloseAsUnqualifiedService do
   end
 
   it 'recusa quando já existe um agendamento confirmado' do
-    lead.update!(agendamento_status: 'confirmado')
+    lead.update!(confirmed_meeting_attributes)
 
     expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
     expect(lead.reload.lead_status).to eq('ativo')
@@ -40,5 +40,23 @@ RSpec.describe OperationalEngine::Tools::CloseAsUnqualifiedService do
     perform
 
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'encerrado_nao_qualificado').count).to eq(1)
+  end
+
+  # CP-01 -- P1-018-05.
+  describe 'corrida com fato mais novo' do
+    it 'reunião confirmada enquanto a ação esperava: não encerra nem mexe na qualificação' do
+      persist_newer_fact_before_lock(**confirmed_meeting_attributes)
+
+      expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
+      lead.reload
+      expect(lead.lead_status).to eq('ativo')
+      expect(lead.qualificacao_status).not_to eq('nao_qualificado')
+    end
+
+    it 'humano assumiu enquanto a ação esperava: bloqueia' do
+      persist_newer_fact_before_lock(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+    end
   end
 end

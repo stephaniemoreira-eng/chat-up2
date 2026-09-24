@@ -22,9 +22,11 @@ module OperationalEngine
         return { ok: false, reason: 'motivo_handoff inválido' } unless OperationalEngine::Lead.motivo_handoffs.key?(@motivo_handoff)
 
         lead = OperationalEngine::Tools::ResolveLeadFromConversation.call(account: @account, conversation_id: @conversation_id)
-        return { ok: false, reason: 'lead está em não-contatar' } if lead.nao_contatar?
 
-        lead.with_lock do
+        # CP-01 (P1-018-05): nao_contatar relido dentro do lock. O no-op em modo humano continua
+        # como estava -- a idempotência completa do handoff é o P1-018-02 (CP-05).
+        blocked = lead.with_lock do
+          next OperationalEngine::Tools::LaviniaActionGuard::NAO_CONTATAR if lead.nao_contatar?
           next if lead.modo_atendimento_humano?
 
           lead.update!(
@@ -40,7 +42,9 @@ module OperationalEngine
           )
           OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'handoff_comercial', source: 'lavinia',
                                                 metadata: { motivo_handoff: @motivo_handoff, correlation_id: SecureRandom.uuid })
+          nil
         end
+        return { ok: false, reason: blocked } if blocked
 
         OperationalEngine::SalesProjectionSync.call(lead)
         OperationalEngine::ComercialProjectionSync.call(lead)

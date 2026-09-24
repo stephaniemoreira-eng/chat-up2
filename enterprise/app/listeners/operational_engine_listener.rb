@@ -31,7 +31,7 @@ class OperationalEngineListener < BaseListener
     message, account = extract_message_and_account(event)
     previous_changes = event.data[:previous_changes] || {}
 
-    OperationalEngine::ConfirmOutboundSendService.call(message: message) if source_id_just_confirmed?(message, previous_changes)
+    confirm_outbound_send(message, account) if source_id_just_confirmed?(message, previous_changes)
 
     log('message_updated', account_id: account.id, message_id: message.id, previous_changes: previous_changes.keys)
   rescue StandardError => e
@@ -56,6 +56,16 @@ class OperationalEngineListener < BaseListener
     return if lead.nil?
 
     OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id)
+  end
+
+  # CP-02 (P0-019-01): a transição source_id nil -> presente acontece UMA vez. Confirmar inline é o
+  # caminho rápido; se falhar, o fato não pode se perder -- vai pro ConfirmOutboundSendJob (retry
+  # durável por message_id) e, em último caso, o OutboundConfirmationReconciler recupera no tick.
+  def confirm_outbound_send(message, account)
+    OperationalEngine::ConfirmOutboundSendService.call(message: message)
+  rescue StandardError => e
+    ChatwootExceptionTracker.new(e, account: account).capture_exception
+    OperationalEngine::ConfirmOutboundSendJob.set(wait: 30.seconds).perform_later(message.id)
   end
 
   # Risco §14.1 do plano: só a transição de branco pra presente confirma o envio real -- não

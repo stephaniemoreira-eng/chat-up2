@@ -2,13 +2,11 @@
 # confirmada. Mesma checagem de sanidade do UpdateMeetingService (event_id da URL == calendar_event_id
 # atual do lead).
 #
-# Volta agendamento_status pra cancelado e etapa_prospect pra qualificado (a etapa logo antes de
-# agendado -- sem reunião confirmada, o lead volta a ser "só" qualificado). NÃO toca
-# conversao_em/tipo_conversao: são write-once no banco (a trigger recusaria) e, mais importante,
-# cancelar uma reunião não desfaz o fato histórico de que uma conversão aconteceu naquele momento --
-# é uma métrica de "tempo até converter", não um estado que reflete a reunião em si. calendar_event_id
-# também fica como está (referência histórica); uma chamada futura de schedule_meeting sobrescreve
-# normalmente quando uma nova reunião for confirmada.
+# CP-04 (P1-023-01, SSOT §28.29 "não voltar automaticamente Agendado→Qualificado"): grava só
+# agendamento_status=cancelado + evento reuniao_cancelada. A etapa Prospect NÃO regride -- a reunião
+# real existiu e o Agendado continua sendo o fato histórico do funil. calendar_event_id, agendado_em
+# e conversao_em/tipo_conversao também ficam intactos (§6.3: fatos históricos; conversão é
+# write-once). Uma nova reunião confirmada depois sobrescreve normalmente via ScheduleMeetingService.
 module OperationalEngine
   module Tools
     class CancelMeetingService
@@ -49,7 +47,7 @@ module OperationalEngine
 
       def persist_cancellation(lead)
         lead.with_lock do
-          lead.update!(agendamento_status: 'cancelado', etapa_prospect: 'qualificado')
+          lead.update!(agendamento_status: 'cancelado')
           OperationalEngine::LeadEvent.create!(
             lead: lead,
             event_type: 'reuniao_cancelada',

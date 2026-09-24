@@ -9,7 +9,7 @@ RSpec.describe OperationalEngine::Tools::StartBudgetService do
   end
 
   def perform
-    described_class.new(account: account, conversation_id: conversation.id).call
+    described_class.new(account: account, conversation_id: conversation.display_id).call
   end
 
   it 'retorna erro quando a conversa não existe' do
@@ -44,5 +44,22 @@ RSpec.describe OperationalEngine::Tools::StartBudgetService do
     perform
 
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'orcamento_iniciado').count).to eq(1)
+  end
+
+  # CP-01 -- P1-018-05.
+  describe 'corrida com fato mais novo' do
+    it 'opt-out entrou enquanto a ação esperava: não inicia orçamento' do
+      persist_newer_fact_before_lock(nao_contatar: true)
+
+      expect(perform).to eq(ok: false, reason: 'lead está em não-contatar')
+      expect(lead.reload.orcamento_status).to eq('nao_solicitado')
+    end
+
+    it 'humano assumiu enquanto a ação esperava: não inicia orçamento' do
+      persist_newer_fact_before_lock(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+      expect(lead.reload.orcamento_status).to eq('nao_solicitado')
+    end
   end
 end
