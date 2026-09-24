@@ -29,17 +29,37 @@ describe('CommercialActionsPanel', () => {
     expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.NO_SHOW');
   });
 
-  // CP-05 (P1-025-02, §8.4): Ganho/Perdido só a partir de Em acompanhamento -- em Oportunidade o
-  // painel oferece a movimentação Comercial (ação do Engine) no lugar.
-  it('em Oportunidade oferece mover para Em acompanhamento e esconde Ganho/Perdido', () => {
+  // CP-16A (P2-VAL-18; decisão da Stéphanie em 24/09/2026): em Oportunidade o painel oferece
+  // tanto a movimentação para Em acompanhamento quanto Ganho/Perdido direto.
+  it('em Oportunidade oferece mover para Em acompanhamento e também Ganho/Perdido', () => {
     const labels = labelsFor({
       engineTags: [],
       engineStageKey: 'oportunidade',
     });
 
     expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.START_ACOMPANHAMENTO');
-    expect(labels).not.toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_WON');
-    expect(labels).not.toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_LOST');
+    expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_WON');
+    expect(labels).toContain('CRM.LEAD.DETAIL.COMMERCIAL.MARK_LOST');
+  });
+
+  it('em Oportunidade emite registerResultado com o motivo da perda', async () => {
+    const wrapper = mount(CommercialActionsPanel, {
+      props: {
+        engineTags: [],
+        engineStageKey: 'oportunidade',
+        isSaving: false,
+      },
+    });
+    await wrapper.find('textarea').setValue('preço');
+    const button = wrapper
+      .findAll('button')
+      .find(b => b.text() === 'CRM.LEAD.DETAIL.COMMERCIAL.MARK_LOST');
+
+    await button.trigger('click');
+
+    expect(wrapper.emitted('registerResultado')).toEqual([
+      [{ resultado: 'perdido', motivoPerda: 'preço' }],
+    ]);
   });
 
   it('emite advance-etapa-comercial com em_acompanhamento', async () => {
