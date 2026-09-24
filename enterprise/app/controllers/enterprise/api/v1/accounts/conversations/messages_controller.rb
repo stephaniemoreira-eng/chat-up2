@@ -6,7 +6,7 @@ module Enterprise::Api::V1::Accounts::Conversations::MessagesController
     sender = Current.user || @resource
     return super unless OperationalEngine::OutboundSendGate.applies?(conversation: @conversation, sender: sender, params: params)
 
-    OperationalEngine::OutboundSendGate.authorize!(conversation: @conversation) do
+    OperationalEngine::OutboundSendGate.authorize!(conversation: @conversation, params: params) do
       super
       @message
     end

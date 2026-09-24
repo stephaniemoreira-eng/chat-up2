@@ -267,4 +267,70 @@ RSpec.describe OperationalEngine::OutboundSendGate do
   it 'a janela de resposta padrão é curta (5 min): lembrete/nudge logo depois não passa por "resposta"' do
     expect(described_class.reply_window).to eq(5.minutes)
   end
+
+  # CP-06 -- RISK-026-01 / P2-026-02 (SSOT §18.3 "timers antigos não ressuscitam", §23.2, §28.23):
+  # o timer do up2-agents carimba quando nasceu; nascido antes da última mudança de modo não fala.
+  describe 'envio programado (carimbo up2_automation)' do
+    let(:user) { create(:user, account: account) }
+
+    before do
+      conversation.update!(additional_attributes: {})
+      lead.update!(etapa_prospect: 'em_conversa')
+      incoming!(at: 2.hours.ago)
+    end
+
+    def post_scheduled(created_at)
+      params = { content_attributes: { up2_automation: { kind: 'FOLLOWUP', job_id: 'job-1', created_at: created_at } } }
+      described_class.authorize!(conversation: conversation, params: params) do
+        create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                         sender: agent_bot, content: 'Oi, conseguiu ver a proposta?')
+      end
+    end
+
+    it '28.23: timer criado antes do Assumir e disparado durante o atendimento humano é bloqueado' do
+      timer_created_at = 1.hour.ago.iso8601
+      OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+
+      expect { post_scheduled(timer_created_at) }.to raise_error(described_class::Blocked) { |e| expect(e.reason).to eq('atendimento_humano') }
+    end
+
+    it '28.22: timer criado antes do Assumir não ressuscita depois do Devolver' do
+      timer_created_at = 1.hour.ago.iso8601
+      OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+      OperationalEngine::TakeoverService.devolver!(lead: lead, user_id: user.id)
+
+      expect { post_scheduled(timer_created_at) }.to raise_error(described_class::Blocked) do |e|
+        expect(e.reason).to eq('automacao_anterior_a_mudanca_de_modo')
+      end
+      expect(conversation.messages.outgoing.where(sender: agent_bot)).to be_empty
+    end
+
+    it 'timer novo, nascido depois do Devolver, pode sair' do
+      OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+      OperationalEngine::TakeoverService.devolver!(lead: lead, user_id: user.id)
+
+      message = travel(1.minute) { post_scheduled(Time.current.iso8601) }
+
+      expect(message).to be_persisted
+    end
+
+    it 'aceita content_attributes em JSON (string) e falha fechado com carimbo ilegível' do
+      OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+      OperationalEngine::TakeoverService.devolver!(lead: lead, user_id: user.id)
+      params = { content_attributes: { up2_automation: { kind: 'FOLLOWUP', created_at: 'ontem' } }.to_json }
+
+      expect do
+        described_class.authorize!(conversation: conversation, params: params) do
+          create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing', sender: agent_bot)
+        end
+      end.to raise_error(described_class::Blocked) { |e| expect(e.reason).to eq('automacao_anterior_a_mudanca_de_modo') }
+    end
+
+    it 'resposta reativa (sem carimbo) depois do Devolver não é afetada' do
+      OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+      OperationalEngine::TakeoverService.devolver!(lead: lead, user_id: user.id)
+
+      expect(post_bot_message).to be_persisted
+    end
+  end
 end

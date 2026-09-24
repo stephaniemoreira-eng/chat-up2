@@ -23,6 +23,7 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
   rescue_from OperationalEngine::RegisterResultadoComercialService::InvalidResultadoError, with: :render_action_error
   rescue_from OperationalEngine::ComercialActionGuard::InvalidContextError, with: :render_action_error
   rescue_from OperationalEngine::SetPropensaoService::InvalidPropensaoError, with: :render_action_error
+  rescue_from OperationalEngine::DevolucaoSync::SyncError, with: :render_action_error
 
   def index
     @leads = filtered_leads.ordered
@@ -136,8 +137,10 @@ class Api::V1::Accounts::Sales::LeadsController < Api::V1::Accounts::Sales::Base
     @lead.reload
   end
 
+  # CP-06 (P1-026-01): a devolução sincroniza antes de reativar a Lavínia; se a sincronização
+  # falhar, o lead continua humano e o operador recebe 422 com o motivo (pode repetir).
   def devolver
-    OperationalEngine::TakeoverService.devolver!(lead: @operational_lead)
+    OperationalEngine::TakeoverService.devolver!(lead: @operational_lead, user_id: Current.user.id)
     @lead.reload
   end
 

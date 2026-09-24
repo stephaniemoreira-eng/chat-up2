@@ -213,6 +213,130 @@ RSpec.describe OperationalEngine::TakeoverService do
     end
   end
 
+  # CP-06 -- P1-026-01, P2-026-01, P2-026-02 (SSOT §7.3, §7.4, §18.2, §18.3, §28.19, §28.22).
+  describe 'devolução com sincronização prévia e timeline canônica (CP-06)' do
+    let(:account) { create(:account) }
+    let(:inbox) { create(:inbox, account: account) }
+    let(:contact) { create(:contact, account: account, phone_number: '+5513991240001') }
+    let(:user) { create(:user, account: account, role: :agent) }
+    let(:conversation) { create(:conversation, account: account, inbox: inbox, contact: contact) }
+    let(:lead) do
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, upsales_contact_id: contact.id,
+                                      upsales_conversation_atual_id: conversation.id, etapa_prospect: 'em_conversa',
+                                      ultima_interacao_em: 3.hours.ago, ultimo_ponto: 'perguntou sobre coleta')
+    end
+
+    before do
+      create(:agent_bot_inbox, inbox: inbox)
+      create(:inbox_member, user: user, inbox: inbox)
+    end
+
+    def message!(type, sender, at:)
+      create(:message, account: account, inbox: inbox, conversation: conversation, message_type: type, sender: sender, created_at: at)
+    end
+
+    def events(type)
+      OperationalEngine::LeadEvent.where(lead: lead, event_type: type).order(:event_at)
+    end
+
+    it '28.19: assumir para a Lavínia na conversa do canal, cancela a abertura autorizada e registra modo/responsável' do
+      conversation.update!(status: :pending, additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+
+      described_class.assumir!(lead: lead, user_id: user.id)
+
+      expect(conversation.reload).to be_open
+      expect(OperationalEngine::OriginationActivation.for(conversation).status).to eq('cancelled')
+      modo = events('modo_atendimento_alterado').last.metadata
+      expect(modo).to include('de' => 'lavinia', 'para' => 'humano', 'motivo' => 'assumir', 'executado_por' => user.id)
+      expect(events('responsavel_alterado').last.metadata).to include('de' => nil, 'para' => user.id, 'executado_por' => user.id)
+      expect(events('intervencao_humana_iniciada').last.metadata['correlation_id']).to eq(modo['correlation_id'])
+    end
+
+    it '28.22: sincroniza ANTES de reativar e só então devolve a conversa para a Lavínia' do
+      described_class.assumir!(lead: lead, user_id: user.id)
+      travel(10.minutes)
+      lead_msg = message!(:incoming, contact, at: 2.minutes.ago)
+      human_msg = message!(:outgoing, user, at: 1.minute.ago)
+      allow(OperationalEngine::DevolucaoSync).to receive(:call).and_wrap_original do |original, locked_lead|
+        expect(locked_lead.reload.modo_atendimento).to eq('humano')
+        original.call(locked_lead)
+      end
+
+      described_class.devolver!(lead: lead, user_id: user.id)
+
+      expect(lead.reload.modo_atendimento).to eq('lavinia')
+      expect(lead.ultima_interacao_em).to be_within(1.second).of(lead_msg.created_at)
+      sync = events('intervencao_humana_encerrada').last.metadata['sincronizacao']
+      expect(sync).to include('conversation_id' => conversation.id, 'ultimo_ponto' => 'perguntou sobre coleta')
+      expect(sync['mensagens_na_intervencao']).to be >= 2 # + mensagens automáticas do inbox (saudação)
+      expect(sync['ultima_mensagem_lead']['message_id']).to eq(lead_msg.id)
+      expect(sync['ultima_mensagem_humana']).to include('message_id' => human_msg.id, 'user_id' => user.id)
+      expect(conversation.reload).to be_pending
+    end
+
+    it 'devolver grava modo e responsável com de/para/motivo/executado_por (timeline reconstruível)' do
+      described_class.assumir!(lead: lead, user_id: user.id)
+      described_class.devolver!(lead: lead, user_id: 7)
+
+      # event_at vem do now() do banco (constante na transação do teste): seleciona pelo motivo.
+      modo = events('modo_atendimento_alterado').find { |event| event.metadata['motivo'] == 'devolver' }.metadata
+      expect(modo).to include('de' => 'humano', 'para' => 'lavinia', 'executado_por' => 7)
+      responsavel = events('responsavel_alterado').find { |event| event.metadata['motivo'] == 'devolver' }.metadata
+      expect(responsavel).to include('de' => user.id, 'para' => nil, 'correlation_id' => modo['correlation_id'])
+      expect(events('intervencao_humana_encerrada').sole.metadata).to include('responsavel_atual_id' => user.id, 'executado_por' => 7)
+      expect(events('modo_atendimento_alterado').map { |event| event.metadata.values_at('de', 'para') })
+        .to contain_exactly(%w[lavinia humano], %w[humano lavinia])
+    end
+
+    it 'sincronização falha: lead continua humano, responsável mantido, nenhum evento e nada projetado' do
+      described_class.assumir!(lead: lead, user_id: user.id)
+      allow(OperationalEngine::DevolucaoSync).to receive(:call).and_raise(OperationalEngine::DevolucaoSync::SyncError, 'chatwoot fora')
+
+      expect { described_class.devolver!(lead: lead, user_id: user.id) }.to raise_error(OperationalEngine::DevolucaoSync::SyncError)
+
+      expect(lead.reload.modo_atendimento).to eq('humano')
+      expect(lead.responsavel_atual_id).to eq(user.id)
+      expect(events('intervencao_humana_encerrada')).to be_empty
+      expect(conversation.reload).to be_open
+    end
+
+    it 'conversa atual de outro contato é divergência: a devolução não acontece' do
+      described_class.assumir!(lead: lead, user_id: user.id)
+      lead.update!(upsales_conversation_atual_id: create(:conversation, account: account, inbox: inbox).id)
+
+      expect { described_class.devolver!(lead: lead, user_id: user.id) }
+        .to raise_error(OperationalEngine::DevolucaoSync::SyncError, /outro contato/)
+      expect(lead.reload.modo_atendimento).to eq('humano')
+    end
+
+    it 'timers antigos não ressuscitam: devolver não restaura aguardando_resposta nem recovery' do
+      described_class.assumir!(lead: lead, user_id: user.id)
+      lead.update!(aguardando_resposta: true, recuperacao_status: 'ativa', proxima_recuperacao_em: 1.hour.from_now)
+
+      described_class.devolver!(lead: lead, user_id: user.id)
+
+      lead.reload
+      expect(lead.aguardando_resposta).to be(false)
+      expect(lead.recuperacao_status).to eq('inativa')
+      expect(lead.proxima_recuperacao_em).to be_nil
+    end
+
+    it 'falha na projeção da conversa depois do Devolver é reconciliada sem duplicar a intervenção' do
+      described_class.assumir!(lead: lead, user_id: user.id)
+      allow(OperationalEngine::ConversationModeProjection).to receive(:call).and_raise(ActiveRecord::StatementInvalid, 'banco nativo fora')
+
+      described_class.devolver!(lead: lead, user_id: user.id)
+      expect(conversation.reload).to be_open
+
+      allow(OperationalEngine::ConversationModeProjection).to receive(:call).and_call_original
+      travel(5.minutes) { OperationalEngine::ProjectionReconcileJob.perform_now }
+
+      expect(conversation.reload).to be_pending
+      expect(events('intervencao_humana_encerrada').count).to eq(1)
+      expect(events('modo_atendimento_alterado').count).to eq(2)
+    end
+  end
+
   describe 'concorrencia (teste 28.23)' do
     # Prova o mecanismo (row lock via with_lock), não a corrida em si: um teste com Threads reais
     # contra o pool de conexões de teste é flaky por natureza (timing, tamanho do pool) e não há

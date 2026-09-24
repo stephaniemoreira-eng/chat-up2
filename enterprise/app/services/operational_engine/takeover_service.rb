@@ -17,62 +17,81 @@
 # responsável Comercial pendente (lacuna do SSOT, ver OperationalEngine::CommercialResponsibleResolver).
 # Assumir esse lead grava o usuário como responsável (§18.2 "responsavel_atual_id = usuário") sem
 # reabrir a intervenção -- o modo já era humano desde o handoff.
+#
+# CP-06 (P1-026-01, P2-026-01, RISK-026-01; SSOT §7.3, §7.4, §18.2, §18.3, §28.19, §28.22):
+# - Devolver só reativa a Lavínia DEPOIS da sincronização (OperationalEngine::DevolucaoSync), na
+#   mesma transação: se a sincronização falha, nada é gravado -- o lead continua humano e com o
+#   responsável, e o erro sobe para o operador (DevolucaoSync::SyncError -> 422).
+# - Timers antigos não ressuscitam: Devolver não restaura aguardando_resposta/recovery (ficam
+#   falso/inativa/nulo) -- novo timer só nasce do estado atual. Ativações de abertura ainda
+#   autorizadas são canceladas ao Assumir, então o Dispatcher não retoma uma abertura antiga depois
+#   do Devolver. Timers do up2-agents criados antes da mudança de modo são recusados no post
+#   (OutboundSendGate, carimbo `up2_automation.created_at`, PR coordenada).
+# - Timeline (P2-026-01): além de intervencao_humana_iniciada/encerrada, cada transição grava
+#   modo_atendimento_alterado e responsavel_alterado com de/para/motivo/executado_por -- quem
+#   assumiu, o que havia antes, quando devolveu e o estado resultante saem só dos eventos.
 module OperationalEngine
   class TakeoverService
-    def self.assumir!(lead:, user_id:)
-      new(lead).assumir!(user_id)
+    def self.assumir!(lead:, user_id:, motivo: 'assumir')
+      new(lead).assumir!(user_id, motivo)
     end
 
-    def self.devolver!(lead:)
-      new(lead).devolver!
+    def self.devolver!(lead:, user_id: nil)
+      new(lead).devolver!(user_id)
     end
 
     def initialize(lead)
       @lead = lead
     end
 
-    def assumir!(user_id)
+    def assumir!(user_id, motivo = 'assumir')
       @lead.with_lock do
         if @lead.modo_atendimento_humano?
           claim_pending_responsavel!(user_id) if @lead.responsavel_atual_id.nil?
           next
         end
 
+        before = transition_snapshot
         @lead.update!(
           modo_atendimento: 'humano',
           responsavel_atual_id: user_id,
           modo_atendimento_entrou_em: Time.current,
           # §18.2: nenhum envio automático pode estar pendente enquanto um humano está na conversa.
           aguardando_resposta: false,
-          # §18.2 "recovery inativa; próxima recovery null" -- Fase 7 ainda não dispara recovery,
-          # mas o estado já fica correto pra quando o dispatcher existir.
+          # §18.2 "recovery inativa; próxima recovery null; cancelar timers da Lavínia".
           recuperacao_status: 'inativa',
           proxima_recuperacao_em: nil
         )
-        write_event('intervencao_humana_iniciada', responsavel_atual_id: user_id)
+        write_transition_events('intervencao_humana_iniciada', before, motivo, user_id, responsavel_atual_id: user_id)
         OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'assumir')
       end
 
-      # Fora do with_lock de propósito: a sincronização visual toca o Postgres nativo, um banco
-      # diferente do Supabase -- não vale segurar o lock de linha do Engine pela viagem de rede extra.
+      # Fora do with_lock de propósito: a sincronização visual e o cancelamento das ativações tocam
+      # o Postgres nativo, um banco diferente do Supabase.
+      cancel_pending_activations
       OperationalEngine::ProjectionReconciler.flush(@lead)
       @lead
     end
 
-    def devolver!
+    def devolver!(user_id = nil)
       @lead.with_lock do
         next if @lead.modo_atendimento_lavinia?
 
-        previous_responsavel = @lead.responsavel_atual_id
+        # §18.3: sincroniza ANTES de reativar. SyncError aqui desfaz a transação inteira.
+        sync = OperationalEngine::DevolucaoSync.call(@lead)
+        before = transition_snapshot
         @lead.update!(
+          **sync[:lead_attributes],
           modo_atendimento: 'lavinia',
           responsavel_atual_id: nil,
-          modo_atendimento_entrou_em: Time.current
+          modo_atendimento_entrou_em: Time.current,
+          # §18.3 "timers antigos não ressuscitam": nada pendente de antes volta a valer.
+          aguardando_resposta: false,
+          recuperacao_status: 'inativa',
+          proxima_recuperacao_em: nil
         )
-        # §18.3: "timers antigos não ressuscitam" -- não há nada aqui que reative um timer, de
-        # propósito. Um novo timer, quando existir (Fase 7), nasce do estado atual do lead, não
-        # de um valor congelado antes do humano assumir.
-        write_event('intervencao_humana_encerrada', responsavel_atual_id: previous_responsavel)
+        write_transition_events('intervencao_humana_encerrada', before, 'devolver', user_id,
+                                responsavel_atual_id: before[:responsavel_atual_id], sincronizacao: sync[:sincronizacao])
         OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'devolver')
       end
 
@@ -82,22 +101,52 @@ module OperationalEngine
 
     private
 
+    def transition_snapshot
+      { modo_atendimento: @lead.modo_atendimento, responsavel_atual_id: @lead.responsavel_atual_id }
+    end
+
     def claim_pending_responsavel!(user_id)
       @lead.update!(responsavel_atual_id: user_id)
-      write_event('responsavel_alterado', de: nil, para: user_id, motivo: 'assumir_responsavel_pendente')
+      write_event('responsavel_alterado', SecureRandom.uuid,
+                  de: nil, para: user_id, motivo: 'assumir_responsavel_pendente', executado_por: user_id)
       OperationalEngine::ProjectionReconciler.request!(@lead, motivo: 'assumir')
+    end
+
+    # Mesma correlation_id em todos os eventos da transição (uma ação lógica, várias semânticas).
+    def write_transition_events(intervencao_event, before, motivo, user_id, **intervencao_metadata)
+      correlation_id = SecureRandom.uuid
+      common = { motivo: motivo, executado_por: user_id }
+      write_event(intervencao_event, correlation_id, **intervencao_metadata, **common)
+      write_event('modo_atendimento_alterado', correlation_id, de: before[:modo_atendimento], para: @lead.modo_atendimento, **common)
+      return if before[:responsavel_atual_id] == @lead.responsavel_atual_id
+
+      write_event('responsavel_alterado', correlation_id, de: before[:responsavel_atual_id], para: @lead.responsavel_atual_id, **common)
     end
 
     # Grava direto (não via EventWriter/IdempotencyGuard): esta não é uma "entrada" de evento
     # externo pra deduplicar -- é a consequência de uma transição de estado que o `with_lock` +
     # early-return acima já torna idempotente. Ver o docstring do EventWriter.
-    def write_event(event_type, **extra_metadata)
+    def write_event(event_type, correlation_id, **metadata)
       OperationalEngine::LeadEvent.create!(
         lead: @lead,
         event_type: event_type,
         source: 'human',
-        metadata: extra_metadata.merge(correlation_id: SecureRandom.uuid)
+        metadata: metadata.merge(correlation_id: correlation_id)
       )
+    end
+
+    # RISK-026-01: uma abertura do Dispatcher autorizada antes do Assumir não pode sobreviver a ele
+    # (senão, depois do Devolver, o Dispatcher a retomaria). Best-effort fora do lock: se falhar, o
+    # OutboundSendGate continua barrando enquanto o lead estiver humano.
+    def cancel_pending_activations
+      return if @lead.upsales_contact_id.blank?
+
+      activations = OperationalEngine::OriginationActivation.pending_for_contact(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id)
+      activations.each do |activation|
+        activation.transition!('cancelled', motivo: 'atendimento_humano') if activation.lead_id == @lead.lead_id
+      end
+    rescue StandardError => e
+      Rails.logger.error("[OperationalEngine::TakeoverService] lead=#{@lead.lead_id} falha ao cancelar ativações: #{e.class}: #{e.message}")
     end
   end
 end

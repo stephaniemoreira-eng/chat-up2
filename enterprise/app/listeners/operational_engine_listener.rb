@@ -55,7 +55,7 @@ class OperationalEngineListener < BaseListener
     lead = OperationalEngine::LeadRepository.find_by_telefone(conta_id: account.id, telefone: phone)
     return if lead.nil?
 
-    OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id)
+    OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: message.sender_id, motivo: 'mensagem_publica_humana')
   end
 
   # CP-02 (P0-019-01): a transição source_id nil -> presente acontece UMA vez. Confirmar inline é o

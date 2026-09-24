@@ -560,6 +560,23 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
         expect(engine_lead.responsavel_atual_id).to be_nil
         expect(response.parsed_body['payload']['custom_attributes']['engine_tags']).to eq(['lavinia'])
       end
+
+      # CP-06 -- P1-026-01: sincronização pré-devolução falhou -> 422, lead continua humano.
+      it 'retorna 422 e mantém o lead humano quando a sincronização pré-devolução falha' do
+        other_contact = create(:contact, account: account)
+        foreign_conversation = create(:conversation, account: account, contact: other_contact)
+        engine_lead = build_engine_lead(modo_atendimento: 'humano', responsavel_atual_id: agent.id,
+                                        upsales_conversation_atual_id: foreign_conversation.id)
+        lead = synced_sales_lead(engine_lead)
+
+        post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/devolver",
+             headers: agent.create_new_auth_token, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body['error']).to match(/outro contato/)
+        expect(engine_lead.reload.modo_atendimento).to eq('humano')
+        expect(engine_lead.responsavel_atual_id).to eq(agent.id)
+      end
     end
 
     it 'retorna unprocessable_entity quando o card nao esta vinculado a um lead do Engine' do
