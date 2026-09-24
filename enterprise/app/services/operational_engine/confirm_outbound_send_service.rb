@@ -39,10 +39,16 @@ module OperationalEngine
       lead = OperationalEngine::LeadRepository.find_by_telefone(conta_id: @message.account_id, telefone: telefone)
       return if lead.nil?
 
-      lead.with_lock { record_first_contact(lead) if lead.primeiro_contato_em.nil? }
+      lead.with_lock do
+        next unless lead.primeiro_contato_em.nil?
 
-      OperationalEngine::SalesProjectionSync.call(lead)
-      OperationalEngine::ComercialProjectionSync.call(lead)
+        record_first_contact(lead)
+        OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'primeiro_contato')
+      end
+
+      # CP-08 (resíduo do CP-05, P1-025-04): projeção pelo mecanismo durável. Também no no-op
+      # (confirmação repetida): se uma projeção anterior ficou pendente, ela é reparada aqui.
+      OperationalEngine::ProjectionReconciler.flush(lead)
     end
 
     private

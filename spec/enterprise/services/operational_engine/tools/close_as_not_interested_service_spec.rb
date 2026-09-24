@@ -25,6 +25,8 @@ RSpec.describe OperationalEngine::Tools::CloseAsNotInterestedService do
     lead.reload
     expect(lead.lead_status).to eq('encerrado')
     expect(lead.motivo_encerramento).to eq('sem_interesse')
+    # 28.27 (P2-VAL-02): sem interesse encerra o ciclo SEM ativar nao_contatar.
+    expect(lead.nao_contatar).to be(false)
   end
 
   it 'não mexe em qualificacao_status' do

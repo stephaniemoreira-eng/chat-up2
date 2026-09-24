@@ -217,6 +217,8 @@ RSpec.describe OperationalEngine::Dispatcher do
 
       described_class.call(conta_id: account.id)
       expect(lead.reload.etapa_prospect).to eq('backlog')
+      # 28.2 (P2-VAL-02): falha no primeiro envio não preenche nenhum timestamp de sucesso.
+      expect(lead.attributes.slice('entrada_operacao_em', 'primeiro_contato_em')).to eq('entrada_operacao_em' => nil, 'primeiro_contato_em' => nil)
       activation_id = activation_for(lead).activation_id
 
       travel_to(business_hours + OperationalEngine::OriginationActivation::DISPATCH_LEASE + 1.minute)
