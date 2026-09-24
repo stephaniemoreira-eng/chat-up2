@@ -29,10 +29,8 @@ module Concerns::OperationalEngine::ToolAuthentication
     tenant = account.up_sales_agent_tenant
     provided = request.headers['Authorization'].to_s.delete_prefix('Bearer ').presence
 
-    unless tenant&.engine_api_key.present? && provided.present? &&
-           ActiveSupport::SecurityUtils.secure_compare(provided, tenant.engine_api_key)
-      return render_tool_error('chave inválida', status: :unauthorized)
-    end
+    # CP-12 (P1-VAL-10): compara o SHA-256 do que foi apresentado com o digest guardado.
+    return render_tool_error('chave inválida', status: :unauthorized) unless tenant&.engine_api_key_matches?(provided)
 
     Current.account = account
     # switch_locale_using_account_locale (herdado) lê @current_account direto, não o método

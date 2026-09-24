@@ -7,7 +7,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Actions', type: :request d
   let(:conversation) { create(:conversation, account: account, contact: contact) }
   let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number) }
 
-  let(:valid_headers) { { 'Authorization' => "Bearer #{agent_tenant.engine_api_key}" } }
+  let(:valid_headers) { { 'Authorization' => "Bearer #{agent_tenant.issued_engine_api_key}" } }
 
   it 'rejeita sem autenticação, igual às outras rotas do Contrato B' do
     post "/api/v1/accounts/#{account.id}/operational_engine/actions/iniciar_orcamento",
