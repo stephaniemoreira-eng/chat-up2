@@ -281,7 +281,6 @@
           "MARK_WON": "Mark Won",
           "MARK_LOST": "Mark Lost",
           "START_ACOMPANHAMENTO": "Move to Follow-up",
-          "RESULT_REQUIRES_ACOMPANHAMENTO": "Won/Lost become available after moving the opportunity to Follow-up.",
           "REMOVE_NO_SHOW": "Remove NO-SHOW",
           "MESSAGES": {
             "ERROR": "Could not complete this action. Please try again."

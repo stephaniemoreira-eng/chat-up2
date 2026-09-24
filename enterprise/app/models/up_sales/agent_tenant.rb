@@ -11,14 +11,18 @@
 #  engine_api_key_digest            :string
 #  created_at                       :datetime         not null
 #  updated_at                       :datetime         not null
+#  recovery_email_body              :text
+#  recovery_email_subject           :string
 #  account_id                       :bigint           not null
+#  commercial_responsible_user_id   :bigint
 #  whatsapp_inbox_id                :bigint
 #
 # Indexes
 #
-#  index_up_sales_agent_tenants_on_account_id          (account_id) UNIQUE
-#  index_up_sales_agent_tenants_on_engine_api_key_digest (engine_api_key_digest) UNIQUE
-#  index_up_sales_agent_tenants_on_whatsapp_inbox_id   (whatsapp_inbox_id)
+#  index_up_sales_agent_tenants_on_account_id                     (account_id) UNIQUE
+#  index_up_sales_agent_tenants_on_commercial_responsible_user_id (commercial_responsible_user_id)
+#  index_up_sales_agent_tenants_on_engine_api_key_digest          (engine_api_key_digest) UNIQUE
+#  index_up_sales_agent_tenants_on_whatsapp_inbox_id              (whatsapp_inbox_id)
 #
 # Liga uma conta Chatwoot ao tenant correspondente no up2-agents. A API do up2-agents não tem
 # chave de plataforma entre tenants (verificado): cada conta precisa da própria chave, criada
@@ -45,6 +49,15 @@
 # desde o Super Admin de configuração de agente (ver UpSales::Agents::UpsertAgentService).
 # Corrigido depois de descobrir esse mecanismo: a Fase 6 (dispatcher) tinha adicionado uma coluna
 # `prospecting_agent_id` própria, redundante e sem nenhum jeito real de ser preenchida.
+#
+# CP-16A -- decisões de negócio da Stéphanie em 24/09/2026 (lacunas do SSOT), configuradas aqui:
+# - `commercial_responsible_user_id` (P2-VAL-16, "DANILO"): o usuário DESTA conta que vira o
+#   responsável Comercial quando a Lavínia faz o handoff e nenhum humano já é responsável (ver
+#   OperationalEngine::CommercialResponsibleResolver). Nulo = responsável pendente (comportamento do
+#   CP-05). Não há nome/ID fixo no código: cada conta escolhe o seu no Super Admin.
+# - `recovery_email_subject` / `recovery_email_body` (P2-VAL-17, "SER AJUSTÁVEL"): texto do e-mail da
+#   3ª tentativa de recovery, com os placeholders de OperationalEngine::RecoveryEmailTemplate. Vazios =
+#   modelo neutro do CP-13.
 class UpSales::AgentTenant < ApplicationRecord
   self.table_name = 'up_sales_agent_tenants'
 
@@ -52,6 +65,7 @@ class UpSales::AgentTenant < ApplicationRecord
 
   belongs_to :account
   belongs_to :whatsapp_inbox, class_name: 'Inbox', optional: true
+  belongs_to :commercial_responsible_user, class_name: 'User', optional: true
 
   encrypts :api_key if Chatwoot.encryption_configured?
   encrypts :engine_api_key if Chatwoot.encryption_configured?
@@ -90,6 +104,18 @@ class UpSales::AgentTenant < ApplicationRecord
   validates :agents_tenant_id, presence: true
   validates :api_key, presence: true
   validate :whatsapp_inbox_must_be_prospecting_channel
+  validate :commercial_responsible_user_must_belong_to_account
+  validates :recovery_email_subject, length: { maximum: OperationalEngine::RecoveryEmailTemplate::SUBJECT_MAX_LENGTH }
+  validates :recovery_email_body, length: { maximum: OperationalEngine::RecoveryEmailTemplate::BODY_MAX_LENGTH }
+  validate :recovery_email_placeholders_must_be_known
+
+  # CP-16A (P2-VAL-16): o responsável configurado, só enquanto ele ainda é usuário desta conta. Um
+  # usuário removido da conta depois de configurado não vira responsável -- volta a ser "pendente".
+  def commercial_responsible_user_id_for_handoff
+    return if commercial_responsible_user_id.blank?
+
+    commercial_responsible_user_id if account.users.exists?(id: commercial_responsible_user_id)
+  end
 
   # A Fase 6 do dispatcher só é elegível quando as duas peças estão configuradas -- faltando
   # qualquer uma, OperationalEngine::Dispatcher pula a conta inteira (falha explícita, não
@@ -114,6 +140,23 @@ class UpSales::AgentTenant < ApplicationRecord
   end
 
   private
+
+  def commercial_responsible_user_must_belong_to_account
+    return if commercial_responsible_user_id.blank?
+    return if account.present? && account.users.exists?(id: commercial_responsible_user_id)
+
+    errors.add(:commercial_responsible_user_id, 'não é um usuário desta conta')
+  end
+
+  def recovery_email_placeholders_must_be_known
+    { recovery_email_subject: recovery_email_subject, recovery_email_body: recovery_email_body }.each do |field, text|
+      unknown = OperationalEngine::RecoveryEmailTemplate.unknown_placeholders(text)
+      next if unknown.empty?
+
+      allowed = OperationalEngine::RecoveryEmailTemplate::PLACEHOLDERS.map { |key| "{{#{key}}}" }.join(', ')
+      errors.add(field, "tem placeholder desconhecido (#{unknown.map { |key| "{{#{key}}}" }.join(', ')}); use só #{allowed}")
+    end
+  end
 
   def whatsapp_inbox_must_be_prospecting_channel
     return if whatsapp_inbox_id.blank?

@@ -40,6 +40,49 @@ RSpec.describe 'Super Admin Up Sales agent config', type: :request do
       expect(agent_tenant.reload.whatsapp_inbox_id).to be_nil
     end
 
+    # CP-16A -- P2-VAL-16/P2-VAL-17 (decisões da Stéphanie em 24/09/2026).
+    it 'grava o responsável Comercial e o texto do e-mail de recovery da conta' do
+      danilo = create(:user, account: account, name: 'Danilo')
+
+      patch "/super_admin/accounts/#{account.id}/up_sales_agent_config",
+            params: { agent_tenant: { commercial_responsible_user_id: danilo.id, recovery_email_subject: 'Oi {{nome}}',
+                                      recovery_email_body: 'Corpo {{marca}}' } }
+
+      expect(response).to redirect_to(super_admin_account_up_sales_agent_config_path(account))
+      expect(agent_tenant.reload.commercial_responsible_user_id).to eq(danilo.id)
+      expect(agent_tenant.recovery_email_subject).to eq('Oi {{nome}}')
+      expect(agent_tenant.recovery_email_body).to eq('Corpo {{marca}}')
+    end
+
+    it 'permite limpar o responsável Comercial e o texto do e-mail (volta ao padrão)' do
+      agent_tenant.update!(commercial_responsible_user_id: create(:user, account: account).id, recovery_email_body: 'x')
+
+      patch "/super_admin/accounts/#{account.id}/up_sales_agent_config",
+            params: { agent_tenant: { commercial_responsible_user_id: '', recovery_email_body: '' } }
+
+      expect(agent_tenant.reload.commercial_responsible_user_id).to be_nil
+      expect(agent_tenant.recovery_email_body).to be_nil
+    end
+
+    it 'rejeita responsável Comercial de outra conta enviado por request forjado' do
+      forjado = create(:user, account: create(:account))
+
+      patch "/super_admin/accounts/#{account.id}/up_sales_agent_config",
+            params: { agent_tenant: { commercial_responsible_user_id: forjado.id } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(agent_tenant.reload.commercial_responsible_user_id).to be_nil
+    end
+
+    it 'mostra os usuários da conta como opção de responsável Comercial' do
+      create(:user, account: account, name: 'Danilo Comercial')
+
+      get "/super_admin/accounts/#{account.id}/up_sales_agent_config"
+
+      expect(response.body).to include('Danilo Comercial')
+      expect(response.body).to include('Responsável Comercial do handoff')
+    end
+
     it 'nao mexe na api_key existente quando o campo de senha fica em branco' do
       patch "/super_admin/accounts/#{account.id}/up_sales_agent_config",
             params: { agent_tenant: { whatsapp_inbox_id: whatsapp_channel.inbox.id, api_key: '' } }
