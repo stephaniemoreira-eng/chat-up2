@@ -32,17 +32,25 @@ module OperationalEngine
         return { ok: true, event_id: lead.calendar_event_id, ja_existia: true } if already_confirmed
 
         agent_tenant = @account.up_sales_agent_tenant
-        return { ok: false, reason: 'agenda não conectada para esta conta' } unless calendar_connected?(agent_tenant)
+        return calendar_failure('agenda não conectada para esta conta') unless calendar_connected?(agent_tenant)
 
         create_and_persist(lead, agent_tenant)
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }
-      rescue UpSales::Agents::CreateCalendarEventService::SyncError => e
+      rescue UpSales::Agents::CreateCalendarEventService::SyncError, *OperationalEngine::CalendarRetryAttempt::NETWORK_ERRORS => e
         # SSOT §16: falha do Calendar não pode confirmar reunião nem conversão -- nada é gravado.
-        { ok: false, reason: e.message }
+        calendar_failure(e.message)
       end
 
       private
+
+      # CP-16B (P2-VAL-19, decisão da Stéphanie em 24/09/2026): a falha é marcada como "do Calendar"
+      # (`falha_calendar: true`) para o up2-agents saber que é a falha que a decisão manda tentar de
+      # novo em silêncio e, na segunda, virar callback do Danilo -- diferente de uma recusa de
+      # negócio (humano, não-contatar, encerrado, não qualificado), que não se tenta de novo.
+      def calendar_failure(reason)
+        { ok: false, reason: reason, falha_calendar: true }
+      end
 
       # Lido fora do lock de propósito: o Calendar é chamado depois, e segurar o lock do lead pela
       # viagem de rede ao up2-agents/Google não compensa. Se um humano assumir entre esta leitura e a
@@ -69,8 +77,8 @@ module OperationalEngine
           description: @description
         ).perform
 
-        event_id = event['id']
-        return { ok: false, reason: 'up2-agents não retornou um event_id válido' } if event_id.blank?
+        event_id = event.is_a?(Hash) ? event['id'] : nil
+        return calendar_failure('up2-agents não retornou um event_id válido') if event_id.blank?
 
         persist_confirmation(lead, event_id)
         { ok: true, event_id: event_id }

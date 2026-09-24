@@ -16,12 +16,18 @@
 #   caminho inverso).
 # - Idempotente pelo estado: callback já registrado com o estado completo é no-op (nenhum evento
 #   novo, nenhuma projeção) -- vale também para o chamador sem turn_id (ToolsController, modo prompt).
+#
+# CP-16B (P2-VAL-19, decisão da Stéphanie em 24/09/2026 -- "REGISTRAR NO CAMPO COMO CALLBACK
+# DANILO"): o callback também nasce da falha dupla do Calendar (CalendarFallbackService). O caminho é
+# ESTE, sem cópia; só a origem fica explícita no evento `callback_registrado` (`motivo`, `origem`,
+# `responsavel_comercial_id`). Sem esses argumentos, o evento sai exatamente como antes.
 module OperationalEngine
   module Tools
     class RegisterCallbackService
-      def initialize(account:, conversation_id:)
+      def initialize(account:, conversation_id:, motivo: nil, origem: nil, responsavel_comercial_id: nil)
         @account = account
         @conversation_id = conversation_id
+        @origin_metadata = { motivo: motivo, origem: origem, responsavel_comercial_id: responsavel_comercial_id }.compact
       end
 
       def call
@@ -64,7 +70,7 @@ module OperationalEngine
         unless lead.agendamento_status_callback_registrado?
           lead.update!(agendamento_status: 'callback_registrado')
           OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'callback_registrado', source: 'lavinia',
-                                                metadata: { correlation_id: SecureRandom.uuid })
+                                                metadata: @origin_metadata.merge(correlation_id: SecureRandom.uuid))
         end
         OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'callback_registrado')
       end

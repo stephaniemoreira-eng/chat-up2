@@ -33,18 +33,24 @@ module OperationalEngine
         return not_the_confirmed_meeting unless matches_confirmed_meeting?(lead)
 
         agent_tenant = @account.up_sales_agent_tenant
-        return { ok: false, reason: 'agenda não conectada para esta conta' } unless calendar_connected?(agent_tenant)
+        return calendar_failure('agenda não conectada para esta conta') unless calendar_connected?(agent_tenant)
 
         event = update_calendar_event(agent_tenant)
         record_event(lead)
-        { ok: true, event_id: event['id'] || @event_id }
+        { ok: true, event_id: (event.is_a?(Hash) && event['id']) || @event_id }
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }
-      rescue UpSales::Agents::UpdateCalendarEventService::SyncError => e
-        { ok: false, reason: e.message }
+      rescue UpSales::Agents::UpdateCalendarEventService::SyncError, *OperationalEngine::CalendarRetryAttempt::NETWORK_ERRORS => e
+        calendar_failure(e.message)
       end
 
       private
+
+      # CP-16B (P2-VAL-19): mesma marcação do ScheduleMeetingService -- a remarcação também ganha a
+      # segunda tentativa silenciosa no up2-agents (mas não o callback: ver CalendarFallbackService).
+      def calendar_failure(reason)
+        { ok: false, reason: reason, falha_calendar: true }
+      end
 
       def matches_confirmed_meeting?(lead)
         @event_id.present? && lead.agendamento_status_confirmado? && lead.calendar_event_id == @event_id
