@@ -87,7 +87,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
            headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'agenda não conectada para esta conta'), 'falha_calendar' => true
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'agenda não conectada para esta conta', 'falha_calendar' => true)
     end
   end
 
