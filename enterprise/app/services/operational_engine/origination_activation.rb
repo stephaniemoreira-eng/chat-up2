@@ -20,6 +20,10 @@
 # ativação está authorized, o Dispatcher pode retomá-la na MESMA conversa (sem criar outra) depois
 # de uma falha transitória -- mas só uma chamada por vez (lease de DISPATCH_LEASE) e no máximo
 # MAX_ATTEMPTS vezes. Uma abertura já gravada (consumed) nunca é reoriginada.
+#
+# CP-13 (P1-VAL-12): KEY/STATUSES/MAX_ATTEMPTS/DISPATCH_LEASE são lidos via `self.class::` para que
+# OperationalEngine::RecoveryActivation reutilize a mesma mecânica (claim com lease, transições sob
+# o lock da conversa) com a sua própria chave, sem duplicar código.
 module OperationalEngine
   class OriginationActivation
     KEY = 'up_sales_origination'.freeze
@@ -29,7 +33,7 @@ module OperationalEngine
 
     def self.build_attributes(lead)
       {
-        KEY => {
+        self::KEY => {
           'activation_id' => SecureRandom.uuid,
           'lead_id' => lead.lead_id,
           'status' => 'authorized',
@@ -39,7 +43,7 @@ module OperationalEngine
     end
 
     def self.for(conversation)
-      data = conversation.additional_attributes&.dig(KEY)
+      data = conversation.additional_attributes&.dig(self::KEY)
       data.present? ? new(conversation, data) : nil
     end
 
@@ -47,7 +51,7 @@ module OperationalEngine
     # pra invalidar outbound pendente de forma verificável (P0-018-01).
     def self.pending_for_contact(account_id:, contact_id:)
       ::Conversation.where(account_id: account_id, contact_id: contact_id)
-                    .where("additional_attributes -> '#{KEY}' ->> 'status' = ?", 'authorized')
+                    .where("additional_attributes -> '#{self::KEY}' ->> 'status' = ?", 'authorized')
                     .filter_map { |conversation| self.for(conversation) }
     end
 
@@ -70,10 +74,10 @@ module OperationalEngine
     # Pode chamar o up2-agents agora? Autorizada, abaixo do teto de tentativas e sem outra chamada
     # em andamento (lease).
     def dispatchable?(now = Time.current)
-      return false unless authorized? && attempts < MAX_ATTEMPTS
+      return false unless authorized? && attempts < self.class::MAX_ATTEMPTS
 
       last = @data['last_attempt_at'].presence && Time.zone.parse(@data['last_attempt_at'])
-      last.nil? || last <= now - DISPATCH_LEASE
+      last.nil? || last <= now - self.class::DISPATCH_LEASE
     end
 
     # Reivindica a próxima tentativa sob o lock da conversa -- dois dispatchers concorrentes não
@@ -81,12 +85,13 @@ module OperationalEngine
     def claim_attempt!(now = Time.current)
       claimed = false
       fresh = ::Conversation.find(conversation.id)
+      key = self.class::KEY
       fresh.with_lock do
-        entry = fresh.additional_attributes&.dig(KEY)
-        next unless entry && self.class.new(fresh, entry).dispatchable?(now)
+        entry = fresh.additional_attributes&.dig(key)
+        next unless entry && entry['activation_id'] == activation_id && self.class.new(fresh, entry).dispatchable?(now)
 
         entry = entry.merge('attempts' => entry['attempts'].to_i + 1, 'last_attempt_at' => now.iso8601(6))
-        fresh.update_columns(additional_attributes: fresh.additional_attributes.merge(KEY => entry)) # rubocop:disable Rails/SkipsModelValidations
+        fresh.update_columns(additional_attributes: fresh.additional_attributes.merge(key => entry)) # rubocop:disable Rails/SkipsModelValidations
         @data = entry
         claimed = true
       end
@@ -100,14 +105,15 @@ module OperationalEngine
     # recém-lida: o objeto recebido pode ter atributos sujos (callbacks de criação, por exemplo), e
     # o Rails recusa `with_lock` nesse caso.
     def transition!(new_status, **extra)
-      raise ArgumentError, "status inválido: #{new_status}" unless STATUSES.include?(new_status)
+      raise ArgumentError, "status inválido: #{new_status}" unless self.class::STATUSES.include?(new_status)
 
+      key = self.class::KEY
       fresh = ::Conversation.find(conversation.id)
       fresh.with_lock do
         current = (fresh.additional_attributes || {}).dup
-        entry = (current[KEY] || @data).merge('status' => new_status, 'status_at' => Time.current.iso8601(6))
+        entry = (current[key] || @data).merge('status' => new_status, 'status_at' => Time.current.iso8601(6))
         entry.merge!(extra.transform_keys(&:to_s))
-        current[KEY] = entry
+        current[key] = entry
         fresh.update_columns(additional_attributes: current) # rubocop:disable Rails/SkipsModelValidations
         @data = entry
       end

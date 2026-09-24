@@ -138,15 +138,28 @@ module OperationalEngine
     # RISK-026-01: uma abertura do Dispatcher autorizada antes do Assumir não pode sobreviver a ele
     # (senão, depois do Devolver, o Dispatcher a retomaria). Best-effort fora do lock: se falhar, o
     # OutboundSendGate continua barrando enquanto o lead estiver humano.
+    #
+    # CP-13 (P1-VAL-12, §18.2 "cancelar timers da Lavínia", 28.23): o mesmo para a tentativa de
+    # recovery autorizada -- além do timer zerado no lead acima e da revalidação no post.
     def cancel_pending_activations
-      return if @lead.upsales_contact_id.blank?
+      contact_ids = [@lead.upsales_contact_id, conversation_contact_id].compact.uniq
+      return if contact_ids.empty?
 
-      activations = OperationalEngine::OriginationActivation.pending_for_contact(account_id: @lead.conta_id, contact_id: @lead.upsales_contact_id)
-      activations.each do |activation|
-        activation.transition!('cancelled', motivo: 'atendimento_humano') if activation.lead_id == @lead.lead_id
+      [OperationalEngine::OriginationActivation, OperationalEngine::RecoveryActivation].each do |klass|
+        contact_ids.each do |contact_id|
+          klass.pending_for_contact(account_id: @lead.conta_id, contact_id: contact_id).each do |activation|
+            activation.transition!('cancelled', motivo: 'atendimento_humano') if activation.lead_id == @lead.lead_id
+          end
+        end
       end
     rescue StandardError => e
       Rails.logger.error("[OperationalEngine::TakeoverService] lead=#{@lead.lead_id} falha ao cancelar ativações: #{e.class}: #{e.message}")
+    end
+
+    def conversation_contact_id
+      return nil if @lead.upsales_conversation_atual_id.blank?
+
+      ::Conversation.where(id: @lead.upsales_conversation_atual_id, account_id: @lead.conta_id).pick(:contact_id)
     end
   end
 end

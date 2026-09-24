@@ -45,9 +45,14 @@ module OperationalEngine
     # CP-01 (§23.2, "resposta nova"): o contato falou antes da abertura do Dispatcher sair -- a
     # ativação deixa de valer. A partir daqui a conversa é reativa; a abertura já gerada não tem
     # mais autorização de primeira abordagem no OutboundSendGate.
+    #
+    # CP-13 (P1-VAL-12, §15.9 "timers pendentes cancelados"): o mesmo vale para uma tentativa de
+    # recovery autorizada e ainda não gravada nesta conversa.
     def supersede_pending_opening
-      activation = OperationalEngine::OriginationActivation.for(@conversation)
-      activation.transition!('superseded', message_id: @message.id) if activation&.authorized?
+      [OperationalEngine::OriginationActivation, OperationalEngine::RecoveryActivation].each do |klass|
+        activation = klass.for(@conversation)
+        activation.transition!('superseded', message_id: @message.id) if activation&.authorized?
+      end
     end
 
     def handle_new(telefone)
@@ -94,25 +99,36 @@ module OperationalEngine
         )
         write_event(lead, 'nova_entrada', inbox_atual_id: @inbox.id) if mudou_de_inbox
         register_outbound_reply(lead) if lead.etapa_prospect_contatado?
+        register_recovery_reply(lead)
         OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'inbound')
       end
       lead
     end
 
-    # §11.3: contatado -> em_conversa, primeira_resposta_em se vazio, cancelar recovery,
-    # eventos lead_respondeu + etapa_alterada (e recuperacao_respondida se havia recovery ativa).
+    # §11.3: contatado -> em_conversa, primeira_resposta_em se vazio, eventos lead_respondeu +
+    # etapa_alterada. O cancelamento do recovery (§11.3 "cancelar recovery") é o de QUALQUER
+    # resposta -- register_recovery_reply, logo em seguida, no mesmo lock.
     def register_outbound_reply(lead)
-      recovery_ativa = lead.recuperacao_status_ativa?
       lead.update!(
         etapa_prospect: 'em_conversa',
         etapa_entrou_em: @message.created_at,
-        primeira_resposta_em: lead.primeira_resposta_em || @message.created_at,
-        recuperacao_status: 'inativa',
-        proxima_recuperacao_em: nil
+        primeira_resposta_em: lead.primeira_resposta_em || @message.created_at
       )
       write_event(lead, 'lead_respondeu', message_id: @message.id)
       write_event(lead, 'etapa_alterada', de: 'contatado', para: 'em_conversa', motivo: 'lead_respondeu')
-      write_event(lead, 'recuperacao_respondida', message_id: @message.id) if recovery_ativa
+    end
+
+    # CP-13 (P1-VAL-12; SSOT §15.9, 28.4 final): qualquer resposta real, em qualquer etapa -- recovery
+    # inativa, tentativa 0, próxima null (o timer armado some junto). recuperacao_respondida só quando
+    # o ciclo já estava ativo (armado e não vencido não é "precisou de recovery", §22.7). A continuação
+    # pelo ultimo_ponto é da Lavínia no turno reativo (ultimo_ponto não é apagado). Se parar de novo,
+    # o próximo envio confirmado arma um ciclo novo na tentativa 1.
+    def register_recovery_reply(lead)
+      before = OperationalEngine::RecoveryCycle.reset_on_reply!(lead)
+      return unless before&.dig(:ativa)
+
+      write_event(lead, 'recuperacao_respondida', message_id: @message.id, tentativa: before[:tentativa],
+                                                  ultimo_ponto: before[:ultimo_ponto], inbox_id: @inbox.id)
     end
 
     # external_id é só o message_id: o event_type já entra na chave composta do

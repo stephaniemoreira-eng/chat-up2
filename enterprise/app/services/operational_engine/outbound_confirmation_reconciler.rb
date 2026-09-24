@@ -22,24 +22,41 @@ module OperationalEngine
 
     # Retorna quantas confirmações foram recuperadas.
     def call
-      pending_messages.count do |message|
+      recovered = pending_messages.count do |message|
         next false unless unconfirmed_lead?(message)
 
-        Rails.logger.warn("[OperationalEngine::OutboundConfirmationReconciler] recuperando confirmação message_id=#{message.id}")
-        OperationalEngine::ConfirmOutboundSendService.call(message: message)
-        true
+        recover(message)
       end
+      recovered + pending_recovery_messages.count { |message| recover(message) }
     end
 
     private
 
+    def recover(message)
+      Rails.logger.warn("[OperationalEngine::OutboundConfirmationReconciler] recuperando confirmação message_id=#{message.id}")
+      OperationalEngine::ConfirmOutboundSendService.call(message: message)
+      true
+    end
+
     def pending_messages
-      key = OperationalEngine::OriginationActivation::KEY
-      message_ids = ::Conversation.where(account_id: @account_id)
-                                  .where("additional_attributes -> '#{key}' ->> 'status' = ?", 'consumed')
-                                  .where(created_at: LOOKBACK.ago..)
-                                  .limit(BATCH)
-                                  .filter_map { |conversation| conversation.additional_attributes.dig(key, 'message_id') }
+      confirmed_messages(consumed_conversations(OperationalEngine::OriginationActivation::KEY).where(created_at: LOOKBACK.ago..),
+                         OperationalEngine::OriginationActivation::KEY)
+    end
+
+    # CP-13 (P1-VAL-12): o mesmo para a tentativa de recovery WhatsApp -- post gravado (consumed) e já
+    # confirmado pelo provedor, mas a tentativa ainda não registrada no Engine (sem `confirmed`).
+    # O serviço é idempotente (a tentativa só incrementa uma vez).
+    def pending_recovery_messages
+      key = OperationalEngine::RecoveryActivation::KEY
+      confirmed_messages(consumed_conversations(key).where(last_activity_at: LOOKBACK.ago..), key)
+    end
+
+    def consumed_conversations(key)
+      ::Conversation.where(account_id: @account_id).where("additional_attributes -> '#{key}' ->> 'status' = ?", 'consumed')
+    end
+
+    def confirmed_messages(conversations, key)
+      message_ids = conversations.limit(BATCH).filter_map { |conversation| conversation.additional_attributes.dig(key, 'message_id') }
       ::Message.where(id: message_ids).where.not(source_id: [nil, ''])
     end
 

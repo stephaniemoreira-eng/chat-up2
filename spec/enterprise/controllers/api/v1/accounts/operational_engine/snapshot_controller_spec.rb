@@ -98,11 +98,12 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Snapshot', type: :request 
     it 'o mesmo lead produz contextos diferentes conforme o disparador' do
       mensagem = incoming('oi')
 
-      contextos = %w[conversa recuperacao agenda].map do |contexto|
+      # CP-13: `recuperacao` deixou de ser um rótulo livre -- exige a RecoveryActivation (ver abaixo).
+      contextos = %w[conversa agenda].map do |contexto|
         fetch(message_id: mensagem.id, contexto_execucao: contexto)['snapshot']['continuidade']['contexto_execucao']
       end
 
-      expect(contextos).to eq(%w[conversa recuperacao agenda])
+      expect(contextos).to eq(%w[conversa agenda])
     end
 
     it 'recusa contexto_execucao desconhecido' do
@@ -133,6 +134,46 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Snapshot', type: :request 
 
         activation.transition!('consumed', message_id: 1)
         fetch(contexto_execucao: 'primeiro_contato', activation_id: activation.activation_id)
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+
+    # CP-13 -- P1-VAL-12 (SSOT §15.2, §12.3, teste 28.5).
+    describe 'recuperação' do
+      let(:recovery) do
+        OperationalEngine::RecoveryActivation.write!(conversation, lead, 1, 'whatsapp')
+      end
+
+      before do
+        lead.update!(etapa_prospect: 'em_conversa', ultimo_ponto: 'aguardando_volume', recuperacao_status: 'ativa',
+                     aguardando_resposta: true, proxima_recuperacao_em: 1.minute.ago)
+      end
+
+      it 'com a tentativa autorizada devolve contexto recuperacao, ultimo_ponto e o histórico recente, sem mensagem atual' do
+        pergunta = incoming('trabalhamos com uns 300 kg')
+        resposta = create(:message, account: account, inbox: conversation.inbox, conversation: conversation, message_type: 'outgoing',
+                                    content: 'E quantas retiradas por semana?')
+
+        body = fetch(contexto_execucao: 'recuperacao', recovery_activation_id: recovery.activation_id)
+
+        expect(response).to have_http_status(:ok)
+        expect(body['snapshot']['continuidade']).to include('contexto_execucao' => 'recuperacao', 'ultimo_ponto' => 'aguardando_volume')
+        expect(body['snapshot']['mensagem_atual']).to be_nil
+        expect(body['snapshot']['mensagens_recentes_relevantes'].pluck('message_id')).to eq([pergunta.id.to_s, resposta.id.to_s])
+      end
+
+      it 'recusa recuperação sem ativação, com ativação alheia, já usada ou com mensagem disparadora' do
+        fetch(contexto_execucao: 'recuperacao')
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        fetch(contexto_execucao: 'recuperacao', recovery_activation_id: SecureRandom.uuid)
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        fetch(contexto_execucao: 'recuperacao', recovery_activation_id: recovery.activation_id, message_id: incoming('oi').id)
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        recovery.transition!('consumed', message_id: 1)
+        fetch(contexto_execucao: 'recuperacao', recovery_activation_id: recovery.activation_id)
         expect(response).to have_http_status(:unprocessable_entity)
       end
     end

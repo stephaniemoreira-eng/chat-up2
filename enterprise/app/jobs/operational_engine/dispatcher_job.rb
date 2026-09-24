@@ -17,6 +17,9 @@ module OperationalEngine
         # um lead já contatado não pode continuar parecendo Backlog elegível.
         OperationalEngine::OutboundConfirmationReconciler.call(account_id: agent_tenant.account_id)
         OperationalEngine::Dispatcher.call(conta_id: agent_tenant.account_id)
+        # CP-13 (P1-VAL-12; SSOT §15.6): Recovery na MESMA fila de saída por inbox, depois da primeira
+        # abordagem do tick (o DispatchPacing é compartilhado). Não consome o limite de 20 ativações.
+        OperationalEngine::RecoveryDispatcher.call(conta_id: agent_tenant.account_id)
       rescue StandardError => e
         Rails.logger.error("[OperationalEngine::DispatcherJob] account #{agent_tenant.account_id}: #{e.message}")
         ChatwootExceptionTracker.new(e, account: agent_tenant.account).capture_exception

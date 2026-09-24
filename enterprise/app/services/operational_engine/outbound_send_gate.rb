@@ -26,6 +26,16 @@
 # 4. nao_contatar / cliente_atual / lead encerrado: só responde o contato (§19.1, §19.2, §28.26)
 #    -- mensagem automática fora de REPLY_WINDOW desde a última mensagem dele é proativa
 #    (timer/recovery/nudge/reativação) e é bloqueada.
+# 5. CP-13 (P1-VAL-12; SSOT §15.6-§15.8, §28.4, §28.23, §28.25): post de RECOVERY (carimbo
+#    up2_automation.kind=RECUPERACAO, job_id = activation_id) só sai com a RecoveryActivation
+#    autorizada desta conversa/lead/tentativa E passando de novo por TODA a revalidação do §15.8
+#    (RecoveryEligibility) sob o lock do lead, dentro da janela de recovery. O post consome a
+#    ativação; balões da MESMA tentativa (split) passam dentro de opening_run_window.
+# 6. CP-13: a recovery do SSOT é a ÚNICA automação de reengajamento numa conta com Engine. Post
+#    programado do up2-agents (carimbo up2_automation) de um tipo fora da lista permitida
+#    (ENV UP_SALES_ENGINE_AUTOMATION_KINDS, padrão APPOINTMENT_REMINDER) é recusado -- o follow-up
+#    nativo (FOLLOWUP), o redirect de canal e qualquer tipo desconhecido não falam por fora do ciclo
+#    do Engine (falha fechado).
 #
 # Falha fechado: se o Engine (Supabase) não responde, ou se o contato tem telefone mas nenhum lead
 # é resolvido, a mensagem automática não sai (§23.3). Contato sem telefone fica fora do Engine.
@@ -86,13 +96,14 @@ module OperationalEngine
       lead.with_lock do
         @conversation.reload
         activation = OperationalEngine::OriginationActivation.for(@conversation)
-        opening = opening?(lead, activation)
+        recovery = OperationalEngine::RecoveryActivation.for(@conversation) if recovery_post?
+        opening = !recovery_post? && opening?(lead, activation)
 
-        reason = blocking_reason(lead, opening, activation)
+        reason = blocking_reason(lead, opening, activation, recovery)
         raise_blocked(lead, reason) if reason
 
         message = yield
-        activation.transition!('consumed', message_id: message.id) if opening && message&.persisted?
+        consume!(message, opening ? activation : nil, recovery)
       end
       message
     end
@@ -123,9 +134,39 @@ module OperationalEngine
       false
     end
 
-    def blocking_reason(lead, opening, activation)
+    def consume!(message, opening_activation, recovery)
+      return unless message&.persisted?
+
+      opening_activation&.transition!('consumed', message_id: message.id)
+      recovery.transition!('consumed', message_id: message.id) if recovery&.authorized?
+    end
+
+    def blocking_reason(lead, opening, activation, recovery)
       return 'atendimento_humano' if human_block?(lead)
+
+      automation_reason = automation_blocking_reason(lead, recovery)
+      return automation_reason if automation_reason || recovery_post?
+
+      conversation_blocking_reason(lead, opening, activation)
+    end
+
+    # Regras de envio PROGRAMADO (carimbo up2_automation): 1b, 5 e 6 do cabeçalho.
+    def automation_blocking_reason(lead, recovery)
+      return nil if automation_stamp.nil?
       return 'automacao_anterior_a_mudanca_de_modo' if stale_automation?(lead)
+
+      automation_rules.blocking_reason(lead, recovery)
+    end
+
+    def automation_rules
+      @automation_rules ||= OperationalEngine::AutomationSendRules.new(@conversation, automation_stamp)
+    end
+
+    def recovery_post?
+      automation_rules.recovery?
+    end
+
+    def conversation_blocking_reason(lead, opening, activation)
       return opening_blocking_reason(lead) if opening
       # Abertura já gravada e contato ainda sem responder: balões da mesma abertura passam (dentro da
       # janela), reenvio não (CP-02) -- e as proteções proativas continuam valendo nos dois casos.
