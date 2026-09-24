@@ -73,4 +73,13 @@ RSpec.describe OperationalEngine::Tools::HandoffToCommercialService do
     expect(lead.motivo_handoff).to eq('avanco_comercial')
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'handoff_comercial').count).to eq(1)
   end
+
+  # CP-01 -- P1-018-05.
+  it 'opt-out entrou enquanto a ação esperava: não faz handoff' do
+    persist_newer_fact_before_lock(nao_contatar: true)
+
+    expect(perform).to eq(ok: false, reason: 'lead está em não-contatar')
+    expect(lead.reload.modo_atendimento).to eq('lavinia')
+    expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'handoff_comercial')).to be_empty
+  end
 end

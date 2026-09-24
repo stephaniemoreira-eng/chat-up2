@@ -21,6 +21,7 @@ module OperationalEngine
     end
 
     def call
+      supersede_pending_opening
       return unless @contact&.phone_number.present?
 
       # find_by_telefone (não Lead.find_by direto) de propósito: normaliza por dentro, e um
@@ -39,6 +40,14 @@ module OperationalEngine
     end
 
     private
+
+    # CP-01 (§23.2, "resposta nova"): o contato falou antes da abertura do Dispatcher sair -- a
+    # ativação deixa de valer. A partir daqui a conversa é reativa; a abertura já gerada não tem
+    # mais autorização de primeira abordagem no OutboundSendGate.
+    def supersede_pending_opening
+      activation = OperationalEngine::OriginationActivation.for(@conversation)
+      activation.transition!('superseded', message_id: @message.id) if activation&.authorized?
+    end
 
     def handle_new(telefone)
       lead = OperationalEngine::LeadRepository.find_or_create_by_telefone(

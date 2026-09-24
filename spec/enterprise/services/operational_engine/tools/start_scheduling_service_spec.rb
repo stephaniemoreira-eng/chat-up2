@@ -53,4 +53,27 @@ RSpec.describe OperationalEngine::Tools::StartSchedulingService do
     expect(perform).to eq(ok: true)
     expect(lead.reload.agendamento_status).to eq('em_andamento')
   end
+
+  # CP-01 -- P1-018-05.
+  describe 'corrida com fato mais novo' do
+    it 'callback registrado enquanto a ação esperava: não sobrescreve para em_andamento' do
+      persist_newer_fact_before_lock(agendamento_status: 'callback_registrado')
+
+      expect(perform).to eq(ok: false, reason: 'já existe um compromisso ativo para este lead')
+      expect(lead.reload.agendamento_status).to eq('callback_registrado')
+    end
+
+    it 'opt-out entrou enquanto a ação esperava: não inicia agendamento' do
+      persist_newer_fact_before_lock(nao_contatar: true)
+
+      expect(perform).to eq(ok: false, reason: 'lead está em não-contatar')
+      expect(lead.reload.agendamento_status).not_to eq('em_andamento')
+    end
+
+    it 'humano assumiu enquanto a ação esperava: não inicia agendamento' do
+      persist_newer_fact_before_lock(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+    end
+  end
 end

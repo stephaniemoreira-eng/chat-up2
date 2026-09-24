@@ -1,4 +1,19 @@
 module Enterprise::Api::V1::Accounts::Conversations::MessagesController
+  # CP-01: toda mensagem pública automática (token do AgentBot) numa conta com Operational Engine
+  # passa pela autorização final do Engine no instante do post -- ver OperationalEngine::OutboundSendGate.
+  # 409 com code fixo pro up2-agents tratar como "bloqueado", não como falha técnica a reenviar.
+  def create
+    sender = Current.user || @resource
+    return super unless OperationalEngine::OutboundSendGate.applies?(conversation: @conversation, sender: sender, params: params)
+
+    OperationalEngine::OutboundSendGate.authorize!(conversation: @conversation) do
+      super
+      @message
+    end
+  rescue OperationalEngine::OutboundSendGate::Blocked => e
+    render json: { error: e.message, reason: e.reason, code: 'operational_engine_blocked' }, status: :conflict
+  end
+
   def destroy
     audited_message = message
 

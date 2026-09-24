@@ -41,4 +41,22 @@ RSpec.describe OperationalEngine::Tools::CloseAsUnqualifiedService do
 
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'encerrado_nao_qualificado').count).to eq(1)
   end
+
+  # CP-01 -- P1-018-05.
+  describe 'corrida com fato mais novo' do
+    it 'reunião confirmada enquanto a ação esperava: não encerra nem mexe na qualificação' do
+      persist_newer_fact_before_lock(agendamento_status: 'confirmado')
+
+      expect(perform).to eq(ok: false, reason: 'lead tem um agendamento confirmado')
+      lead.reload
+      expect(lead.lead_status).to eq('ativo')
+      expect(lead.qualificacao_status).not_to eq('nao_qualificado')
+    end
+
+    it 'humano assumiu enquanto a ação esperava: bloqueia' do
+      persist_newer_fact_before_lock(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+    end
+  end
 end
