@@ -16,6 +16,16 @@
 #   OutboundSendGate barra o resto;
 # - lavinia -> `open` vira `pending` e um usuário humano atribuído é removido.
 # Conversa resolvida/adiada e inbox sem bot ativo nunca são tocadas.
+#
+# CP-16A (P2-VAL-16; decisão da Stéphanie em 24/09/2026: responsável Comercial do handoff pedido pela
+# Lavínia = "DANILO", configurado por conta): o handoff agora pode deixar o lead humano COM
+# responsável. Abrir a conversa na hora faria o up2-agents parar ANTES de postar a resposta do próprio
+# turno do handoff (que o OutboundSendGate libera -- decisão de 23/09/2026). Solução: enquanto a
+# janela dessa resposta estiver aberta (OperationalEngine::HandoffReplyWindow -- responsável gravado
+# pelo próprio handoff, dentro da janela técnica, nenhuma mensagem/fato humano depois) a conversa NÃO
+# é aberta; um OperationalEngine::ConversationModeProjectionJob reprojeta logo depois que a janela
+# fecha, e aí ela vira `open`. Se um humano escrever ou assumir antes disso, a janela fecha e a
+# próxima projeção (inclusive a do job) abre na hora.
 module OperationalEngine
   class ConversationModeProjection
     def self.call(lead)
@@ -49,10 +59,19 @@ module OperationalEngine
       if lead.modo_atendimento_lavinia?
         lavinia_changes(conversation)
       elsif lead.responsavel_atual_id.present? && conversation.pending?
-        { status: :open }
+        handoff_reply_pending?(conversation) ? {} : { status: :open }
       else
         {}
       end
+    end
+
+    # CP-16A: adia o `open` até a resposta do turno do handoff (ver cabeçalho) e agenda a reprojeção.
+    def handoff_reply_pending?(conversation)
+      window = OperationalEngine::HandoffReplyWindow.new(lead, conversation)
+      return false unless window.open_with_handoff_responsible?
+
+      OperationalEngine::ConversationModeProjectionJob.set(wait_until: window.closes_at + 1.second).perform_later(lead.lead_id)
+      true
     end
 
     def lavinia_changes(conversation)

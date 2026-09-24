@@ -12,14 +12,20 @@
 # Qualificado, §8.2) -- exigir a frente bloquearia o no-show dessa reunião e a propensão dessa
 # oportunidade, que são justamente ações do Comercial (lacuna registrada na PR do CP-05).
 #
-# Máquina mínima (§8.4): Oportunidade → Em acompanhamento → Ganho / Perdido. Resultado terminal só
-# a partir de Em acompanhamento.
+# Máquina mínima (§8.4): Oportunidade → Em acompanhamento → Ganho / Perdido.
+#
+# CP-16A (P2-VAL-18; decisão da Stéphanie em 24/09/2026, lacuna do SSOT sobre a etapa exigida):
+# Ganho/Perdido também direto de Oportunidade -- "NÃO É NECESSÁRIO, O DANILO PODE DAR COMO GANHO OU
+# PERDIDO SEM NECESSIDADE DE ESTAR 'EM ACOMPANHAMENTO', UMA VEZ QUE ELE PODE NEGOCIAR DIRETAMENTE EM
+# 1 ÚNICO CONTATO COM O LEAD." A decisão é sobre a ETAPA exigida, não sobre o arraste: Ganho/Perdido
+# continuam só pela ação explícita (RegisterResultadoComercialService) -- o drag no Kanban passa pelo
+# AdvanceEtapaComercialService, que só aceita em_acompanhamento (§21.2, CP-05).
 module OperationalEngine
   module ComercialActionGuard
     class InvalidContextError < StandardError; end
 
     ETAPAS_ABERTAS = %w[oportunidade em_acompanhamento].freeze
-    TRANSICOES = { 'oportunidade' => %w[em_acompanhamento], 'em_acompanhamento' => %w[ganho perdido] }.freeze
+    TRANSICOES = { 'oportunidade' => %w[em_acompanhamento ganho perdido], 'em_acompanhamento' => %w[ganho perdido] }.freeze
 
     def self.oportunidade_aberta?(lead)
       ETAPAS_ABERTAS.include?(lead.etapa_comercial) && lead.resultado_comercial_em_aberto?

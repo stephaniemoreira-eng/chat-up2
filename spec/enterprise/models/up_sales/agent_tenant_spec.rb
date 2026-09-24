@@ -119,4 +119,43 @@ RSpec.describe UpSales::AgentTenant do
       expect(agent_tenant.update(whatsapp_inbox_id: nil)).to be(true)
     end
   end
+
+  # CP-16A -- P2-VAL-16 (decisão da Stéphanie em 24/09/2026: responsável Comercial do handoff =
+  # Danilo, configurado por conta) e P2-VAL-17 (texto do e-mail de recovery ajustável).
+  describe 'configuração de negócio por conta (CP-16A)' do
+    let(:account) { create(:account) }
+    let(:agent_tenant) { create(:up_sales_agent_tenant, account: account) }
+
+    it 'aceita como responsável Comercial um usuário da própria conta' do
+      danilo = create(:user, account: account)
+
+      expect(agent_tenant.update(commercial_responsible_user_id: danilo.id)).to be(true)
+      expect(agent_tenant.commercial_responsible_user_id_for_handoff).to eq(danilo.id)
+    end
+
+    it 'rejeita usuário de outra conta' do
+      outro = create(:user, account: create(:account))
+
+      expect(agent_tenant.update(commercial_responsible_user_id: outro.id)).to be(false)
+      expect(agent_tenant.errors[:commercial_responsible_user_id]).to include('não é um usuário desta conta')
+    end
+
+    it 'usuário removido da conta depois de configurado deixa de ser responsável (volta a pendente)' do
+      danilo = create(:user, account: account)
+      agent_tenant.update!(commercial_responsible_user_id: danilo.id)
+      AccountUser.where(account: account, user: danilo).destroy_all
+
+      expect(agent_tenant.reload.commercial_responsible_user_id_for_handoff).to be_nil
+    end
+
+    it 'aceita os placeholders documentados no e-mail de recovery' do
+      expect(agent_tenant.update(recovery_email_subject: '{{marca}} -- {{ nome }}',
+                                 recovery_email_body: 'Oi {{nome}}, da {{empresa}}. {{persona}}')).to be(true)
+    end
+
+    it 'rejeita placeholder desconhecido' do
+      expect(agent_tenant.update(recovery_email_body: 'Oi {{email}} {{nome}}')).to be(false)
+      expect(agent_tenant.errors[:recovery_email_body].join).to include('{{email}}')
+    end
+  end
 end

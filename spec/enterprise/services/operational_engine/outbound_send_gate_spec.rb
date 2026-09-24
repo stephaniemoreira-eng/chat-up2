@@ -244,6 +244,64 @@ RSpec.describe OperationalEngine::OutboundSendGate do
         expect_blocked(/atendimento_humano/)
       end
     end
+
+    # CP-16A -- P2-VAL-16 (decisão da Stéphanie em 24/09/2026: responsável Comercial do handoff pedido
+    # pela Lavínia = "DANILO", configurado por conta). O responsável vem preenchido PELO handoff e a
+    # resposta do próprio turno continua liberada (decisão de 23/09/2026).
+    describe 'handoff com responsável Comercial configurado na conta' do
+      let(:danilo) { create(:user, account: account) }
+
+      def handoff!
+        OperationalEngine::Tools::HandoffToCommercialService.new(
+          account: account, conversation_id: conversation.display_id, motivo_handoff: 'avanco_comercial'
+        ).call
+      end
+
+      before { agent_tenant.update!(commercial_responsible_user_id: danilo.id) }
+
+      it 'grava o Danilo como responsável e ainda deixa sair a resposta do turno do handoff' do
+        handoff!
+
+        expect(lead.reload.responsavel_atual_id).to eq(danilo.id)
+        expect(post_bot_message(content: 'Vou te passar para o Danilo, do comercial.')).to be_persisted
+      end
+
+      it 'bloqueia depois da janela técnica' do
+        handoff!
+
+        travel(described_class.handoff_reply_window + 1.second) { expect_blocked(/atendimento_humano/) }
+      end
+
+      it 'bloqueia quando um humano já escreveu na conversa depois do handoff' do
+        handoff!
+        create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                         sender: danilo, content: 'Oi, aqui é o Danilo')
+
+        expect_blocked(/atendimento_humano/)
+      end
+
+      it 'bloqueia quando o responsável foi trocado depois do handoff' do
+        handoff!
+        lead.reload.update!(responsavel_atual_id: create(:user, account: account).id)
+
+        expect_blocked(/atendimento_humano/)
+      end
+
+      it 'bloqueia quando há fato humano de responsável depois do handoff' do
+        handoff!
+        OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'responsavel_alterado', source: 'human',
+                                              metadata: { de: danilo.id, para: danilo.id, motivo: 'assumir' })
+
+        expect_blocked(/atendimento_humano/)
+      end
+
+      it 'humano que já era responsável antes do handoff (§18.4) continua bloqueando' do
+        OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: danilo.id)
+        handoff!
+
+        expect_blocked(/atendimento_humano/)
+      end
+    end
   end
 
   it 'falha fechado quando o Engine não responde' do

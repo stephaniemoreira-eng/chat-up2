@@ -7,8 +7,9 @@
 # - frente_operacional = comercial;
 # - modo_atendimento = humano (a partir daqui a Lavínia não fala mais -- §12.4);
 # - responsavel_atual_id = responsável Comercial -- resolvido SÓ em
-#   OperationalEngine::CommercialResponsibleResolver. LACUNA do SSOT (ver o comentário lá): sem
-#   regra/config para escolher o usuário, o responsável fica pendente e isso é explícito no retorno
+#   OperationalEngine::CommercialResponsibleResolver (CP-16A, P2-VAL-16: o usuário Comercial
+#   configurado na conta -- decisão da Stéphanie em 24/09/2026, "DANILO"). Sem humano responsável e
+#   sem configuração, o responsável fica pendente e isso é explícito no retorno
 #   (`responsavel_pendente: true`) e no evento, em vez de fingir que alguém foi atribuído;
 # - etapa_comercial = oportunidade (cria se não havia; nunca rebaixa uma que já avançou);
 # - recovery Prospect encerrada, aguardando_resposta = false;

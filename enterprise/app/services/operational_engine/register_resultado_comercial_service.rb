@@ -7,9 +7,10 @@
 # risco de sobrescrever silenciosamente um resultado (e um ganho_em) já registrado.
 #
 # CP-05:
-# - P1-025-02: resultado terminal só a partir de uma transição Comercial permitida (§8.4:
-#   Em acompanhamento → Ganho/Perdido), validada no Engine dentro do lock
-#   (OperationalEngine::ComercialActionGuard) -- não depende do botão estar visível.
+# - P1-025-02: resultado terminal só a partir de uma transição Comercial permitida (§8.4), validada
+#   no Engine dentro do lock (OperationalEngine::ComercialActionGuard) -- não depende do botão estar
+#   visível. CP-16A (P2-VAL-18, decisão da Stéphanie em 24/09/2026): Oportunidade ou Em
+#   acompanhamento → Ganho/Perdido; nunca por arraste.
 # - P1-025-03: Ganho completa o estado de cliente atual (§17.4 + §19.1): motivo_encerramento =
 #   cliente_atual junto com relacao_atual/lead_status. Conversão Prospect (conversao_em/
 #   tipo_conversao) nunca é tocada aqui -- é fato distinto do resultado (§16.5, §28.30/§28.31).

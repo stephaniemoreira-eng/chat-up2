@@ -218,4 +218,94 @@ RSpec.describe OperationalEngine::InboundProcessor do
       expect(OperationalEngine::ProjectionRequest.find(lead.lead_id)).to be_status_pendente
     end
   end
+
+  # CP-16A -- P2-VAL-15 (decisão da Stéphanie em 24/09/2026: lead em Backlog que fala antes da
+  # abertura = inbound, "SIM"; SSOT §11.2 aplicado ao lead existente, §5.4 origem write-once).
+  describe 'lead em Backlog que manda mensagem antes da abertura (P2-VAL-15)' do
+    let!(:lead) do
+      OperationalEngine::Lead.create!(
+        conta_id: account.id, telefone: contact.phone_number, upsales_contact_id: contact.id, origem_lead: 'lista_fria',
+        modo_entrada: 'outbound', tipo_entrada: 'novo', etapa_prospect: 'backlog', etapa_entrou_em: 2.days.ago
+      )
+    end
+
+    def events(type)
+      OperationalEngine::LeadEvent.where(lead: lead, event_type: type)
+    end
+
+    it 'vira inbound em Em conversa com entrada_operacao_em e etapa_entrou_em no horário da mensagem' do
+      message = build_message
+
+      described_class.call(message: message)
+
+      lead.reload
+      expect(lead.modo_entrada).to eq('inbound')
+      expect(lead.etapa_prospect).to eq('em_conversa')
+      expect(lead.entrada_operacao_em).to be_within(1.second).of(message.created_at)
+      expect(lead.etapa_entrou_em).to be_within(1.second).of(message.created_at)
+      expect(lead.inbox_entrada_id).to eq(conversation.inbox_id)
+    end
+
+    it 'preserva origem_lead (write-once, §5.4) e não recria o lead' do
+      expect { described_class.call(message: build_message) }.not_to change(OperationalEngine::Lead, :count)
+
+      expect(lead.reload.origem_lead).to eq('lista_fria')
+      expect(events('lead_criado')).to be_empty
+    end
+
+    it 'grava nova_entrada e etapa_alterada backlog -> em_conversa com motivo explícito' do
+      described_class.call(message: build_message)
+
+      expect(events('nova_entrada').sole.metadata).to include('modo_entrada' => 'inbound', 'motivo' => 'lead_iniciou_antes_da_abertura')
+      expect(events('etapa_alterada').sole.metadata).to include('de' => 'backlog', 'para' => 'em_conversa',
+                                                                 'motivo' => 'lead_iniciou_antes_da_abertura')
+    end
+
+    it 'não sobrescreve entrada_operacao_em já preenchida (write-once)' do
+      original = 3.days.ago.change(usec: 0)
+      lead.update!(entrada_operacao_em: original)
+
+      described_class.call(message: build_message)
+
+      expect(lead.reload.entrada_operacao_em).to eq(original)
+      expect(lead.etapa_prospect).to eq('em_conversa')
+    end
+
+    it 'webhook duplicado: o mesmo message_id processado duas vezes gera uma única transição' do
+      message = build_message
+
+      2.times { described_class.call(message: message) }
+
+      expect(events('etapa_alterada').count).to eq(1)
+      expect(events('nova_entrada').count).to eq(1)
+    end
+
+    it 'supersede a ativação pendente e sai da fila do Dispatcher' do
+      conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+
+      described_class.call(message: build_message)
+
+      expect(OperationalEngine::OriginationActivation.for(conversation.reload).status).to eq('superseded')
+      expect(OperationalEngine::BacklogSelector.candidatos(conta_id: account.id)).not_to include(lead.reload)
+      expect(OperationalEngine::OutboundEligibility.origination_blockers(lead)).to include('fora_do_backlog')
+    end
+
+    it 'entra no Dashboard Prospect como inbound (CP-11)' do
+      described_class.call(message: build_message)
+
+      filtros = { data_inicial: 1.day.ago.to_date.iso8601, data_final: 1.day.from_now.to_date.iso8601 }
+      inbound = OperationalEngine::ProspectDashboardMetrics.call(conta_id: account.id, filtros: filtros.merge(modo: 'inbound'))
+      outbound = OperationalEngine::ProspectDashboardMetrics.call(conta_id: account.id, filtros: filtros.merge(modo: 'outbound'))
+      expect(inbound[:big_numbers][:leads_iniciados]).to eq(1)
+      expect(inbound[:big_numbers][:em_conversa][:absoluto]).to eq(1)
+      expect(outbound[:big_numbers][:leads_iniciados]).to eq(0)
+    end
+
+    it 'leva o card Prospect para Em conversa' do
+      described_class.call(message: build_message)
+
+      card = Sales::Lead.joins(:pipeline).find_by(operational_lead_id: lead.lead_id, sales_pipelines: { engine_kind: 'prospect' })
+      expect(card&.stage&.engine_stage_key).to eq('em_conversa')
+    end
+  end
 end

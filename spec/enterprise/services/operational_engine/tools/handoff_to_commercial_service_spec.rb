@@ -128,4 +128,32 @@ RSpec.describe OperationalEngine::Tools::HandoffToCommercialService do
     expect(lead.reload.modo_atendimento).to eq('lavinia')
     expect(events('handoff_comercial')).to be_empty
   end
+
+  # CP-16A -- P2-VAL-16 (decisão da Stéphanie em 24/09/2026: responsável Comercial do handoff pedido
+  # pela Lavínia = "DANILO", configurado por conta em UpSales::AgentTenant).
+  describe 'responsável Comercial configurado na conta (P2-VAL-16)' do
+    let(:danilo) { create(:user, account: account) }
+
+    before { create(:up_sales_agent_tenant, account: account, commercial_responsible_user_id: danilo.id) }
+
+    it 'grava o usuário configurado como responsável, sem pendência' do
+      result = perform
+
+      expect(result).to eq(ok: true)
+      expect(lead.reload.responsavel_atual_id).to eq(danilo.id)
+      handoff = events('handoff_comercial').first
+      expect(handoff.metadata['responsavel_pendente']).to be(false)
+      expect(handoff.metadata['transicoes']['responsavel_atual_id']).to eq('de' => nil, 'para' => danilo.id)
+      expect(events('responsavel_alterado').sole.metadata).to include('de' => nil, 'para' => danilo.id, 'motivo' => 'handoff_comercial')
+    end
+
+    it 'humano que já era responsável continua sendo o responsável (não troca pelo configurado)' do
+      lead.update!(modo_atendimento: 'humano', responsavel_atual_id: 42, modo_atendimento_entrou_em: 1.hour.ago)
+
+      perform
+
+      expect(lead.reload.responsavel_atual_id).to eq(42)
+      expect(events('responsavel_alterado')).to be_empty
+    end
+  end
 end
