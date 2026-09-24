@@ -102,7 +102,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
 
     result = perform
 
-    expect(result).to eq(ok: true, event_id: 'evt_already')
+    expect(result).to eq(ok: true, event_id: 'evt_already', ja_existia: true)
     expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')).not_to have_been_made
   end
 
@@ -148,6 +148,44 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
       expect(lead.etapa_prospect).to eq('agendado')
       expect(lead.tipo_conversao).to eq('agendamento')
       expect(OperationalEngine::LeadEvent.where(lead: lead).pluck(:event_type)).to include('callback_registrado', 'reuniao_agendada')
+    end
+  end
+
+  # CP-10 (P1-VAL-03; SSOT §12.4, §23.2, 28.19): agora é a ferramenta "Criar evento" da Lavínia --
+  # as guardas valem ANTES do Calendar, então nenhum evento real nasce para um lead bloqueado.
+  describe 'guardas da Lavínia (CP-10)' do
+    let(:calendar_url) { 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events' }
+
+    before { stub_create_event }
+
+    it 'lead em atendimento humano: recusa sem criar evento nem confirmar' do
+      lead.update!(modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
+      expect(a_request(:post, calendar_url)).not_to have_been_made
+      expect(lead.reload.agendamento_status).to eq('nao_iniciado')
+      expect(lead.calendar_event_id).to be_nil
+    end
+
+    it 'lead em não-contatar: recusa sem criar evento' do
+      lead.update!(nao_contatar: true)
+
+      expect(perform).to eq(ok: false, reason: 'lead está em não-contatar')
+      expect(a_request(:post, calendar_url)).not_to have_been_made
+    end
+
+    it 'lead encerrado: recusa sem criar evento' do
+      lead.update!(lead_status: 'encerrado', motivo_encerramento: 'sem_interesse')
+
+      expect(perform).to eq(ok: false, reason: 'lead encerrado')
+      expect(a_request(:post, calendar_url)).not_to have_been_made
+    end
+
+    it 'humano também vence a resposta idempotente de reunião já confirmada' do
+      lead.update!(agendamento_status: 'confirmado', calendar_event_id: 'evt_already', etapa_prospect: 'agendado',
+                   agendado_em: Time.current, modo_atendimento: 'humano')
+
+      expect(perform).to eq(ok: false, reason: 'lead em atendimento humano')
     end
   end
 end

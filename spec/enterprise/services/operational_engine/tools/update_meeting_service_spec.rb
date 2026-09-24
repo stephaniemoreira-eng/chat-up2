@@ -83,4 +83,39 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
 
     expect(result).to eq(ok: false, reason: 'Horário indisponível')
   end
+
+  # CP-10 (P1-VAL-03): ferramenta "Atualizar evento" da Lavínia -- o modelo não carrega event_id.
+  describe 'modo agent (CP-10)' do
+    it 'sem event_id, reagenda a reunião confirmada do próprio lead' do
+      stub_update_event
+
+      result = perform(event_id: nil)
+
+      expect(result).to eq(ok: true, event_id: 'evt_123')
+      expect(a_request(:patch, %r{calendar/events/evt_123})).to have_been_made.once
+      expect(OperationalEngine::LeadEvent.find_by(lead: lead, event_type: 'reuniao_reagendada')).to be_present
+      expect(lead.reload.agendamento_status).to eq('confirmado')
+    end
+
+    it 'sem event_id e sem reunião confirmada: recusa sem tocar o Calendar' do
+      lead.update!(agendamento_status: 'cancelado')
+
+      expect(perform(event_id: nil)).to eq(ok: false, reason: 'este lead não tem uma reunião confirmada com esse event_id')
+      expect(a_request(:patch, %r{calendar/events})).not_to have_been_made
+    end
+
+    it 'lead em atendimento humano: recusa sem tocar o Calendar' do
+      lead.update!(modo_atendimento: 'humano')
+
+      expect(perform(event_id: nil)).to eq(ok: false, reason: 'lead em atendimento humano')
+      expect(a_request(:patch, %r{calendar/events})).not_to have_been_made
+    end
+
+    it 'falha do Calendar: não registra reagendamento' do
+      stub_update_event(status: 422, body: { error: 'Calendário inválido' })
+
+      expect(perform(event_id: nil)).to eq(ok: false, reason: 'Calendário inválido')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'reuniao_reagendada')).to be_empty
+    end
+  end
 end

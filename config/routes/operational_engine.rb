@@ -13,6 +13,10 @@
 post 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#schedule_meeting'
 patch 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_engine/tools#update_meeting'
 delete 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_engine/tools#cancel_meeting'
+# CP-10 (P1-VAL-03): as mesmas ações sem :event_id -- é o caminho das ferramentas "Atualizar evento"/
+# "Cancelar evento" da Lavínia no modo agent; o Engine resolve a reunião confirmada do próprio lead.
+patch 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#update_meeting'
+delete 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#cancel_meeting'
 post 'operational_engine/tools/register_callback', to: 'operational_engine/tools#register_callback'
 get 'operational_engine/tools/availability', to: 'operational_engine/tools#availability'
 

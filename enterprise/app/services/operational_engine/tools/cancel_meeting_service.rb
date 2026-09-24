@@ -7,23 +7,30 @@
 # real existiu e o Agendado continua sendo o fato histórico do funil. calendar_event_id, agendado_em
 # e conversao_em/tipo_conversao também ficam intactos (§6.3: fatos históricos; conversão é
 # write-once). Uma nova reunião confirmada depois sobrescreve normalmente via ScheduleMeetingService.
+#
+# CP-10 (P1-VAL-03): é a ferramenta "Cancelar evento" da Lavínia no modo agent. `event_id` opcional
+# (mesmo motivo do UpdateMeetingService). Guarda só de modo humano: o lead que pediu não-contatar e
+# quer desmarcar a reunião não deve ficar com um compromisso que ele recusou -- e, de todo modo, o
+# Engine não chama a Lavínia para um lead em não-contatar.
 module OperationalEngine
   module Tools
     class CancelMeetingService
       def initialize(account:, conversation_id:, event_id:)
         @account = account
         @conversation_id = conversation_id
-        @event_id = event_id
+        @event_id = event_id.presence
       end
 
       def call
         lead = OperationalEngine::Tools::ResolveLeadFromConversation.call(account: @account, conversation_id: @conversation_id)
+        reason = OperationalEngine::Tools::LaviniaActionGuard.blocked_reason(lead)
+        return { ok: false, reason: reason } if reason
+
+        @event_id ||= lead.calendar_event_id
         return not_the_confirmed_meeting unless matches_confirmed_meeting?(lead)
 
         agent_tenant = @account.up_sales_agent_tenant
-        if agent_tenant.blank? || agent_tenant.calendar_integration_instance_id.blank?
-          return { ok: false, reason: 'agenda não conectada para esta conta' }
-        end
+        return { ok: false, reason: 'agenda não conectada para esta conta' } unless calendar_connected?(agent_tenant)
 
         UpSales::Agents::CancelCalendarEventService.new(agent_tenant: agent_tenant, event_id: @event_id).perform
 
@@ -38,7 +45,11 @@ module OperationalEngine
       private
 
       def matches_confirmed_meeting?(lead)
-        lead.agendamento_status_confirmado? && lead.calendar_event_id == @event_id
+        @event_id.present? && lead.agendamento_status_confirmado? && lead.calendar_event_id == @event_id
+      end
+
+      def calendar_connected?(agent_tenant)
+        agent_tenant.present? && agent_tenant.calendar_integration_instance_id.present?
       end
 
       def not_the_confirmed_meeting

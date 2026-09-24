@@ -94,4 +94,34 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
     expect(result).to eq(ok: false, reason: 'Falha no Google')
     expect(lead.reload.agendamento_status).to eq('confirmado')
   end
+
+  # CP-10 (P1-VAL-03): ferramenta "Cancelar evento" da Lavínia -- o modelo não carrega event_id.
+  describe 'modo agent (CP-10)' do
+    it 'sem event_id, cancela a reunião confirmada do próprio lead sem regredir a etapa (28.29)' do
+      stub_cancel_event
+
+      expect(perform(event_id: nil)).to eq(ok: true)
+      lead.reload
+      expect(lead.agendamento_status).to eq('cancelado')
+      expect(lead.etapa_prospect).to eq('agendado')
+    end
+
+    it 'lead em atendimento humano: recusa sem tocar o Calendar' do
+      lead.update!(modo_atendimento: 'humano')
+
+      expect(perform(event_id: nil)).to eq(ok: false, reason: 'lead em atendimento humano')
+      expect(a_request(:delete, %r{calendar/events})).not_to have_been_made
+      expect(lead.reload.agendamento_status).to eq('confirmado')
+    end
+
+    it 'falha do Calendar: reunião continua confirmada' do
+      stub_cancel_event(status: 500)
+
+      result = perform(event_id: nil)
+
+      expect(result[:ok]).to be(false)
+      expect(lead.reload.agendamento_status).to eq('confirmado')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'reuniao_cancelada')).to be_empty
+    end
+  end
 end
