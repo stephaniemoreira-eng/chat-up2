@@ -107,7 +107,9 @@ module OperationalEngine
         end
         return unless before.key?(:etapa_comercial) && before[:etapa_comercial].nil?
 
-        event(lead, 'oportunidade_criada', correlation_id, etapa_comercial: lead.etapa_comercial, motivo: 'handoff_comercial')
+        OperationalEngine::ComercialOpportunity.registrar_evento!(
+          lead, source: 'lavinia', motivo: 'handoff_comercial', correlation_id: correlation_id
+        )
       end
 
       # §17.3: o que for conhecido, sem exigir ficha gigante -- campos vazios ficam fora.
