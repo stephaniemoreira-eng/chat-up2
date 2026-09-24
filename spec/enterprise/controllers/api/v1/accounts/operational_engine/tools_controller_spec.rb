@@ -7,7 +7,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   let(:conversation) { create(:conversation, account: account, contact: contact) }
   let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number) }
 
-  let(:valid_headers) { { 'Authorization' => "Bearer #{agent_tenant.engine_api_key}" } }
+  let(:valid_headers) { { 'Authorization' => "Bearer #{agent_tenant.issued_engine_api_key}" } }
 
   describe 'autenticação (S-5: servidor-a-servidor, sem sessão)' do
     it 'rejeita sem header Authorization' do
@@ -37,7 +37,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
       other_tenant = create(:up_sales_agent_tenant, account: other_account)
 
       post "/api/v1/accounts/#{account.id}/operational_engine/tools/register_callback",
-           params: { conversation_id: conversation.display_id }, headers: { 'Authorization' => "Bearer #{other_tenant.engine_api_key}" }, as: :json
+           params: { conversation_id: conversation.display_id }, headers: { 'Authorization' => "Bearer #{other_tenant.issued_engine_api_key}" }, as: :json
 
       expect(response).to have_http_status(:unauthorized)
     end

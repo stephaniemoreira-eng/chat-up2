@@ -8,6 +8,7 @@
 #  api_key                          :string           not null
 #  calendar_integration_instance_id :string
 #  engine_api_key                   :string
+#  engine_api_key_digest            :string
 #  created_at                       :datetime         not null
 #  updated_at                       :datetime         not null
 #  account_id                       :bigint           not null
@@ -16,6 +17,7 @@
 # Indexes
 #
 #  index_up_sales_agent_tenants_on_account_id          (account_id) UNIQUE
+#  index_up_sales_agent_tenants_on_engine_api_key_digest (engine_api_key_digest) UNIQUE
 #  index_up_sales_agent_tenants_on_whatsapp_inbox_id   (whatsapp_inbox_id)
 #
 # Liga uma conta Chatwoot ao tenant correspondente no up2-agents. A API do up2-agents não tem
@@ -26,7 +28,13 @@
 # `engine_api_key` é o sentido inverso de `api_key` (S-5, plano do Marco 1): o segredo que o
 # up2-agents apresenta ao CHAMAR o chat-up2 (rotas operational_engine/tools/*), não o que usamos
 # pra chamar ele. Diferente de `api_key` (colado manualmente, gerado no painel do up2-agents),
-# este é gerado por nós (has_secure_token) -- quem chama este lado da relação é o dono dela.
+# este é gerado por nós -- quem chama este lado da relação é o dono dela.
+#
+# CP-12 (P1-VAL-10; RISK-020-01): este lado só VERIFICA a chave, nunca precisa lê-la de volta --
+# então guardamos só o SHA-256 (`engine_api_key_digest`). A chave em claro existe apenas no Vault do
+# up2-agents (criptografada lá) e, por instantes, em memória no objeto que acabou de gerá-la
+# (`issued_engine_api_key`, nunca persistido). A coluna `engine_api_key` é legado: aceita só
+# enquanto o tenant ainda não foi rotacionado (sem digest), e a rotação a zera.
 #
 # `whatsapp_inbox_id` (Fase 6, dispatcher): qual inbox WhatsApp usar pra originar o primeiro
 # contato. Configuração manual, não auto-detectada -- este projeto já teve mais de um ambiente/
@@ -45,10 +53,38 @@ class UpSales::AgentTenant < ApplicationRecord
   belongs_to :account
   belongs_to :whatsapp_inbox, class_name: 'Inbox', optional: true
 
-  has_secure_token :engine_api_key
-
   encrypts :api_key if Chatwoot.encryption_configured?
   encrypts :engine_api_key if Chatwoot.encryption_configured?
+
+  # A chave em claro recém-gerada, só em memória (nunca persistida). Quem a gera entrega ao Vault.
+  attr_reader :issued_engine_api_key
+
+  def self.engine_api_key_digest(key)
+    OpenSSL::Digest::SHA256.hexdigest(key.to_s)
+  end
+
+  # Gera uma chave nova e deixa gravável só o digest (a coluna legada é zerada). Não salva.
+  def assign_new_engine_api_key
+    @issued_engine_api_key = SecureRandom.base58(32)
+    self.engine_api_key_digest = self.class.engine_api_key_digest(@issued_engine_api_key)
+    self.engine_api_key = nil
+    @issued_engine_api_key
+  end
+
+  def engine_api_key_configured?
+    engine_api_key_digest.present? || engine_api_key.present?
+  end
+
+  # Comparação em tempo constante. Sem digest (tenant ainda não rotacionado), vale a chave legada.
+  def engine_api_key_matches?(provided)
+    return false if provided.blank?
+
+    if engine_api_key_digest.present?
+      ActiveSupport::SecurityUtils.secure_compare(self.class.engine_api_key_digest(provided), engine_api_key_digest)
+    else
+      engine_api_key.present? && ActiveSupport::SecurityUtils.secure_compare(provided, engine_api_key)
+    end
+  end
 
   validates :account_id, presence: true, uniqueness: true
   validates :agents_tenant_id, presence: true
