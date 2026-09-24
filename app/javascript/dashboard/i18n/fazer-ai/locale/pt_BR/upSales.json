@@ -18,7 +18,67 @@
       "LAST_SEARCH_EMPTY": "— (ainda sem busca)",
       "MEETINGS_SCHEDULED": "Compromissos na agenda (mês)",
       "MEETINGS_PLACEHOLDER": "— (sem dados da agenda)",
-      "DEALS_WON": "Negócios fechados"
+      "DEALS_WON": "Negócios fechados",
+      "CRM_SECTION_TITLE": "Visão geral do CRM",
+      "CRM_SECTION_HINT": "Fotografia atual dos cards do CRM, fora da coorte. Cada lead conta uma vez, mesmo com card Prospect e Comercial.",
+      "PROSPECT": {
+        "TITLE": "Dashboard Prospect",
+        "HINT": "Performance histórica por coorte: a população é definida uma única vez pela data de entrada na operação, e todos os indicadores usam os mesmos leads.",
+        "LOADING": "Calculando a coorte…",
+        "ERROR": "Não foi possível calcular o dashboard agora.",
+        "EMPTY_VALUE": "—",
+        "FILTERS": {
+          "START": "Entrada de",
+          "END": "até",
+          "MODE": "Modo",
+          "ORIGIN": "Origem",
+          "SEGMENT": "Segmento",
+          "INBOX": "Inbox de entrada",
+          "ALL": "Todos"
+        },
+        "MODES": {
+          "CONSOLIDADO": "Consolidado",
+          "OUTBOUND": "Outbound",
+          "INBOUND": "Inbound"
+        },
+        "BIG_NUMBERS": {
+          "STARTED": "Leads iniciados",
+          "CONVERSATION_RATE": "Taxa de conversa",
+          "QUALIFICATION_RATE": "Taxa de qualificação",
+          "CONVERSION_RATE": "Taxa de conversão",
+          "ABSOLUTE": "{count} leads"
+        },
+        "FUNNEL": {
+          "TITLE": "Funil",
+          "INICIARAM": "Iniciaram a operação",
+          "EM_CONVERSA": "Em conversa",
+          "QUALIFICADOS": "Qualificados",
+          "CONVERTIDOS": "Convertidos",
+          "EFFICIENCY": "{rate} da etapa anterior",
+          "COMPOSITION": "Detalhe da conversão: {meetings} reunião(ões) agendada(s) · {callbacks} callback(s) realizado(s)"
+        },
+        "TIMES": {
+          "TITLE": "Tempos médios",
+          "ENTRY_TO_CONVERSATION": "Entrada → primeira Em conversa",
+          "CONVERSATION_TO_QUALIFICATION": "Em conversa → primeira qualificação",
+          "QUALIFICATION_TO_CONVERSION": "Qualificação → conversão",
+          "ENTRY_TO_CONVERSION": "Entrada → conversão",
+          "SAMPLE": "média de {count} leads que atingiram o marco"
+        },
+        "DURATION": {
+          "MINUTES": "{m} min",
+          "HOURS": "{h} h {m} min",
+          "DAYS": "{d} d {h} h"
+        },
+        "RECOVERY": {
+          "TITLE": "Recovery",
+          "NEEDED": "Precisaram de recovery",
+          "RECOVERED": "Recuperados",
+          "RATE": "Taxa de recovery",
+          "CONVERSIONS_AFTER": "Conversões após recovery",
+          "HINT": "Conversão após recovery é sequência temporal, não atribuição causal. Os números dependem dos eventos de recovery do Engine (cadência da Fase 7 ainda em construção)."
+        }
+      }
     },
     "AGENDA": {
       "TITLE": "Agenda",
