@@ -18,6 +18,13 @@
 #
 # Tudo dentro do lock do lead, num só commit. Chamado via TurnIdempotency pelo controller, com a
 # mesma identidade de turno das ações.
+#
+# CP-16B (P2-VAL-20, decisão da Stéphanie em 24/09/2026): `ressincronizacao: true` é o commit do turno
+# silencioso pós-devolução (OperationalEngine::DevolucaoResync). Só os fatos de continuidade entram
+# (RESSINCRONIZACAO_CAMPOS: ultimo_ponto, resumo_oportunidade, dados_extraidos); decisao_qualificacao,
+# aguardando_resposta e acao_sugerida são descartados AQUI, no Engine -- qualquer que seja a saída do
+# modelo, esse turno não qualifica, não encerra, não arma timer e não dispara ação. "SE NECESSÁRIO":
+# ultimo_ponto vazio/igual não sobrescreve (mesma regra de sempre, logo abaixo).
 module OperationalEngine
   class ApplyStructuredOutputService
     TEXT_FACTS = %w[nome empresa email segmento regiao modelo_atual dor_oportunidade impacto cep].freeze
@@ -26,11 +33,14 @@ module OperationalEngine
     INTEGER_FACTS = %w[retiradas_semana].freeze
     DECISOES = %w[sem_alteracao em_qualificacao qualificado nao_qualificado nao_concluido].freeze
     TEXT_MAX = 2000
+    RESSINCRONIZACAO_CAMPOS = %w[dados_extraidos ultimo_ponto resumo_oportunidade].freeze
 
-    def initialize(account:, conversation_id:, saida:)
+    def initialize(account:, conversation_id:, saida:, ressincronizacao: false)
       @account = account
       @conversation_id = conversation_id
       @saida = (saida || {}).to_h.stringify_keys
+      @ressincronizacao = ressincronizacao
+      @saida = @saida.slice(*RESSINCRONIZACAO_CAMPOS) if ressincronizacao
     end
 
     def call
@@ -62,9 +72,15 @@ module OperationalEngine
       changes = facts.merge(continuity_changes).reject { |field, value| lead.public_send(field) == value }
       lead.update!(changes) if changes.any?
       write_event(lead, 'lead_enriquecido', campos: facts.keys) if facts.keys.intersect?(changes.keys)
+      record_resync(lead, changes.keys)
 
       warnings = apply_decisao(lead, decisao)
       { ok: true, campos_atualizados: changes.keys, ignorados: ignored, avisos: warnings }
+    end
+
+    # CP-16B: trilha da ressincronização pós-devolução, inclusive quando nada mudou ("SE NECESSÁRIO").
+    def record_resync(lead, campos)
+      write_event(lead, 'ressincronizacao_devolucao', campos: campos) if @ressincronizacao
     end
 
     # [{campo => valor válido}, [chaves ignoradas]]

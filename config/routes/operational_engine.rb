@@ -18,6 +18,9 @@ delete 'operational_engine/tools/schedule_meeting/:event_id', to: 'operational_e
 patch 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#update_meeting'
 delete 'operational_engine/tools/schedule_meeting', to: 'operational_engine/tools#cancel_meeting'
 post 'operational_engine/tools/register_callback', to: 'operational_engine/tools#register_callback'
+# CP-16B (P2-VAL-19): desfecho da segunda falha do Calendar ao agendar -- callback do Danilo + texto
+# fixo para o lead (decisão da Stéphanie em 24/09/2026).
+post 'operational_engine/tools/calendar_fallback', to: 'operational_engine/tools#calendar_fallback'
 get 'operational_engine/tools/availability', to: 'operational_engine/tools#availability'
 
 # S-4 parte 1: health + Snapshot (SSOT §12.3), pedidos por docs/agent-runtime-v1.md (up2-agents)

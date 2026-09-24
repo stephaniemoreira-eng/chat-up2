@@ -180,5 +180,53 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Snapshot', type: :request 
         expect(response).to have_http_status(:unprocessable_entity)
       end
     end
+
+    # CP-16B -- P2-VAL-20 (decisão da Stéphanie em 24/09/2026): o turno silencioso pós-devolução recebe
+    # o histórico recente COM as mensagens do humano, no contexto `conversa` (contrato inalterado).
+    describe 'ressincronização pós-devolução' do
+      let(:user) { create(:user, account: account) }
+
+      before do
+        lead.update!(upsales_contact_id: contact.id, upsales_conversation_atual_id: conversation.id, ultimo_ponto: 'aguardando_volume')
+        OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+      end
+
+      def devolver!
+        OperationalEngine::TakeoverService.devolver!(lead: lead, user_id: user.id)
+        OperationalEngine::LeadEvent.find_by(lead: lead, event_type: 'intervencao_humana_encerrada').metadata['correlation_id']
+      end
+
+      it 'com a devolução vigente devolve contexto conversa, sem mensagem atual e com as mensagens do humano' do
+        incoming('vocês atendem Santos?')
+        humana = create(:message, account: account, inbox: conversation.inbox, conversation: conversation, message_type: 'outgoing',
+                                  sender: user, content: 'Atendemos sim! Qual o volume mensal?')
+        devolucao_id = devolver!
+
+        body = fetch(devolucao_id: devolucao_id)
+
+        expect(response).to have_http_status(:ok)
+        expect(body['snapshot']['continuidade']).to include('contexto_execucao' => 'conversa', 'ultimo_ponto' => 'aguardando_volume')
+        expect(body['snapshot']['mensagem_atual']).to be_nil
+        ultima = body['snapshot']['mensagens_recentes_relevantes'].last
+        expect(ultima).to include('message_id' => humana.id.to_s, 'autor' => 'humano')
+      end
+
+      it 'recusa devolução desconhecida, com mensagem disparadora, noutro contexto ou já superada por novo Assumir' do
+        devolucao_id = devolver!
+
+        fetch(devolucao_id: SecureRandom.uuid)
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        fetch(devolucao_id: devolucao_id, message_id: incoming('oi').id)
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        fetch(devolucao_id: devolucao_id, contexto_execucao: 'agenda')
+        expect(response).to have_http_status(:unprocessable_entity)
+
+        OperationalEngine::TakeoverService.assumir!(lead: lead, user_id: user.id)
+        fetch(devolucao_id: devolucao_id)
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
   end
 end

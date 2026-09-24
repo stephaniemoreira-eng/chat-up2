@@ -22,8 +22,13 @@ class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts:
   # retorno real (regra 18). Idempotentes pela identidade do turno (`turn_id`, mesmo ledger do
   # ActionsController): repetir a chamada no mesmo turno devolve o resultado guardado sem criar/alterar/
   # cancelar outro evento no Calendar. Sem turn_id (chamador legado) seguem como antes.
+  #
+  # CP-16B (P2-VAL-19, decisão da Stéphanie em 24/09/2026): `tentativa=2` é a segunda tentativa
+  # silenciosa que o up2-agents faz depois de uma falha do Calendar -- entrada própria no ledger do
+  # turno e nunca por cima da primeira (OperationalEngine::CalendarRetryAttempt). Sem `tentativa`, é a
+  # primeira, exatamente como no CP-10.
   def schedule_meeting
-    result = turn_idempotent('ferramenta:criar_evento') do
+    result = calendar_attempt('ferramenta:criar_evento') do
       ::OperationalEngine::Tools::ScheduleMeetingService.new(
         account: Current.account,
         conversation_id: params[:conversation_id],
@@ -40,7 +45,7 @@ class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts:
   # `event_id` vem da URL (rota legada) ou não vem (rota do modo agent): sem ele, o Engine usa a
   # reunião confirmada do próprio lead -- o modelo nunca carrega um identificador do Calendar.
   def update_meeting
-    result = turn_idempotent('ferramenta:atualizar_evento') do
+    result = calendar_attempt('ferramenta:atualizar_evento') do
       ::OperationalEngine::Tools::UpdateMeetingService.new(
         account: Current.account,
         conversation_id: params[:conversation_id],
@@ -67,6 +72,21 @@ class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts:
     render_tool_result(result, ok_payload: ->(r) { r.slice(:replay) })
   end
 
+  # CP-16B (P2-VAL-19): a segunda falha do Calendar ao agendar vira callback do Danilo + o texto fixo
+  # que o up2-agents envia ao lead (OperationalEngine::Tools::CalendarFallbackService). Uma vez por
+  # turno: repetir devolve o resultado guardado, sem outro callback/evento.
+  def calendar_fallback
+    result = turn_idempotent('ferramenta:fallback_calendar') do
+      ::OperationalEngine::Tools::CalendarFallbackService.new(
+        account: Current.account, conversation_id: params[:conversation_id], ferramenta: params[:ferramenta]
+      ).call
+    end
+
+    render_tool_result(result, ok_payload: lambda { |r|
+      r.slice(:callback, :motivo, :responsavel_comercial_id, :responsavel_pendente, :mensagem_lead, :replay)
+    })
+  end
+
   def register_callback
     result = ::OperationalEngine::Tools::RegisterCallbackService.new(
       account: Current.account,
@@ -90,5 +110,13 @@ class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts:
 
   def turn_idempotent(operacao, &)
     ::OperationalEngine::TurnIdempotency.call(conta_id: Current.account.id, operacao: operacao, turn_id: params[:turn_id], &)
+  end
+
+  def calendar_attempt(operacao)
+    turn_idempotent(::OperationalEngine::CalendarRetryAttempt.operation(operacao, params[:tentativa])) do
+      ::OperationalEngine::CalendarRetryAttempt.previous_outcome(
+        conta_id: Current.account.id, base_operation: operacao, turn_id: params[:turn_id], tentativa: params[:tentativa]
+      ) || yield
+    end
   end
 end

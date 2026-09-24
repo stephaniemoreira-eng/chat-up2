@@ -345,6 +345,17 @@ RSpec.describe OperationalEngine::OutboundSendGate do
 
       expect(post_scheduled(Time.current.iso8601)).to be_persisted
     end
+
+    # CP-16B (P2-VAL-20, decisão da Stéphanie em 24/09/2026): o turno silencioso pós-devolução nunca
+    # fala com o lead -- nem se alguém incluir o tipo na lista da ENV.
+    it 'post carimbado RESSINCRONIZACAO é sempre recusado, mesmo listado na ENV' do
+      with_modified_env(UP_SALES_ENGINE_AUTOMATION_KINDS: 'APPOINTMENT_REMINDER,RESSINCRONIZACAO') do
+        expect { post_scheduled(Time.current.iso8601, kind: 'RESSINCRONIZACAO') }.to raise_error(described_class::Blocked) do |e|
+          expect(e.reason).to eq('ressincronizacao_nunca_envia')
+        end
+      end
+      expect(conversation.messages.outgoing.where(sender: agent_bot)).to be_empty
+    end
   end
 
   # CP-13 -- P1-VAL-12 (SSOT §15.6-§15.8, 28.4, 28.23, 28.25): post de recovery só com a autorização

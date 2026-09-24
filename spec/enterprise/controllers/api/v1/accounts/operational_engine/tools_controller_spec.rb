@@ -87,7 +87,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
            headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'agenda não conectada para esta conta')
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'agenda não conectada para esta conta'), 'falha_calendar' => true
     end
   end
 
@@ -150,7 +150,7 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
       post base_path, params: schedule_params, headers: valid_headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'Calendário inválido')
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'Calendário inválido', 'falha_calendar' => true)
       expect(lead.reload.agendamento_status).to eq('nao_iniciado')
     end
 
@@ -193,6 +193,123 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
 
       expect(response.parsed_body).to eq('ok' => false, 'reason' => 'lead em atendimento humano')
       expect(a_request(:post, calendar_base)).not_to have_been_made
+    end
+  end
+
+  # CP-16B (P2-VAL-19) -- decisão da Stéphanie em 24/09/2026: falha do Calendar => o up2-agents espera
+  # e tenta UMA segunda vez em silêncio (`tentativa=2`); com mais uma falha, callback do Danilo + texto
+  # fixo (calendar_fallback). No máximo duas chamadas ao Calendar por turno, nenhuma duplicata.
+  describe 'segunda tentativa e fallback do Calendar (CP-16B)' do
+    let(:calendar_base) { 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events' }
+    let(:base_path) { "/api/v1/accounts/#{account.id}/operational_engine/tools/schedule_meeting" }
+    let(:fallback_path) { "/api/v1/accounts/#{account.id}/operational_engine/tools/calendar_fallback" }
+    let(:schedule_params) do
+      { conversation_id: conversation.display_id, summary: 'Reunião', turn_id: 'msg:950',
+        start: '2026-09-22T14:00:00-03:00', end: '2026-09-22T14:30:00-03:00' }
+    end
+    let(:json) { { 'Content-Type' => 'application/json' } }
+    let(:google_down) { { status: 502, body: { error: 'Google indisponível' }.to_json, headers: json } }
+
+    before do
+      agent_tenant.update!(calendar_integration_instance_id: 'instance-1')
+      lead.update!(upsales_contact_id: contact.id)
+    end
+
+    it '1ª falha + 2ª sucesso: confirma a reunião na segunda tentativa, sem callback' do
+      stub_request(:post, calendar_base)
+        .to_return(google_down, { status: 200, body: { event: { 'id' => 'evt_2' } }.to_json, headers: json })
+
+      post base_path, params: schedule_params, headers: valid_headers, as: :json
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'Google indisponível', 'falha_calendar' => true)
+
+      post base_path, params: schedule_params.merge(tentativa: 2), headers: valid_headers, as: :json
+      expect(response.parsed_body).to eq('ok' => true, 'event_id' => 'evt_2')
+      expect(lead.reload.agendamento_status).to eq('confirmado')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'callback_registrado')).to be_empty
+    end
+
+    it 'replay das duas tentativas do mesmo turno não chama o Calendar de novo (no máximo 2 chamadas)' do
+      stub_request(:post, calendar_base).to_return(google_down)
+
+      2.times do
+        post base_path, params: schedule_params, headers: valid_headers, as: :json
+        post base_path, params: schedule_params.merge(tentativa: 2), headers: valid_headers, as: :json
+      end
+
+      expect(a_request(:post, calendar_base)).to have_been_made.twice
+      expect(response.parsed_body).to include('ok' => false, 'falha_calendar' => true)
+    end
+
+    it 'a 2ª tentativa não corre por cima da 1ª ainda em processamento (sem marca de falha do Calendar)' do
+      OperationalEngine::IdempotencyRecord.create!(conta_id: account.id, event_type: 'ferramenta:criar_evento', external_source: 'lavinia_turn',
+                                                   external_id: 'msg:950', correlation_id: SecureRandom.uuid, status: 'received')
+
+      post base_path, params: schedule_params.merge(tentativa: 2), headers: valid_headers, as: :json
+
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'primeira tentativa ainda em processamento')
+      expect(a_request(:post, calendar_base)).not_to have_been_made
+    end
+
+    it 'a 1ª tentativa deu certo mas o up2-agents não viu: a 2ª devolve esse sucesso, sem outro evento' do
+      stub_request(:post, calendar_base).to_return(status: 200, body: { event: { 'id' => 'evt_1' } }.to_json, headers: json)
+      post base_path, params: schedule_params, headers: valid_headers, as: :json
+
+      post base_path, params: schedule_params.merge(tentativa: 2), headers: valid_headers, as: :json
+
+      expect(response.parsed_body).to eq('ok' => true, 'event_id' => 'evt_1')
+      expect(a_request(:post, calendar_base)).to have_been_made.once
+    end
+
+    it 'recusa de negócio não é falha do Calendar (sem a marca)' do
+      lead.update!(modo_atendimento: 'humano')
+
+      post base_path, params: schedule_params, headers: valid_headers, as: :json
+
+      expect(response.parsed_body).to eq('ok' => false, 'reason' => 'lead em atendimento humano')
+    end
+
+    it 'remarcar também ganha a segunda tentativa, com chave própria' do
+      lead.update!(agendamento_status: 'confirmado', calendar_event_id: 'evt_old', etapa_prospect: 'agendado', agendado_em: Time.current)
+      stub_request(:patch, "#{calendar_base}/evt_old")
+        .to_return(google_down, { status: 200, body: { event: { 'id' => 'evt_old' } }.to_json, headers: json })
+      update_params = { conversation_id: conversation.display_id, turn_id: 'msg:951', start: '2026-09-23T15:00:00-03:00',
+                        end: '2026-09-23T15:30:00-03:00' }
+
+      patch base_path, params: update_params, headers: valid_headers, as: :json
+      expect(response.parsed_body).to include('ok' => false, 'falha_calendar' => true)
+      patch base_path, params: update_params.merge(tentativa: 2), headers: valid_headers, as: :json
+      expect(response.parsed_body).to eq('ok' => true, 'event_id' => 'evt_old')
+    end
+
+    describe 'POST calendar_fallback (duas falhas)' do
+      let(:fallback_params) { { conversation_id: conversation.display_id, turn_id: 'msg:950', ferramenta: 'criar_evento' } }
+
+      it 'registra o callback do Danilo e devolve o texto fixo para o lead' do
+        post fallback_path, params: fallback_params, headers: valid_headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body).to include('ok' => true, 'callback' => 'registrado', 'motivo' => 'falha_calendar',
+                                                'mensagem_lead' => OperationalEngine::Tools::CalendarFallbackService::DEFAULT_MESSAGE)
+        expect(response.parsed_body['mensagem_lead']).not_to match(/agendad/i)
+        expect(lead.reload.agendamento_status).to eq('callback_registrado')
+      end
+
+      it 'é idempotente no turno: repetir não duplica callback nem a trilha' do
+        2.times { post fallback_path, params: fallback_params, headers: valid_headers, as: :json }
+
+        expect(response.parsed_body).to include('ok' => true, 'replay' => true)
+        expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'callback_registrado').count).to eq(1)
+        expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'agendamento_falhou_callback').count).to eq(1)
+      end
+
+      it 'lead em não-contatar: recusado, nenhuma mensagem para enviar' do
+        lead.update!(nao_contatar: true)
+
+        post fallback_path, params: fallback_params, headers: valid_headers, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body).to eq('ok' => false, 'reason' => 'lead está em não-contatar')
+      end
     end
   end
 end

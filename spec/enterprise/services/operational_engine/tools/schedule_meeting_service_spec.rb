@@ -47,7 +47,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
 
     result = perform
 
-    expect(result).to eq(ok: false, reason: 'agenda não conectada para esta conta')
+    expect(result).to eq(ok: false, reason: 'agenda não conectada para esta conta', falha_calendar: true)
   end
 
   it 'cria o evento real e confirma o agendamento (SSOT §16)' do
@@ -90,7 +90,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
 
     result = perform
 
-    expect(result).to eq(ok: false, reason: 'Calendário inválido')
+    expect(result).to eq(ok: false, reason: 'Calendário inválido', falha_calendar: true)
     lead.reload
     expect(lead.agendamento_status).to eq('nao_iniciado')
     expect(lead.calendar_event_id).to be_nil
