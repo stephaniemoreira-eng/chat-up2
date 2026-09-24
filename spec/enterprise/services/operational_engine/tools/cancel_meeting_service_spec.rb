@@ -41,7 +41,8 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
     expect(result).to eq(ok: false, reason: 'agenda não conectada para esta conta')
   end
 
-  it 'cancela a reunião: agendamento_status=cancelado, volta pra qualificado' do
+  # CP-04 (P1-023-01/P2-023-01, SSOT §28.29): cancelar não regride Agendado→Qualificado.
+  it 'cancela a reunião: agendamento_status=cancelado, etapa Prospect continua Agendado' do
     stub_cancel_event
 
     result = perform
@@ -49,10 +50,10 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
     expect(result).to eq(ok: true)
     lead.reload
     expect(lead.agendamento_status).to eq('cancelado')
-    expect(lead.etapa_prospect).to eq('qualificado')
+    expect(lead.etapa_prospect).to eq('agendado')
   end
 
-  it 'não mexe em conversao_em/tipo_conversao/calendar_event_id' do
+  it 'não mexe em conversao_em/tipo_conversao/calendar_event_id/agendado_em' do
     lead.update!(conversao_em: 1.day.ago.change(usec: 0), tipo_conversao: 'agendamento')
     stub_cancel_event
 
@@ -62,6 +63,7 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
     expect(lead.conversao_em).to be_present
     expect(lead.tipo_conversao).to eq('agendamento')
     expect(lead.calendar_event_id).to eq('evt_123')
+    expect(lead.agendado_em).to be_present
   end
 
   it 'grava o evento reuniao_cancelada' do
@@ -74,13 +76,13 @@ RSpec.describe OperationalEngine::Tools::CancelMeetingService do
     expect(event.metadata['calendar_event_id']).to eq('evt_123')
   end
 
-  it 'sincroniza o card de volta pro Kanban Prospect (fora de Agendado)' do
+  it 'o card do Kanban Prospect continua em Agendado (projeção segue o Engine)' do
     stub_cancel_event
 
     perform
 
     sales_lead = Sales::Lead.find_by(contact_id: contact.id)
-    expect(sales_lead.stage.engine_stage_key).to eq('qualificado')
+    expect(sales_lead.stage.engine_stage_key).to eq('agendado')
   end
 
   it 'não muda nada quando o Calendar falha' do
