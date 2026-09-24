@@ -281,7 +281,6 @@
           "MARK_WON": "Marcar Ganho",
           "MARK_LOST": "Marcar Perdido",
           "START_ACOMPANHAMENTO": "Mover para Em acompanhamento",
-          "RESULT_REQUIRES_ACOMPANHAMENTO": "Ganho/Perdido ficam disponíveis depois de mover a oportunidade para Em acompanhamento.",
           "REMOVE_NO_SHOW": "Remover NO-SHOW",
           "MESSAGES": {
             "ERROR": "Não foi possível concluir essa ação. Tente novamente."

@@ -90,6 +90,62 @@
       <% end %>
     </fieldset>
 
+    <%# CP-16A (P2-VAL-16 / P2-VAL-17): decisões de negócio da Stéphanie em 24/09/2026, por conta. %>
+    <fieldset class="mb-8">
+      <legend class="font-bold mb-2">Operação Comercial e recovery</legend>
+
+      <%= fields_for :agent_tenant, @agent_tenant do |tenant_form| %>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :commercial_responsible_user_id, 'Responsável Comercial do handoff' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.select :commercial_responsible_user_id,
+                options_from_collection_for_select(@account_users, :id, :name, @agent_tenant.commercial_responsible_user_id),
+                { include_blank: '— nenhum (responsável fica pendente) —' },
+                { class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full" }
+            %>
+            <p class="pt-2 text-xs italic text-slate-400">
+              Quem vira o responsável quando a Lavínia passa o lead para o Comercial e nenhum humano já
+              é o responsável (na Lava e Pronto: o Danilo). Em branco, o lead fica com responsável
+              pendente até alguém clicar em "Assumir". Só lista usuários desta conta.
+            </p>
+          </div>
+        </div>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :recovery_email_subject, 'Assunto do e-mail de recovery (3ª tentativa)' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.text_field :recovery_email_subject,
+                maxlength: OperationalEngine::RecoveryEmailTemplate::SUBJECT_MAX_LENGTH,
+                placeholder: '{{marca}}: podemos continuar nossa conversa?',
+                class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full"
+            %>
+          </div>
+        </div>
+        <div class="flex mb-4">
+          <div class="field-unit__label">
+            <%= tenant_form.label :recovery_email_body, 'Corpo do e-mail de recovery (3ª tentativa)' %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= tenant_form.text_area :recovery_email_body,
+                rows: 8,
+                maxlength: OperationalEngine::RecoveryEmailTemplate::BODY_MAX_LENGTH,
+                class: "mt-2 border border-slate-100 p-1.5 rounded-md w-full"
+            %>
+            <p class="pt-2 text-xs italic text-slate-400">
+              Texto puro. Placeholders aceitos: <code>{{nome}}</code> (nome do lead), <code>{{empresa}}</code>
+              (empresa do lead), <code>{{persona}}</code> (quem assina, padrão "Lavínia") e
+              <code>{{marca}}</code> (nome da conta). Nome/empresa desconhecidos viram texto vazio.
+              Deixe assunto e/ou corpo em branco para usar o modelo neutro padrão. O texto não pode
+              prometer preço, cobertura, prazo ou certificação (Base V0.7).
+            </p>
+          </div>
+        </div>
+      <% end %>
+    </fieldset>
+
     <% if @agent_tenant.persisted? %>
       <p class="mb-4 text-sm">
         Dispatcher (Fase 6):

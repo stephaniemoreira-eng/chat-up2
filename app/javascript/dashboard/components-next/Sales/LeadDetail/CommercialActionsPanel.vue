@@ -10,8 +10,13 @@ import Button from 'dashboard/components-next/button/Button.vue';
 //
 // CP-05 (P1-025-02, P1-023-03, P2-025-03): a visibilidade aqui só espelha as guardas do Engine
 // (OperationalEngine::ComercialActionGuard), que valem mesmo para chamada direta. Máquina do §8.4:
-// Oportunidade → Em acompanhamento → Ganho/Perdido -- Ganho/Perdido só em Em acompanhamento; a
-// movimentação Oportunidade → Em acompanhamento é uma ação do Engine (botão ou drag convertido).
+// Oportunidade → Em acompanhamento → Ganho/Perdido; a movimentação Oportunidade → Em
+// acompanhamento é uma ação do Engine (botão ou drag convertido).
+//
+// CP-16A (P2-VAL-18; decisão da Stéphanie em 24/09/2026): Ganho/Perdido também direto de
+// Oportunidade -- "o Danilo pode dar como ganho ou perdido sem necessidade de estar 'em
+// acompanhamento'", porque ele pode negociar em um único contato. Continua sendo só por esta ação
+// explícita: arrastar o card para Ganho/Perdido segue recusado pelo Engine (CP-05).
 // NO-SHOW pode ser removido manualmente (§20.3); o evento histórico permanece.
 const props = defineProps({
   engineTags: { type: Array, default: () => [] },
@@ -39,7 +44,9 @@ const hasPendingCallback = computed(() =>
   props.engineTags.includes('callback')
 );
 const hasNoShow = computed(() => props.engineTags.includes('no_show'));
-const canResolve = computed(() => props.engineStageKey === 'em_acompanhamento');
+const canResolve = computed(() =>
+  ['oportunidade', 'em_acompanhamento'].includes(props.engineStageKey)
+);
 const canStartAcompanhamento = computed(
   () => props.engineStageKey === 'oportunidade'
 );
@@ -137,13 +144,9 @@ const onRegisterResultado = resultado => {
       </div>
 
       <div
-        v-if="!canResolve"
-        class="pt-2 text-xs border-t border-n-weak text-n-slate-10"
+        v-if="canResolve"
+        class="flex flex-col gap-2 pt-2 border-t border-n-weak"
       >
-        {{ t('CRM.LEAD.DETAIL.COMMERCIAL.RESULT_REQUIRES_ACOMPANHAMENTO') }}
-      </div>
-
-      <div v-else class="flex flex-col gap-2 pt-2 border-t border-n-weak">
         <textarea
           v-model="motivoPerda"
           rows="2"

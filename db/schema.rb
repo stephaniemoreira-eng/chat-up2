@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_24_130000) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_24_150000) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1981,7 +1981,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_24_130000) do
     t.string "engine_api_key"
     t.bigint "whatsapp_inbox_id"
     t.string "engine_api_key_digest"
+    t.bigint "commercial_responsible_user_id"
+    t.string "recovery_email_subject"
+    t.text "recovery_email_body"
     t.index ["account_id"], name: "index_up_sales_agent_tenants_on_account_id", unique: true
+    t.index ["commercial_responsible_user_id"], name: "index_up_sales_agent_tenants_on_commercial_responsible_user_id"
     t.index ["engine_api_key_digest"], name: "index_up_sales_agent_tenants_on_engine_api_key_digest", unique: true
     t.index ["whatsapp_inbox_id"], name: "index_up_sales_agent_tenants_on_whatsapp_inbox_id"
   end
@@ -2113,6 +2117,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_24_130000) do
   add_foreign_key "scheduled_messages", "messages"
   add_foreign_key "scheduled_messages", "recurring_scheduled_messages"
   add_foreign_key "up_sales_agent_tenants", "inboxes", column: "whatsapp_inbox_id"
+  add_foreign_key "up_sales_agent_tenants", "users", column: "commercial_responsible_user_id", on_delete: :nullify
   add_foreign_key "user_sessions", "users"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).
       on("accounts").

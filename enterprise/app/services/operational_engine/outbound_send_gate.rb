@@ -15,7 +15,8 @@
 # Regras, na ordem:
 # 1. modo_atendimento=humano bloqueia (§12.4, §18.2, §23.2) -- exceto a resposta do próprio turno
 #    que fez o handoff_comercial (decisão da Stéphanie em 23/09/2026, lacuna do SSOT registrada no
-#    PR): dentro de HANDOFF_REPLY_WINDOW, sem responsável humano e sem mensagem humana depois.
+#    PR): dentro de HANDOFF_REPLY_WINDOW, sem mensagem humana depois e sem responsável humano --
+#    exceto o responsável Comercial gravado pelo PRÓPRIO handoff (CP-16A, P2-VAL-16, 24/09/2026).
 # 2. Conversa com ativação "authorized" e sem mensagem do contato = abertura do Dispatcher:
 #    exige elegibilidade completa (OutboundEligibility) e nenhuma outra ativação já consumida.
 # 3. Lead em Backlog sem ativação válida e sem mensagem do contato: abertura não autorizada.
@@ -56,7 +57,7 @@ module OperationalEngine
     end
 
     def self.handoff_reply_window
-      ENV.fetch('UP_SALES_HANDOFF_REPLY_WINDOW_SECONDS', '120').to_i.seconds
+      OperationalEngine::HandoffReplyWindow.duration
     end
 
     # CP-02 (P0-022-01): quanto tempo depois de gravada a abertura ainda aceita balões da MESMA
@@ -259,30 +260,12 @@ module OperationalEngine
                     .exists?(["additional_attributes -> '#{OperationalEngine::OriginationActivation::KEY}' ->> 'status' = ?", 'consumed'])
     end
 
-    # A resposta do turno que acabou de fazer handoff_comercial. O modo virou humano PELA própria
-    # Lavínia (evento handoff_comercial), nenhum humano reivindicou (responsavel nulo, nenhuma
-    # intervenção humana registrada depois, nenhuma mensagem pública humana na conversa depois) e
-    # ainda está dentro da janela técnica.
+    # A resposta do turno que acabou de fazer handoff_comercial (decisão de 23/09/2026). A regra
+    # inteira -- inclusive o responsável Comercial gravado pelo próprio handoff (CP-16A, P2-VAL-16,
+    # decisão da Stéphanie em 24/09/2026) -- mora em OperationalEngine::HandoffReplyWindow, a mesma
+    # que a ConversationModeProjection usa para não abrir a conversa antes dessa resposta.
     def handoff_reply_allowed?(lead)
-      return false if lead.responsavel_atual_id.present? || lead.motivo_handoff.blank?
-
-      handoff = recent_lavinia_handoff(lead)
-      handoff.present? && no_human_message_since?(handoff.event_at)
-    end
-
-    # O último evento de modo do lead, se for o handoff_comercial da própria Lavínia ainda dentro
-    # da janela -- qualquer intervenção humana registrada depois dele o substitui.
-    def recent_lavinia_handoff(lead)
-      event = lead.events
-                  .where(event_type: %w[handoff_comercial intervencao_humana_iniciada intervencao_humana_encerrada])
-                  .order(event_at: :desc).first
-      return unless event&.event_type == 'handoff_comercial' && event.source_lavinia?
-
-      event if event.event_at >= self.class.handoff_reply_window.ago
-    end
-
-    def no_human_message_since?(time)
-      @conversation.messages.outgoing.where(sender_type: 'User', private: false).where('created_at >= ?', time).none?
+      OperationalEngine::HandoffReplyWindow.new(lead, @conversation).open?
     end
 
     def raise_blocked(lead, reason)

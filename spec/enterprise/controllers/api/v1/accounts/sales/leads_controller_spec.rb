@@ -482,17 +482,17 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
         expect(engine_lead.reload.resultado_comercial).to eq('ganho')
       end
 
-      # CP-05 (P1-025-02): chamada direta fora da sequência §8.4 é recusada no backend.
-      it 'retorna unprocessable_entity ao resolver direto de Oportunidade, sem mexer no Engine' do
+      # CP-16A (P2-VAL-18; decisão da Stéphanie em 24/09/2026): a ação explícita resolve direto de
+      # Oportunidade (antes do CP-16A isto era recusado pelo §8.4 estrito do CP-05).
+      it 'resolve direto de Oportunidade pela ação explícita (P2-VAL-18)' do
         engine_lead = build_engine_lead
         lead = synced_sales_lead(engine_lead)
 
         post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/register_resultado_comercial",
              params: { resultado_comercial: 'ganho' }, headers: agent.create_new_auth_token, as: :json
 
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body['error']).to include('transição Comercial não permitida')
-        expect(engine_lead.reload.resultado_comercial).to eq('em_aberto')
+        expect(response).to have_http_status(:success)
+        expect(engine_lead.reload.resultado_comercial).to eq('ganho')
       end
     end
 
@@ -557,6 +557,21 @@ RSpec.describe 'Api::V1::Accounts::Sales::Leads', type: :request do
         expect(response).to have_http_status(:unprocessable_entity)
         expect(engine_lead.reload.etapa_comercial).to eq('em_acompanhamento')
         expect(lead.reload.sales_stage_id).to eq(stage_for('em_acompanhamento').id)
+      end
+
+      # CP-16A (P2-VAL-18): liberar Ganho/Perdido a partir de Oportunidade não libera o ARRASTE.
+      it 'drag de Oportunidade direto para Ganho/Perdido continua recusado' do
+        engine_lead = build_engine_lead
+        lead = synced_sales_lead(engine_lead)
+
+        %w[ganho perdido].each do |key|
+          post "/api/v1/accounts/#{account.id}/crm/leads/#{lead.id}/move",
+               params: { sales_stage_id: stage_for(key).id }, headers: agent.create_new_auth_token, as: :json
+
+          expect(response).to have_http_status(:unprocessable_entity)
+        end
+        expect(engine_lead.reload.etapa_comercial).to eq('oportunidade')
+        expect(engine_lead.resultado_comercial).to eq('em_aberto')
       end
 
       it 'drag num card Prospect gerido pelo Engine é recusado' do

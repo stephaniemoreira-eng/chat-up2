@@ -130,14 +130,28 @@ RSpec.describe OperationalEngine::RegisterResultadoComercialService do
 
   # CP-05 (P1-025-02, §8.4): guarda de backend, independente do botão.
   describe 'guardas de contexto Comercial' do
-    it 'recusa resolver direto de Oportunidade (sequência §8.4)' do
+    # CP-16A (P2-VAL-18; decisão da Stéphanie em 24/09/2026): Danilo pode dar Ganho/Perdido direto
+    # de Oportunidade, sem passar por Em acompanhamento.
+    it 'resolve como ganho direto de Oportunidade (P2-VAL-18)' do
       lead = build_lead(etapa_comercial: 'oportunidade')
 
-      expect { described_class.call!(lead: lead, resultado: 'ganho', user_id: 9) }
-        .to raise_error(OperationalEngine::ComercialActionGuard::InvalidContextError)
-      expect(lead.reload.resultado_comercial).to eq('em_aberto')
-      expect(lead.relacao_atual).to be_nil
-      expect(lead.events).to be_empty
+      described_class.call!(lead: lead, resultado: 'ganho', user_id: 9)
+
+      expect(lead.reload.resultado_comercial).to eq('ganho')
+      expect(lead.etapa_comercial).to eq('ganho')
+      expect(lead.relacao_atual).to eq('cliente_atual')
+      expect(lead.events.find_by(event_type: 'resultado_ganho').metadata).to include('de' => 'oportunidade', 'para' => 'ganho')
+      expect(comercial_sales_lead(lead).stage.engine_stage_key).to eq('ganho')
+    end
+
+    it 'resolve como perdido direto de Oportunidade, com motivo (P2-VAL-18)' do
+      lead = build_lead(etapa_comercial: 'oportunidade')
+
+      described_class.call!(lead: lead, resultado: 'perdido', user_id: 9, motivo_perda: 'preço')
+
+      expect(lead.reload.resultado_comercial).to eq('perdido')
+      expect(lead.motivo_perda).to eq('preço')
+      expect(lead.events.find_by(event_type: 'resultado_perdido').metadata).to include('de' => 'oportunidade', 'para' => 'perdido')
     end
 
     it 'recusa um lead sem oportunidade Comercial (Prospect puro)' do

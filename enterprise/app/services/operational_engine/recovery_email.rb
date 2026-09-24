@@ -24,12 +24,23 @@ module OperationalEngine
       ActionMailer::Base.perform_deliveries && UNAVAILABLE_DELIVERY_METHODS.exclude?(ActionMailer::Base.delivery_method)
     end
 
+    # Algo com cara de endereço dentro de uma mensagem de erro SMTP (ex.: "550 <x@y> user unknown").
+    ADDRESS_IN_TEXT = /[^\s<>"'@]+@[^\s<>"'@]+/
+
     # Devolve o Message-ID do e-mail aceito.
+    #
+    # CP-16A (P2-VAL-17; Stéphanie, 24/09/2026: texto "SER AJUSTÁVEL"): assunto/corpo configurados na
+    # conta (UpSales::AgentTenant) seguem para o mailer; vazios = modelo neutro do CP-13. A mensagem da
+    # falha tem endereços mascarados -- ela vai para o registro de falha da ativação/log.
     def self.deliver!(lead:, address:, account:)
-      mail = OperationalEngine::RecoveryMailer.with(to: address, nome: lead.nome, marca: account&.name).follow_up.deliver_now
+      tenant = account&.up_sales_agent_tenant
+      mail = OperationalEngine::RecoveryMailer.with(
+        to: address, nome: lead.nome, empresa: lead.empresa, marca: account&.name,
+        subject_template: tenant&.recovery_email_subject, body_template: tenant&.recovery_email_body
+      ).follow_up.deliver_now
       mail.message_id
     rescue StandardError => e
-      raise DeliveryError, "#{e.class}: #{e.message}"
+      raise DeliveryError, "#{e.class}: #{e.message.to_s.gsub(ADDRESS_IN_TEXT, '[email]')}"
     end
   end
 end
