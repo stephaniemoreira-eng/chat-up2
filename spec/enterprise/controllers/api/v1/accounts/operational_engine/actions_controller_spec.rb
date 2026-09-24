@@ -156,5 +156,17 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Actions', type: :request d
       expect(lead.reload).to have_attributes(dor_oportunidade: 'fila', qualificacao_status: 'qualificado', ultimo_ponto: 'CEP')
       expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'lead_qualificado').count).to eq(1)
     end
+
+    # CP-14 -- P1-VAL-13 (28.12): o replay do turno que informou o preço não duplica a transição.
+    it 'preço direto informado grava orcamento_status=informado uma vez só, mesmo com replay do turno' do
+      lead.update!(orcamento_status: 'em_dimensionamento')
+      saida = { mensagem_resposta: 'O valor do serviço é R$ 1.800,00 por mês. Funciona para você?', acao_sugerida: 'continuar_conversa' }
+
+      2.times { post_turno('msg:960', saida) }
+
+      expect(response).to have_http_status(:ok)
+      expect(lead.reload.orcamento_status).to eq('informado')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'orcamento_informado').count).to eq(1)
+    end
   end
 end
