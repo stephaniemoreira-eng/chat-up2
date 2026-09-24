@@ -290,7 +290,7 @@ RSpec.describe OperationalEngine::OutboundSendGate do
       it 'bloqueia quando há fato humano de responsável depois do handoff' do
         handoff!
         OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'responsavel_alterado', source: 'human',
-                                              metadata: { de: danilo.id, para: danilo.id, motivo: 'assumir' })
+                                             metadata: { de: danilo.id, para: danilo.id, motivo: 'assumir' })
 
         expect_blocked(/atendimento_humano/)
       end

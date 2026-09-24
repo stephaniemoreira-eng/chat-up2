@@ -73,7 +73,7 @@ RSpec.describe OperationalEngine::ConversationModeProjection do
     def handoff_lead
       build_lead(modo_atendimento: 'humano', responsavel_atual_id: user.id, motivo_handoff: 'avanco_comercial').tap do |lead|
         OperationalEngine::LeadEvent.create!(lead: lead, event_type: 'handoff_comercial', source: 'lavinia',
-                                              metadata: { transicoes: { responsavel_atual_id: { de: nil, para: user.id } } })
+                                             metadata: { transicoes: { responsavel_atual_id: { de: nil, para: user.id } } })
       end
     end
 

@@ -64,10 +64,13 @@ RSpec.describe OperationalEngine::InboundProcessor do
   end
 
   describe 'lead existente (teste 28.8)' do
+    # etapa explícita: a etapa padrão do lead é backlog, e desde o CP-16A (P2-VAL-15) um lead em
+    # Backlog que fala vira inbound -- caso próprio, coberto no describe do P2-VAL-15 abaixo.
     let!(:lead) do
       OperationalEngine::LeadRepository.find_or_create_by_telefone(
         conta_id: account.id, telefone: contact.phone_number,
-        attributes: { origem_lead: 'google_ads', inbox_entrada_id: 999, inbox_atual_id: 999, upsales_contact_id: contact.id }
+        attributes: { origem_lead: 'google_ads', inbox_entrada_id: 999, inbox_atual_id: 999, upsales_contact_id: contact.id,
+                      etapa_prospect: 'em_conversa', etapa_entrou_em: 1.day.ago }
       )
     end
 
@@ -258,7 +261,7 @@ RSpec.describe OperationalEngine::InboundProcessor do
 
       expect(events('nova_entrada').sole.metadata).to include('modo_entrada' => 'inbound', 'motivo' => 'lead_iniciou_antes_da_abertura')
       expect(events('etapa_alterada').sole.metadata).to include('de' => 'backlog', 'para' => 'em_conversa',
-                                                                 'motivo' => 'lead_iniciou_antes_da_abertura')
+                                                                'motivo' => 'lead_iniciou_antes_da_abertura')
     end
 
     it 'não sobrescreve entrada_operacao_em já preenchida (write-once)' do
@@ -306,6 +309,16 @@ RSpec.describe OperationalEngine::InboundProcessor do
 
       card = Sales::Lead.joins(:pipeline).find_by(operational_lead_id: lead.lead_id, sales_pipelines: { engine_kind: 'prospect' })
       expect(card&.stage&.engine_stage_key).to eq('em_conversa')
+    end
+
+    it 'lead de Backlog já encerrado (ex.: cliente atual) não entra na operação Prospect' do
+      lead.update!(lead_status: 'encerrado', motivo_encerramento: 'cliente_atual', relacao_atual: 'cliente_atual')
+
+      described_class.call(message: build_message)
+
+      expect(lead.reload.etapa_prospect).to eq('backlog')
+      expect(lead.modo_entrada).to eq('outbound')
+      expect(lead.entrada_operacao_em).to be_nil
     end
   end
 end

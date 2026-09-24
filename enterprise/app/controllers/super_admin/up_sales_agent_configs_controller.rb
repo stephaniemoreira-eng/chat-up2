@@ -77,10 +77,8 @@ class SuperAdmin::UpSalesAgentConfigsController < SuperAdmin::EnterpriseBaseCont
   end
 
   def agent_tenant_params
-    permitted = params.require(:agent_tenant)
-                       .permit(:agents_tenant_id, :agents_tenant_slug, :api_key, :calendar_integration_instance_id, :whatsapp_inbox_id,
-                               *BUSINESS_DECISION_FIELDS)
-                       .to_h
+    fields = %i[agents_tenant_id agents_tenant_slug api_key calendar_integration_instance_id whatsapp_inbox_id] + BUSINESS_DECISION_FIELDS
+    permitted = params.require(:agent_tenant).permit(*fields).to_h
     permitted[:api_key] = nil if permitted[:api_key].blank?
     # compact só tira a api_key em branco (manter a atual). Os campos do CP-16A chegam como "" quando
     # limpos de propósito e são gravados vazios: vazio = responsável pendente / modelo de e-mail padrão.

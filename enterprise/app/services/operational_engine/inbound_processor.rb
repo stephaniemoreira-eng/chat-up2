@@ -106,7 +106,7 @@ module OperationalEngine
         )
         # Antes do nova_entrada genérico de propósito: mesma chave de idempotência (tipo + message_id),
         # então o evento que fica é o da entrada na operação, com o modo e o motivo.
-        register_backlog_inbound(lead) if lead.etapa_prospect_backlog?
+        register_backlog_inbound(lead) if lead.etapa_prospect_backlog? && lead.lead_status_ativo?
         write_event(lead, 'nova_entrada', inbox_atual_id: @inbox.id) if mudou_de_inbox
         register_outbound_reply(lead) if lead.etapa_prospect_contatado?
         register_recovery_reply(lead)
@@ -128,6 +128,9 @@ module OperationalEngine
     # mais (BacklogSelector/OutboundEligibility exigem backlog) e a ativação pendente já foi superseded
     # em #supersede_pending_opening; o Dashboard (CP-11) o conta como inbound pela coorte de
     # entrada_operacao_em + modo_entrada.
+    # Só lead ATIVO: um lead de Backlog já encerrado (ex.: cliente atual raspado, P2-VAL-06, ou não
+    # contatar) nunca teria abertura -- continua fora da operação Prospect; o gate só o deixa receber
+    # resposta ao que ele mandou (§19.1/§19.2).
     def register_backlog_inbound(lead)
       lead.update!(
         modo_entrada: 'inbound',
