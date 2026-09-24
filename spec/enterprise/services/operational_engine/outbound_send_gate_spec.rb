@@ -186,7 +186,7 @@ RSpec.describe OperationalEngine::OutboundSendGate do
     describe 'depois de handoff_comercial feito pela própria Lavínia' do
       before do
         OperationalEngine::Tools::HandoffToCommercialService.new(
-          account: account, conversation_id: conversation.id, motivo_handoff: 'avanco_comercial'
+          account: account, conversation_id: conversation.display_id, motivo_handoff: 'avanco_comercial'
         ).call
       end
 

@@ -9,7 +9,7 @@ RSpec.describe OperationalEngine::Tools::StartBudgetService do
   end
 
   def perform
-    described_class.new(account: account, conversation_id: conversation.id).call
+    described_class.new(account: account, conversation_id: conversation.display_id).call
   end
 
   it 'retorna erro quando a conversa não existe' do

@@ -12,7 +12,7 @@ RSpec.describe OperationalEngine::Tools::HandoffToCommercialService do
   end
 
   def perform(motivo: 'avanco_comercial')
-    described_class.new(account: account, conversation_id: conversation.id, motivo_handoff: motivo).call
+    described_class.new(account: account, conversation_id: conversation.display_id, motivo_handoff: motivo).call
   end
 
   it 'retorna erro quando a conversa não existe' do

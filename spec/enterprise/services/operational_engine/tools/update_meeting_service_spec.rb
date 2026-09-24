@@ -17,7 +17,7 @@ RSpec.describe OperationalEngine::Tools::UpdateMeetingService do
 
   def perform(**overrides)
     described_class.new(
-      account: account, conversation_id: conversation.id, event_id: 'evt_123',
+      account: account, conversation_id: conversation.display_id, event_id: 'evt_123',
       starts_at: '2026-09-23T15:00:00-03:00', ends_at: '2026-09-23T15:30:00-03:00',
       **overrides
     ).call

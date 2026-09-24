@@ -14,7 +14,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
   def perform(**overrides)
     described_class.new(
       account: account,
-      conversation_id: conversation.id,
+      conversation_id: conversation.display_id,
       summary: 'Reunião com Lavínia',
       starts_at: '2026-09-22T14:00:00-03:00',
       ends_at: '2026-09-22T14:30:00-03:00',

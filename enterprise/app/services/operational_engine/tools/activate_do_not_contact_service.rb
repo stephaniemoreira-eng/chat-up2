@@ -51,7 +51,8 @@ module OperationalEngine
 
       # Fora do lock do lead (outro banco): se falhar no meio, o gate ainda barra pela flag.
       def cancel_pending_activations(lead)
-        contact_id = @account.conversations.find_by(id: @conversation_id)&.contact_id
+        contact_id = OperationalEngine::Tools::ResolveLeadFromConversation
+                     .conversation(account: @account, conversation_id: @conversation_id)&.contact_id
         return if contact_id.blank?
 
         OperationalEngine::OriginationActivation.pending_for_contact(account_id: @account.id, contact_id: contact_id).each do |activation|
