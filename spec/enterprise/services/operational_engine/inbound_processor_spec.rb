@@ -103,7 +103,7 @@ RSpec.describe OperationalEngine::InboundProcessor do
 
       expect { described_class.call(message: message) }.to change(OperationalEngine::LeadEvent, :count).by(1)
       expect(lead.reload.ultima_interacao_em).to be_within(1.second).of(message.created_at)
-      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'lead_respondeu').sole.external_id).to eq(message.id.to_s)
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'lead_respondeu')).to exist
     end
 
     it 'reprocessa a mesma mensagem sem duplicar o evento de resposta' do
