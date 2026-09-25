@@ -5,6 +5,7 @@ json.position resource.position
 json.color resource.color
 json.probability resource.probability
 json.category resource.category
+json.engine_stage_key resource.engine_stage_key
 json.stale_after_hours resource.stale_after_hours
 json.created_at resource.created_at.to_i
 json.updated_at resource.updated_at.to_i

@@ -22,8 +22,8 @@ RSpec.describe 'Api::V1::Accounts::Sales::Stages', type: :request do
     end
 
     it 'returns stages ordered by position, scoped to the pipeline' do
-      second = create(:sales_stage, pipeline: pipeline)
-      first = create(:sales_stage, pipeline: pipeline, position: -1)
+      second = create(:sales_stage, pipeline: pipeline, engine_stage_key: 'em_acompanhamento')
+      first = create(:sales_stage, pipeline: pipeline, position: -1, engine_stage_key: 'oportunidade')
       create(:sales_stage, pipeline: create(:sales_pipeline, account: account))
 
       get "/api/v1/accounts/#{account.id}/crm/pipelines/#{pipeline.id}/stages", headers: admin.create_new_auth_token, as: :json
@@ -34,6 +34,10 @@ RSpec.describe 'Api::V1::Accounts::Sales::Stages', type: :request do
       # dashboard/stores/sales/stages.js#getStagesByPipeline). Omitting it from the serializer
       # silently empties every Kanban column client-side without any error on either side.
       expect(response.parsed_body['payload'].pluck('sales_pipeline_id')).to eq([pipeline.id, pipeline.id])
+      # The commercial action panel uses this key to decide whether it must expose the
+      # SSOT-required controls (advance, mark won, and mark lost). The stage name is editable;
+      # this key is the stable domain contract.
+      expect(response.parsed_body['payload'].pluck('engine_stage_key')).to eq(%w[oportunidade em_acompanhamento])
     end
 
     it 'returns not_found when the pipeline belongs to another account' do
