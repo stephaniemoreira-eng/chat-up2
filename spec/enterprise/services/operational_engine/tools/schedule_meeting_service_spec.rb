@@ -90,6 +90,7 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
 
     it 'falha fechada quando não consegue reler a agenda' do
       stub_request(:get, calendar_url)
+        .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))
         .to_return(status: 503, body: { error: 'Calendar indisponível' }.to_json, headers: { 'Content-Type' => 'application/json' })
 
       expect(perform).to eq(ok: false, reason: 'Calendar indisponível', falha_calendar: true)
