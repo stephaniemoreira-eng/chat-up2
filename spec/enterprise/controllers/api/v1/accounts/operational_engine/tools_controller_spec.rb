@@ -126,6 +126,9 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
     before do
       agent_tenant.update!(calendar_integration_instance_id: 'instance-1')
       lead.update!(upsales_contact_id: contact.id)
+      stub_request(:get, calendar_base)
+        .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))
+        .to_return(status: 200, body: { events: [] }.to_json, headers: { 'Content-Type' => 'application/json' })
     end
 
     it 'repetir Criar evento no mesmo turno não cria um segundo evento' do
@@ -213,6 +216,9 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
     before do
       agent_tenant.update!(calendar_integration_instance_id: 'instance-1')
       lead.update!(upsales_contact_id: contact.id)
+      stub_request(:get, calendar_base)
+        .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))
+        .to_return(status: 200, body: { events: [] }.to_json, headers: { 'Content-Type' => 'application/json' })
     end
 
     it '1ª falha + 2ª sucesso: confirma a reunião na segunda tentativa, sem callback' do

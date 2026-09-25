@@ -34,10 +34,15 @@ module OperationalEngine
         agent_tenant = @account.up_sales_agent_tenant
         return calendar_failure('agenda não conectada para esta conta') unless calendar_connected?(agent_tenant)
 
+        conflict_reason = calendar_conflict_reason(agent_tenant)
+        return calendar_failure(conflict_reason) if conflict_reason
+
         create_and_persist(lead, agent_tenant)
       rescue OperationalEngine::Tools::ResolveLeadFromConversation::NotFound => e
         { ok: false, reason: e.message }
-      rescue UpSales::Agents::CreateCalendarEventService::SyncError, *OperationalEngine::CalendarRetryAttempt::NETWORK_ERRORS => e
+      rescue UpSales::Agents::CreateCalendarEventService::SyncError,
+             UpSales::Agents::ListCalendarEventsService::SyncError,
+             *OperationalEngine::CalendarRetryAttempt::NETWORK_ERRORS => e
         # SSOT §16: falha do Calendar não pode confirmar reunião nem conversão -- nada é gravado.
         calendar_failure(e.message)
       end
@@ -66,6 +71,49 @@ module OperationalEngine
 
       def calendar_connected?(agent_tenant)
         agent_tenant.present? && agent_tenant.calendar_integration_instance_id.present?
+      end
+
+      # A lista de disponibilidade orienta a conversa, mas esta verificação protege a fronteira que
+      # efetivamente cria o compromisso. O Google Calendar aceita sobreposições; sem revalidar aqui,
+      # um modelo pode escolher um horário ocupado e ainda receber um event_id real. SSOT §3.6/§16.1:
+      # evento real só confirma reunião quando o intervalo também estava disponível no instante da escrita.
+      def calendar_conflict_reason(agent_tenant)
+        events = UpSales::Agents::ListCalendarEventsService.new(
+          agent_tenant: agent_tenant,
+          time_min: @starts_at,
+          time_max: @ends_at
+        ).perform
+
+        return 'horário indisponível na agenda' if events.any? { |event| overlaps_requested_interval?(event) }
+
+        nil
+      end
+
+      # [start, end) mantém adjacências válidas: algo que termina exatamente quando a reunião começa
+      # (ou começa exatamente quando ela termina) não é conflito. Evento sem intervalo legível falha
+      # fechado: não há base segura para declarar o horário disponível.
+      def overlaps_requested_interval?(event)
+        event_start = calendar_event_time(event, 'start')
+        event_end = calendar_event_time(event, 'end')
+        return true if event_start.nil? || event_end.nil?
+
+        event_start < requested_end && event_end > requested_start
+      end
+
+      def requested_start
+        @requested_start ||= Time.iso8601(@starts_at)
+      end
+
+      def requested_end
+        @requested_end ||= Time.iso8601(@ends_at)
+      end
+
+      def calendar_event_time(event, boundary)
+        value = event[boundary] || event[boundary.to_sym] || event["#{boundary}_at"] || event["#{boundary}s_at"]
+        value = value['dateTime'] || value['date_time'] || value['date'] if value.is_a?(Hash)
+        Time.iso8601(value) if value.present?
+      rescue ArgumentError, TypeError
+        nil
       end
 
       def create_and_persist(lead, agent_tenant)

@@ -23,7 +23,14 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
     ).call
   end
 
-  def stub_create_event(status: 200, body: { event: { 'id' => 'evt_123', 'htmlLink' => 'https://calendar.google.com/evt_123' } })
+  def stub_calendar_events(events = [])
+    stub_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')
+      .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))
+      .to_return(status: 200, body: { events: events }.to_json, headers: { 'Content-Type' => 'application/json' })
+  end
+
+  def stub_create_event(status: 200, body: { event: { 'id' => 'evt_123', 'htmlLink' => 'https://calendar.google.com/evt_123' } }, events: [])
+    stub_calendar_events(events)
     stub_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
@@ -48,6 +55,49 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
     result = perform
 
     expect(result).to eq(ok: false, reason: 'agenda não conectada para esta conta', falha_calendar: true)
+  end
+
+  describe 'disponibilidade no instante da escrita (F-RT-01)' do
+    let(:calendar_url) { 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events' }
+
+    def busy_event(starts_at:, ends_at:)
+      { 'id' => 'busy_1', 'start' => { 'dateTime' => starts_at }, 'end' => { 'dateTime' => ends_at } }
+    end
+
+    it 'recusa sobreposição total sem criar evento nem confirmar' do
+      stub_calendar_events([busy_event(starts_at: '2026-09-22T14:00:00-03:00', ends_at: '2026-09-22T14:30:00-03:00')])
+
+      expect(perform).to eq(ok: false, reason: 'horário indisponível na agenda', falha_calendar: true)
+      expect(a_request(:post, calendar_url)).not_to have_been_made
+      expect(lead.reload.agendamento_status).to eq('nao_iniciado')
+      expect(lead.calendar_event_id).to be_nil
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'reuniao_agendada')).to be_empty
+    end
+
+    it 'recusa sobreposição parcial sem criar evento' do
+      stub_calendar_events([busy_event(starts_at: '2026-09-22T13:45:00-03:00', ends_at: '2026-09-22T14:15:00-03:00')])
+
+      expect(perform).to eq(ok: false, reason: 'horário indisponível na agenda', falha_calendar: true)
+      expect(a_request(:post, calendar_url)).not_to have_been_made
+    end
+
+    it 'permite intervalo adjacente, sem sobreposição' do
+      adjacent = busy_event(starts_at: '2026-09-22T13:30:00-03:00', ends_at: '2026-09-22T14:00:00-03:00')
+      stub_create_event(events: [adjacent])
+
+      expect(perform).to eq(ok: true, event_id: 'evt_123')
+    end
+
+    it 'falha fechada quando não consegue reler a agenda' do
+      stub_request(:get, calendar_url)
+        .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))
+        .to_return(status: 503, body: { error: 'Calendar indisponível' }.to_json, headers: { 'Content-Type' => 'application/json' })
+
+      expect(perform).to eq(ok: false, reason: 'Calendar indisponível', falha_calendar: true)
+      expect(a_request(:post, calendar_url)).not_to have_been_made
+      expect(lead.reload.agendamento_status).to eq('nao_iniciado')
+      expect(lead.calendar_event_id).to be_nil
+    end
   end
 
   it 'cria o evento real e confirma o agendamento (SSOT §16)' do
