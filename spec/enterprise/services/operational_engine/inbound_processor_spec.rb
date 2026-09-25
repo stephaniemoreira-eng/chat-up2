@@ -97,12 +97,22 @@ RSpec.describe OperationalEngine::InboundProcessor do
       expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'nova_entrada').count).to eq(1)
     end
 
-    it 'na mesma inbox de sempre, so atualiza ultima_interacao_em sem gravar evento' do
+    it 'na mesma inbox de sempre, atualiza ultima_interacao_em e registra a resposta do lead' do
       lead.update!(inbox_atual_id: conversation.inbox_id)
       message = build_message
 
-      expect { described_class.call(message: message) }.not_to change(OperationalEngine::LeadEvent, :count)
+      expect { described_class.call(message: message) }.to change(OperationalEngine::LeadEvent, :count).by(1)
       expect(lead.reload.ultima_interacao_em).to be_within(1.second).of(message.created_at)
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'lead_respondeu')).to exist
+    end
+
+    it 'reprocessa a mesma mensagem sem duplicar o evento de resposta' do
+      lead.update!(inbox_atual_id: conversation.inbox_id)
+      message = build_message
+
+      2.times { described_class.call(message: message) }
+
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'lead_respondeu').count).to eq(1)
     end
 
     it 'tambem sincroniza o card Comercial (Fase 9) quando o lead ja e uma oportunidade' do
@@ -201,7 +211,7 @@ RSpec.describe OperationalEngine::InboundProcessor do
       described_class.call(message: build_message)
       described_class.call(message: build_message)
 
-      expect(events('lead_respondeu').count).to eq(1)
+      expect(events('lead_respondeu').count).to eq(2)
       expect(lead.reload.etapa_prospect).to eq('em_conversa')
     end
 
