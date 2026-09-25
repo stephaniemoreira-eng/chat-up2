@@ -90,8 +90,9 @@ module OperationalEngine
     end
 
     # §5.4: nova origem não duplica o lead nem sobrescreve origem_lead (write-once, garantido no
-    # banco); só atualiza onde o lead está sendo operado agora e registra a ocorrência. Mesma
-    # inbox de sempre -> só toca ultima_interacao_em, sem evento (não é um fato de negócio novo).
+    # banco); só atualiza onde o lead está sendo operado agora e registra a ocorrência. Cada
+    # mensagem inbound é um fato operacional e deve manter a trilha append-only em lead_events;
+    # o conteúdo completo continua exclusivamente no UpSales (§7.2).
     #
     # CP-08 (P1-VAL-01; SSOT §11.3, teste 28.3): a primeira resposta real de um lead Contatado o
     # leva para Em conversa sob o lock do lead (mesmo lock do OutboundSendGate/TakeoverService) --
@@ -99,6 +100,7 @@ module OperationalEngine
     def handle_existing(lead)
       lead.with_lock do
         mudou_de_inbox = lead.inbox_atual_id != @inbox.id
+        inbound_from_backlog = lead.etapa_prospect_backlog? && lead.lead_status_ativo?
         lead.update!(
           ultima_interacao_em: @message.created_at,
           upsales_conversation_atual_id: @conversation.id,
@@ -106,9 +108,13 @@ module OperationalEngine
         )
         # Antes do nova_entrada genérico de propósito: mesma chave de idempotência (tipo + message_id),
         # então o evento que fica é o da entrada na operação, com o modo e o motivo.
-        register_backlog_inbound(lead) if lead.etapa_prospect_backlog? && lead.lead_status_ativo?
+        register_backlog_inbound(lead) if inbound_from_backlog
         write_event(lead, 'nova_entrada', inbox_atual_id: @inbox.id) if mudou_de_inbox
-        register_outbound_reply(lead) if lead.etapa_prospect_contatado?
+        if lead.etapa_prospect_contatado?
+          register_outbound_reply(lead)
+        elsif !inbound_from_backlog
+          write_event(lead, 'lead_respondeu', message_id: @message.id)
+        end
         register_recovery_reply(lead)
         OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'inbound')
       end
