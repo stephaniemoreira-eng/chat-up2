@@ -43,9 +43,14 @@ module Chatwoot
     config.eager_load_paths << Rails.root.join('lib')
     config.eager_load_paths << Rails.root.join('enterprise/lib')
     config.eager_load_paths << Rails.root.join('enterprise/listeners')
-    # rubocop:disable Rails/FilePath
-    config.eager_load_paths += Dir["#{Rails.root}/enterprise/app/**"]
-    # rubocop:enable Rails/FilePath
+
+    # Os módulos Enterprise também precisam carregar no test/development, em que Rails não faz
+    # eager load. Compartilhar as duas listas mantém os namespaces (por exemplo,
+    # UpSales::AgentTenant) disponíveis para controllers, rake tasks e factories em todos os
+    # ambientes.
+    enterprise_app_paths = Dir[Rails.root.join('enterprise/app/*')]
+    config.autoload_paths += enterprise_app_paths
+    config.eager_load_paths += enterprise_app_paths
     # Add enterprise views to the view paths
     config.paths['app/views'].unshift('enterprise/app/views')
 
