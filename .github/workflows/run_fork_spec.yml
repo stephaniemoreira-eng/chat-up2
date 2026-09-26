@@ -48,6 +48,7 @@ env:
     spec/enterprise/controllers/enterprise/api/v1/accounts/conversations/messages_controller_spec.rb
     spec/enterprise/controllers/super_admin
     spec/enterprise/lib/tasks/rake/task_up_sales_spec.rb
+    spec/enterprise/helpers/super_admin/account_features_helper_spec.rb
 
 jobs:
   backend:
