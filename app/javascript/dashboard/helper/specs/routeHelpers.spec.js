@@ -24,7 +24,9 @@ describe('#defaultRedirectPage', () => {
 
   it('should return dashboard route for users with conversation permissions', () => {
     const permissions = ['conversation_manage', 'agent'];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe(
+      'accounts/2/up-sales/dashboard'
+    );
   });
 
   it('should return contacts route for users with contact permissions', () => {
@@ -46,12 +48,16 @@ describe('#defaultRedirectPage', () => {
 
   it('should return dashboard route as default for users with custom roles', () => {
     const permissions = ['custom_role'];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe(
+      'accounts/2/up-sales/dashboard'
+    );
   });
 
   it('should return dashboard route for users with administrator role', () => {
     const permissions = ['administrator'];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe(
+      'accounts/2/up-sales/dashboard'
+    );
   });
 
   it('should return dashboard route for users with multiple permissions', () => {
@@ -62,7 +68,9 @@ describe('#defaultRedirectPage', () => {
       'agent',
       'administrator',
     ];
-    expect(defaultRedirectPage(to, permissions)).toBe('accounts/2/up-sales/dashboard');
+    expect(defaultRedirectPage(to, permissions)).toBe(
+      'accounts/2/up-sales/dashboard'
+    );
   });
 });
 

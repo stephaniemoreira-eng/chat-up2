@@ -74,9 +74,7 @@ defineExpose({ dialogRef, onSuccess, open });
   <Dialog
     ref="dialogRef"
     :title="
-      isEditMode
-        ? t('CRM.STAGE.EDIT.TITLE')
-        : t('CRM.STAGE.CREATE.TITLE')
+      isEditMode ? t('CRM.STAGE.EDIT.TITLE') : t('CRM.STAGE.CREATE.TITLE')
     "
     width="sm"
     @confirm="handleConfirm"

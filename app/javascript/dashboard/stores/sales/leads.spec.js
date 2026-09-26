@@ -134,7 +134,12 @@ describe('salesLeads store', () => {
   describe('#fetchTimeline', () => {
     it('returns the timeline payload from the API', async () => {
       SalesLeadsAPI.timeline.mockResolvedValueOnce({
-        data: { payload: { entries: [{ id: 1, type: 'activity' }], next_before: null } },
+        data: {
+          payload: {
+            entries: [{ id: 1, type: 'activity' }],
+            next_before: null,
+          },
+        },
       });
 
       const store = useSalesLeadsStore();
@@ -151,12 +156,22 @@ describe('salesLeads store', () => {
       await seedLead(store);
 
       SalesLeadsAPI.updateSummary.mockResolvedValueOnce({
-        data: { payload: { id: 1, sales_stage_id: 10, position: 0, summary: 'Novo resumo' } },
+        data: {
+          payload: {
+            id: 1,
+            sales_stage_id: 10,
+            position: 0,
+            summary: 'Novo resumo',
+          },
+        },
       });
 
       await store.updateSummary({ id: 1, summary: 'Novo resumo' });
 
-      expect(SalesLeadsAPI.updateSummary).toHaveBeenCalledWith(1, 'Novo resumo');
+      expect(SalesLeadsAPI.updateSummary).toHaveBeenCalledWith(
+        1,
+        'Novo resumo'
+      );
       expect(store.getRecord(1).summary).toBe('Novo resumo');
     });
   });
@@ -167,7 +182,14 @@ describe('salesLeads store', () => {
       await seedLead(store);
 
       SalesLeadsAPI.registerCallbackRealizado.mockResolvedValueOnce({
-        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: [] } } },
+        data: {
+          payload: {
+            id: 1,
+            sales_stage_id: 10,
+            position: 0,
+            custom_attributes: { engine_tags: [] },
+          },
+        },
       });
 
       await store.registerCallbackRealizado({ id: 1 });
@@ -183,13 +205,22 @@ describe('salesLeads store', () => {
       await seedLead(store);
 
       SalesLeadsAPI.registerNoShow.mockResolvedValueOnce({
-        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['no_show'] } } },
+        data: {
+          payload: {
+            id: 1,
+            sales_stage_id: 10,
+            position: 0,
+            custom_attributes: { engine_tags: ['no_show'] },
+          },
+        },
       });
 
       await store.registerNoShow({ id: 1 });
 
       expect(SalesLeadsAPI.registerNoShow).toHaveBeenCalledWith(1);
-      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['no_show']);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual([
+        'no_show',
+      ]);
     });
   });
 
@@ -199,13 +230,22 @@ describe('salesLeads store', () => {
       await seedLead(store);
 
       SalesLeadsAPI.setPropensao.mockResolvedValueOnce({
-        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['quente'] } } },
+        data: {
+          payload: {
+            id: 1,
+            sales_stage_id: 10,
+            position: 0,
+            custom_attributes: { engine_tags: ['quente'] },
+          },
+        },
       });
 
       await store.setPropensao({ id: 1, propensaoFechamento: 'quente' });
 
       expect(SalesLeadsAPI.setPropensao).toHaveBeenCalledWith(1, 'quente');
-      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['quente']);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual([
+        'quente',
+      ]);
     });
   });
 
@@ -238,13 +278,22 @@ describe('salesLeads store', () => {
       await seedLead(store);
 
       SalesLeadsAPI.assumir.mockResolvedValueOnce({
-        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['humano'] } } },
+        data: {
+          payload: {
+            id: 1,
+            sales_stage_id: 10,
+            position: 0,
+            custom_attributes: { engine_tags: ['humano'] },
+          },
+        },
       });
 
       await store.assumir({ id: 1 });
 
       expect(SalesLeadsAPI.assumir).toHaveBeenCalledWith(1);
-      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['humano']);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual([
+        'humano',
+      ]);
     });
   });
 
@@ -254,13 +303,22 @@ describe('salesLeads store', () => {
       await seedLead(store);
 
       SalesLeadsAPI.devolver.mockResolvedValueOnce({
-        data: { payload: { id: 1, sales_stage_id: 10, position: 0, custom_attributes: { engine_tags: ['lavinia'] } } },
+        data: {
+          payload: {
+            id: 1,
+            sales_stage_id: 10,
+            position: 0,
+            custom_attributes: { engine_tags: ['lavinia'] },
+          },
+        },
       });
 
       await store.devolver({ id: 1 });
 
       expect(SalesLeadsAPI.devolver).toHaveBeenCalledWith(1);
-      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual(['lavinia']);
+      expect(store.getRecord(1).custom_attributes.engine_tags).toEqual([
+        'lavinia',
+      ]);
     });
   });
 });
