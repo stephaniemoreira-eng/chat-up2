@@ -11,7 +11,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
 
   context 'lead nasceu no Backlog (outbound, §10.5)' do
     let!(:lead) do
-      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog')
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'outbound', etapa_prospect: 'backlog')
     end
 
     it 'confirma o primeiro contato e move pra contatado' do
@@ -49,17 +49,19 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
 
   context 'lead nasceu inbound (já em em_conversa, nunca passou por backlog)' do
     let!(:lead) do
-      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'em_conversa')
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'inbound', etapa_prospect: 'em_conversa')
     end
 
-    it 'confirma o primeiro contato sem mexer em etapa_prospect' do
+    it 'não contabiliza a resposta da Lavínia como primeiro contato outbound e preserva o Recovery' do
       message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
 
+      expect(OperationalEngine::RecoveryCycle).to receive(:on_send_confirmed).with(lead, message)
       perform(message)
 
       lead.reload
-      expect(lead.primeiro_contato_em).to be_present
+      expect(lead.primeiro_contato_em).to be_nil
       expect(lead.etapa_prospect).to eq('em_conversa')
+      expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'primeiro_contato_enviado')).to be_empty
     end
   end
 
@@ -82,7 +84,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
   # CP-02 -- P1-019-01, P1-019-02, P0-019-01, P2-019-01 (SSOT §9, §10.6, §28.1).
   describe 'confirmação operacional completa e recuperável' do
     let!(:lead) do
-      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog',
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'outbound', etapa_prospect: 'backlog',
                                       upsales_contact_id: contact.id)
     end
     let(:message) { create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc') }
@@ -143,13 +145,15 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
 
   it 'lead inbound: primeiro envio outbound não sobrescreve entrada_operacao_em nem gera etapa_alterada falso' do
     original = 2.days.ago.change(usec: 0)
-    lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'em_conversa',
+    lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'inbound', etapa_prospect: 'em_conversa',
                                            entrada_operacao_em: original)
     message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.in')
 
     perform(message)
 
     expect(lead.reload.entrada_operacao_em).to eq(original)
+    expect(lead.reload.primeiro_contato_em).to be_nil
+    expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'primeiro_contato_enviado')).to be_empty
     expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'etapa_alterada')).to be_empty
   end
 end
