@@ -83,7 +83,9 @@ describe OperationalEngineListener do
 
   describe 'confirmação de envio (Fase 6, §10.6, S-7)' do
     let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
-    let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog') }
+    let!(:lead) do
+      OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'outbound', etapa_prospect: 'backlog')
+    end
 
     it 'source_id saindo de nulo pra presente numa mensagem outgoing aciona a confirmação' do
       outgoing = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
