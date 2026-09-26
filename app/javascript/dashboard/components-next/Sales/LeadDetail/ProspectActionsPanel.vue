@@ -18,7 +18,9 @@ const isHuman = computed(() => props.engineTags.includes('humano'));
 </script>
 
 <template>
-  <div class="flex items-center justify-between gap-3 p-3 border rounded-lg border-n-weak bg-n-alpha-1">
+  <div
+    class="flex items-center justify-between gap-3 p-3 border rounded-lg border-n-weak bg-n-alpha-1"
+  >
     <span class="text-sm text-n-slate-11">
       {{
         isHuman

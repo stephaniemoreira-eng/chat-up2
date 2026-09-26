@@ -10,7 +10,7 @@ defineProps({
   hasMore: { type: Boolean, default: false },
 });
 
-defineEmits(['load-more']);
+defineEmits(['loadMore']);
 
 const { t } = useI18n();
 
@@ -79,7 +79,7 @@ const stageTransitionLabel = entry =>
       color="slate"
       size="sm"
       :is-loading="isLoading"
-      @click="$emit('load-more')"
+      @click="$emit('loadMore')"
     />
   </div>
 </template>
