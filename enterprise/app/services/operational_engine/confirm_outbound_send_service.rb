@@ -43,7 +43,10 @@ module OperationalEngine
       return if lead.nil?
 
       lead.with_lock do
-        if lead.primeiro_contato_em.nil?
+        # §9/§10.6: primeiro_contato_em é exclusivamente a primeira abordagem de um lead
+        # outbound ainda no Backlog. Uma resposta da Lavínia a um inbound também recebe source_id
+        # e precisa passar pelo RecoveryCycle abaixo, mas não pode converter esse fato em outbound.
+        if first_outbound_contact?(lead)
           record_first_contact(lead)
           OperationalEngine::ProjectionReconciler.request!(lead, motivo: 'primeiro_contato')
         end
@@ -60,6 +63,10 @@ module OperationalEngine
     end
 
     private
+
+    def first_outbound_contact?(lead)
+      lead.primeiro_contato_em.nil? && lead.modo_entrada == 'outbound' && lead.etapa_prospect_backlog?
+    end
 
     def record_first_contact(lead)
       now = Time.current
