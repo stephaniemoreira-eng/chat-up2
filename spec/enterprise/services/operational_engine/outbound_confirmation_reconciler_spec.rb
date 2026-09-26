@@ -4,7 +4,9 @@ require 'rails_helper'
 RSpec.describe OperationalEngine::OutboundConfirmationReconciler do
   let(:account) { create(:account) }
   let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
-  let!(:lead) { OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, etapa_prospect: 'backlog') }
+  let!(:lead) do
+    OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'outbound', etapa_prospect: 'backlog')
+  end
   let(:conversation) do
     create(:conversation, account: account, contact: contact,
                           additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
