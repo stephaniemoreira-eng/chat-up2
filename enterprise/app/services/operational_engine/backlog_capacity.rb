@@ -4,11 +4,8 @@
 # cálculo é sempre relativo a AGORA, nunca tenta recuperar capacidade não usada de uma janela
 # que já fechou.
 #
-# Parâmetros hardcoded aqui de propósito, não espalhados pelo dispatcher (Fase 6, ainda não
-# escrito): "centralizados/configuráveis, não duplicados em prompt ou múltiplos arquivos" (§25)
-# significa UMA fonte, não necessariamente já uma tabela editável -- só existe um cliente
-# operacional (Lava e Pronto) hoje. `conta_id` já entra na assinatura pra não forçar reescrever
-# todo chamador quando isso virar configuração por conta de verdade.
+# Parâmetros centralizados nesta fonte: ainda existe somente um cliente operacional, mas conta_id
+# já faz parte da assinatura para permitir configuração por conta no futuro.
 module OperationalEngine
   class BacklogCapacity
     TIMEZONE = 'America/Sao_Paulo'
@@ -19,20 +16,26 @@ module OperationalEngine
     ].freeze
     DIAS_OPERACIONAIS = (1..5) # Date#wday: 0=domingo..6=sábado
 
+    # TEST-WINDOW-01: exceção temporária de homologação. O comportamento padrão continua sendo
+    # o SSOT; a exceção só é habilitada por três variáveis e expira de forma fechada.
+    TEST_OVERRIDE_ENABLED_ENV = 'OPERATIONAL_ENGINE_TEST_OVERRIDE_ENABLED'
+    TEST_OVERRIDE_MODE_ENV = 'OPERATIONAL_ENGINE_TEST_WINDOW_OVERRIDE'
+    TEST_OVERRIDE_UNTIL_ENV = 'OPERATIONAL_ENGINE_TEST_WINDOW_OVERRIDE_UNTIL'
+    TEST_OVERRIDE_FULL_DAY = 'full_day'
+
     def self.disponivel(conta_id:, agora: Time.current)
       new(conta_id: conta_id, agora: agora).disponivel
     end
 
     def initialize(conta_id:, agora: Time.current)
       @conta_id = conta_id
-      # Timezone explícito, não confia no Time.zone global do processo (que aqui é UTC por
-      # padrão) -- horário de negócio é sempre América/São Paulo, deploy ou timezone da máquina
-      # não devem poder mudar em que hora o dispatcher liga.
+      # Horário de negócio é sempre América/São Paulo, independente do timezone do processo.
       @agora = agora.in_time_zone(TIMEZONE)
     end
 
     def disponivel
       return 0 unless dia_operacional?
+      return restante_no_dia if test_window_override_active?
 
       janela = janela_atual
       return 0 if janela.nil?
@@ -44,6 +47,15 @@ module OperationalEngine
 
     def dia_operacional?
       DIAS_OPERACIONAIS.cover?(@agora.wday)
+    end
+
+    def test_window_override_active?
+      return false unless ENV[TEST_OVERRIDE_ENABLED_ENV] == 'true'
+      return false unless ENV[TEST_OVERRIDE_MODE_ENV] == TEST_OVERRIDE_FULL_DAY
+
+      Time.iso8601(ENV.fetch(TEST_OVERRIDE_UNTIL_ENV)).in_time_zone(TIMEZONE) >= @agora
+    rescue ArgumentError, KeyError, TypeError
+      false
     end
 
     def janela_atual
@@ -68,8 +80,6 @@ module OperationalEngine
       @agora.change(hour: minutos_desde_meia_noite / 60, min: minutos_desde_meia_noite % 60, sec: 0)
     end
 
-    # §10.6: primeiro_contato_em só é gravado quando o provedor confirma envio real -- essa é a
-    # definição operacional de "ativação", não a criação do lead nem uma tentativa qualquer.
     def ativados_entre(inicio, fim)
       OperationalEngine::Lead.where(conta_id: @conta_id, primeiro_contato_em: inicio..fim).count
     end
