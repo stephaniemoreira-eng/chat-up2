@@ -24,7 +24,7 @@ RSpec.describe OperationalEngine::Dispatcher do
   end
 
   def stub_originate(status: 200, body: { ok: true, outcome: 'posted' })
-    stub_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+    stub_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
 
@@ -47,7 +47,7 @@ RSpec.describe OperationalEngine::Dispatcher do
     expect(conversation.messages).to be_empty # quem manda a mensagem e o up2-agents, nao este service
 
     expect(
-      a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+      a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
         .with(body: hash_including('chatwootConversationId' => conversation.display_id))
     ).to have_been_made.once
 
@@ -64,7 +64,7 @@ RSpec.describe OperationalEngine::Dispatcher do
     described_class.call(conta_id: account.id)
 
     expect(
-      a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+      a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
     ).to have_been_made.once
   end
 
@@ -75,7 +75,7 @@ RSpec.describe OperationalEngine::Dispatcher do
 
     described_class.call(conta_id: account.id)
 
-    expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
+    expect(a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
   end
 
   it 'pula a conta quando nao ha slot sdr configurado (sem agente de prospeccao no up2-agents)' do
@@ -85,7 +85,7 @@ RSpec.describe OperationalEngine::Dispatcher do
 
     described_class.call(conta_id: account.id)
 
-    expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
+    expect(a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
   end
 
   it 'pula um lead com nao_contatar=true' do
@@ -94,7 +94,7 @@ RSpec.describe OperationalEngine::Dispatcher do
 
     described_class.call(conta_id: account.id)
 
-    expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
+    expect(a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')).not_to have_been_made
   end
 
   it 'registra um LeadEvent quando a origination falha, sem propagar o erro' do
@@ -115,7 +115,7 @@ RSpec.describe OperationalEngine::Dispatcher do
     # Simula o up2-agents: durante a "geracao" um fato novo pode entrar; depois ele tenta gravar a
     # abertura pelo mesmo caminho do post real (OutboundSendGate).
     def stub_originate_posting(before_post: nil)
-      stub_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate').to_return do
+      stub_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate').to_return do
         before_post&.call
         conversation = Conversation.find_by!(account_id: account.id, inbox_id: inbox.id)
         OperationalEngine::OutboundSendGate.authorize!(conversation: conversation) do
@@ -144,7 +144,7 @@ RSpec.describe OperationalEngine::Dispatcher do
       expect(activation.activation_id).to be_present
       # CP-03 (P1-022-02): a mesma identidade vai para o up2-agents (Snapshot primeiro_contato + turn_id).
       expect(
-        a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+        a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
           .with(body: hash_including('activationId' => activation.activation_id))
       ).to have_been_made.once
     end
@@ -195,7 +195,7 @@ RSpec.describe OperationalEngine::Dispatcher do
 
   # CP-02 -- P1-024-01, P1-024-02, P1-024-03, P1-024-04, P0-022-01, P2-024-01.
   describe 'fila outbound confiável' do
-    let(:originate_url) { 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate' }
+    let(:originate_url) { 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate' }
     let(:json) { { 'Content-Type' => 'application/json' } }
 
     def ok_response
