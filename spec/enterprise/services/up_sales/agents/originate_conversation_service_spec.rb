@@ -1,5 +1,6 @@
 require 'rails_helper'
 
+
 RSpec.describe UpSales::Agents::OriginateConversationService do
   let(:account) { create(:account) }
   let(:agent_tenant) { create(:up_sales_agent_tenant, account: account) }
@@ -14,7 +15,7 @@ RSpec.describe UpSales::Agents::OriginateConversationService do
   end
 
   def stub_originate(status: 200, body: { ok: true, outcome: 'posted' })
-    stub_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+    stub_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
 
@@ -24,7 +25,7 @@ RSpec.describe UpSales::Agents::OriginateConversationService do
     perform
 
     expect(
-      a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
+      a_request(:post, 'https://novo-agents.up2aceleradora.com.br/api/v1/chatwoot/originate')
         .with(
           headers: { 'Authorization' => "Bearer #{agent_tenant.api_key}" },
           body: hash_including(
