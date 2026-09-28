@@ -93,10 +93,11 @@ module OperationalEngine
     # Lock 2 (Postgres nativo, conexão própria) -- protege contra o dispatcher rodando duas vezes
     # concorrentemente e criando duas conversas pro mesmo lead.
     #
-    # CP-02 (P1-024-01): conversa existente não é mais "já reivindicado para sempre" -- se ela carrega
-    # uma ativação AINDA autorizada deste lead (tentativa anterior falhou antes da abertura sair), a
-    # mesma ativação é retomada na mesma conversa. Abertura já gravada, ativação invalidada/esgotada
-    # ou conversa sem ativação (histórica, humana) nunca são reoriginadas.
+    # CP-02 (P1-024-01): uma ativação ainda autorizada deste lead é retomada na
+    # mesma conversa. Ativação já gravada, invalidada ou esgotada continua terminal e
+    # não é reoriginada. Já uma conversa histórica sem ativação do Engine não é uma
+    # reivindicação: ela é preservada e a abertura nasce em uma nova conversa, para
+    # que a migração de contatos legados não bloqueie silenciosamente o Backlog.
     def claim_or_resume(lead)
       contact_inbox = ContactInboxWithContactBuilder.new(
         inbox: agent_tenant.whatsapp_inbox,
@@ -106,9 +107,15 @@ module OperationalEngine
       result = nil
       ActiveRecord::Base.transaction do
         contact_inbox.lock!
-        conversation = contact_inbox.reload.conversations.order(:id).last || create_conversation(contact_inbox, lead)
-        activation = OperationalEngine::OriginationActivation.for(conversation)
-        next unless activation&.authorized? && activation.lead_id == lead.lead_id
+        conversation = contact_inbox.reload.conversations.order(:id).last
+        activation = OperationalEngine::OriginationActivation.for(conversation) if conversation
+
+        if activation
+          next unless activation.authorized? && activation.lead_id == lead.lead_id
+        else
+          conversation = create_conversation(contact_inbox, lead)
+          activation = OperationalEngine::OriginationActivation.for(conversation)
+        end
 
         result = { contact_inbox: contact_inbox, conversation: conversation, activation: activation }
       end
