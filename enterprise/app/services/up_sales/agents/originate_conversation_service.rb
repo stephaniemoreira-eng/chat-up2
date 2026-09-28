@@ -57,6 +57,6 @@ class UpSales::Agents::OriginateConversationService
   end
 
   def api_base_url
-    GlobalConfigService.load('UP2_AGENTS_API_URL', 'https://agents.up2aceleradora.com.br/api')
+    GlobalConfigService.load('UP2_AGENTS_API_URL', 'https://novo-agents.up2aceleradora.com.br/api')
   end
 end
