@@ -15,6 +15,13 @@ module OperationalEngine
     DIAS_UTEIS = (1..5) # Date#wday: 0=domingo..6=sábado
     OFFSET = /\A(\d+)(h|d|bd)\z/
 
+    # TEST-WINDOW-01: a mesma exceção temporária de homologação da primeira abordagem.
+    # Ela só vale em dias úteis e expira fechada; fora dela, a janela do SSOT permanece intacta.
+    TEST_OVERRIDE_ENABLED_ENV = 'OPERATIONAL_ENGINE_TEST_OVERRIDE_ENABLED'
+    TEST_OVERRIDE_MODE_ENV = 'OPERATIONAL_ENGINE_TEST_WINDOW_OVERRIDE'
+    TEST_OVERRIDE_UNTIL_ENV = 'OPERATIONAL_ENGINE_TEST_WINDOW_OVERRIDE_UNTIL'
+    TEST_OVERRIDE_FULL_DAY = 'full_day'
+
     class InvalidOffset < ArgumentError; end
 
     # §25 janela_recuperacao_inicio/fim -- configuração operacional, padrão = SSOT.
@@ -28,6 +35,8 @@ module OperationalEngine
 
     def self.within_window?(time)
       local = time.in_time_zone(TIMEZONE)
+      return true if test_window_override_active?(local)
+
       DIAS_UTEIS.cover?(local.wday) && minute_of_day(local) >= window_start_min && minute_of_day(local) < window_end_min
     end
 
@@ -44,7 +53,7 @@ module OperationalEngine
     end
 
     # Aplica um offset de cadência ("2h", "3d", "1bd") a partir do baseline -- sem janela (ver
-    # next_window_at). `bd` = dia útil: avança dia a dia pulando sábado/domingo, mantendo a hora.
+    # next_window_at). bd = dia útil: avança dia a dia pulando sábado/domingo, mantendo a hora.
     def self.shift(baseline, token)
       match = OFFSET.match(token.to_s.strip)
       raise InvalidOffset, "offset inválido: #{token.inspect}" if match.nil?
@@ -68,6 +77,16 @@ module OperationalEngine
         local += 1.day until DIAS_UTEIS.cover?(local.wday)
       end
       local
+    end
+
+    def self.test_window_override_active?(local)
+      return false unless DIAS_UTEIS.cover?(local.wday)
+      return false unless ENV[TEST_OVERRIDE_ENABLED_ENV] == 'true'
+      return false unless ENV[TEST_OVERRIDE_MODE_ENV] == TEST_OVERRIDE_FULL_DAY
+
+      Time.iso8601(ENV.fetch(TEST_OVERRIDE_UNTIL_ENV)).in_time_zone(TIMEZONE) >= local
+    rescue ArgumentError, KeyError, TypeError
+      false
     end
 
     def self.minute_of_day(local)
