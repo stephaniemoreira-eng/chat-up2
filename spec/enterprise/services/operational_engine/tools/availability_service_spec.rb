@@ -37,6 +37,7 @@ RSpec.describe OperationalEngine::Tools::AvailabilityService do
 
     it 'falha fechada quando o calendário devolve evento sem intervalo' do
       stub_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')
+        .with(query: hash_including('timeMin' => '2026-09-22T00:00:00-03:00'))
         .to_return(status: 200, body: { events: [{ 'id' => 'evt_1' }] }.to_json, headers: { 'Content-Type' => 'application/json' })
 
       expect(perform).to eq(ok: false, reason: 'agenda retornou evento sem intervalo verificável')
