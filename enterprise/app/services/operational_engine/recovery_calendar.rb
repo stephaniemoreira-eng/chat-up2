@@ -13,7 +13,7 @@ module OperationalEngine
   class RecoveryCalendar
     TIMEZONE = 'America/Sao_Paulo'.freeze
     DIAS_UTEIS = (1..5) # Date#wday: 0=domingo..6=sábado
-    OFFSET = /\A(\d+)(h|d|bd)\z/
+    OFFSET = /\A([1-9]\d*)(h|d|bd)\z/
 
     # TEST-WINDOW-01: a mesma exceção temporária de homologação da primeira abordagem.
     # Ela só vale em dias úteis e expira fechada; fora dela, a janela do SSOT permanece intacta.

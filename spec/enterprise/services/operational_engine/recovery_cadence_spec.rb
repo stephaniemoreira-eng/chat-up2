@@ -73,6 +73,9 @@ RSpec.describe OperationalEngine::RecoveryCadence do
 
       ENV['UP_SALES_RECOVERY_CADENCE_CONVERSAVA'] = '1h,lixo'
       expect(described_class.offsets('conversava')).to eq(%w[2h 1bd 3d])
+
+      ENV['UP_SALES_RECOVERY_CADENCE_CONVERSAVA'] = '0h,1bd,3d'
+      expect(described_class.offsets('conversava')).to eq(%w[2h 1bd 3d])
     end
 
     it 'janela, folga do esgotamento e teto diário são configuráveis' do
