@@ -40,6 +40,7 @@ RSpec.describe OperationalEngine::Tools::AvailabilityService do
 
     it 'recusa uma resposta sem slots verificáveis' do
       stub_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/availability')
+        .with(query: hash_including('timeMin' => '2026-09-22T00:00:00-03:00'))
         .to_return(status: 200, body: { availability: { events: [] } }.to_json, headers: { 'Content-Type' => 'application/json' })
 
       expect(perform).to eq(ok: false, reason: 'agenda devolveu disponibilidade inválida')
