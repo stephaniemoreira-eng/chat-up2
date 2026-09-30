@@ -70,6 +70,24 @@ RSpec.describe 'Api::V1::Accounts::OperationalEngine::Tools', type: :request do
   end
 
   describe 'GET availability' do
+    it 'expõe apenas slots verificados, nunca eventos ocupados como disponibilidade' do
+      service = instance_double(OperationalEngine::Tools::AvailabilityService)
+      allow(OperationalEngine::Tools::AvailabilityService).to receive(:new).and_return(service)
+      allow(service).to receive(:call).and_return(
+        ok: true,
+        slots: [{ 'start' => '2026-09-22T14:00:00-03:00', 'end' => '2026-09-22T14:30:00-03:00', 'label' => 'seg 22/09 14:00' }]
+      )
+
+      get "/api/v1/accounts/#{account.id}/operational_engine/tools/availability",
+          headers: valid_headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to eq(
+        'ok' => true,
+        'slots' => [{ 'start' => '2026-09-22T14:00:00-03:00', 'end' => '2026-09-22T14:30:00-03:00', 'label' => 'seg 22/09 14:00' }]
+      )
+    end
+
     it 'reflete o resultado do service' do
       get "/api/v1/accounts/#{account.id}/operational_engine/tools/availability",
           headers: valid_headers, as: :json

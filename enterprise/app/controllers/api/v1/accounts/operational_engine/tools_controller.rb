@@ -103,7 +103,7 @@ class Api::V1::Accounts::OperationalEngine::ToolsController < Api::V1::Accounts:
       time_max: params[:time_max]
     ).call
 
-    render_tool_result(result, ok_payload: ->(r) { { events: r[:events], slots: r[:slots] } })
+    render_tool_result(result, ok_payload: ->(r) { { slots: r[:slots] } })
   end
 
   private
