@@ -6,6 +6,16 @@
 module OperationalEngine
   module Tools
     class ScheduleMeetingService
+      # VAL-01: falha controlada, com escopo fechado, para certificar o fallback CP-16B em
+      # homologação sem alterar a agenda real. Só existe quando todos os quatro valores batem:
+      # habilitação explícita, conta, conversa e prazo futuro. Fora desse caso, o caminho é o
+      # mesmo de sempre. A falha acontece depois da consulta de conflito, portanto a leitura de
+      # disponibilidade segue real e somente a escrita é simulada.
+      TEST_CREATE_FAILURE_ENABLED_ENV = 'OPERATIONAL_ENGINE_TEST_CALENDAR_CREATE_FAILURE_ENABLED'
+      TEST_CREATE_FAILURE_ACCOUNT_ENV = 'OPERATIONAL_ENGINE_TEST_CALENDAR_CREATE_FAILURE_ACCOUNT_ID'
+      TEST_CREATE_FAILURE_CONVERSATION_ENV = 'OPERATIONAL_ENGINE_TEST_CALENDAR_CREATE_FAILURE_CONVERSATION_ID'
+      TEST_CREATE_FAILURE_UNTIL_ENV = 'OPERATIONAL_ENGINE_TEST_CALENDAR_CREATE_FAILURE_UNTIL'
+
       def initialize(account:, conversation_id:, summary:, starts_at:, ends_at:, description: nil)
         @account = account
         @conversation_id = conversation_id
@@ -117,6 +127,8 @@ module OperationalEngine
       end
 
       def create_and_persist(lead, agent_tenant)
+        return calendar_failure('falha de criação de Calendar induzida para certificação VAL-01') if test_create_failure_active?
+
         event = UpSales::Agents::CreateCalendarEventService.new(
           agent_tenant: agent_tenant,
           summary: @summary,
@@ -130,6 +142,16 @@ module OperationalEngine
 
         persist_confirmation(lead, event_id)
         { ok: true, event_id: event_id }
+      end
+
+      def test_create_failure_active?
+        return false unless ENV[TEST_CREATE_FAILURE_ENABLED_ENV] == 'true'
+        return false unless ENV[TEST_CREATE_FAILURE_ACCOUNT_ENV] == @account.id.to_s
+        return false unless ENV[TEST_CREATE_FAILURE_CONVERSATION_ENV] == @conversation_id.to_s
+
+        Time.iso8601(ENV.fetch(TEST_CREATE_FAILURE_UNTIL_ENV)) >= Time.current
+      rescue ArgumentError, KeyError, TypeError
+        false
       end
 
       # Idempotente pra chamadas repetidas em sequência (o early-return em `call`), não pra duas

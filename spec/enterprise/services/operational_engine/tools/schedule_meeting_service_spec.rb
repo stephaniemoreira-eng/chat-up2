@@ -35,6 +35,24 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
       .to_return(status: status, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
   end
 
+  def with_test_create_failure(account_id: account.id, conversation_id: conversation.display_id, until_at: 5.minutes.from_now.iso8601)
+    keys = [
+      described_class::TEST_CREATE_FAILURE_ENABLED_ENV,
+      described_class::TEST_CREATE_FAILURE_ACCOUNT_ENV,
+      described_class::TEST_CREATE_FAILURE_CONVERSATION_ENV,
+      described_class::TEST_CREATE_FAILURE_UNTIL_ENV
+    ]
+    previous = keys.to_h { |key| [key, ENV[key]] }
+
+    ENV[described_class::TEST_CREATE_FAILURE_ENABLED_ENV] = 'true'
+    ENV[described_class::TEST_CREATE_FAILURE_ACCOUNT_ENV] = account_id.to_s
+    ENV[described_class::TEST_CREATE_FAILURE_CONVERSATION_ENV] = conversation_id.to_s
+    ENV[described_class::TEST_CREATE_FAILURE_UNTIL_ENV] = until_at
+    yield
+  ensure
+    previous&.each { |key, value| ENV[key] = value }
+  end
+
   it 'retorna erro quando a conversa não existe' do
     result = perform(conversation_id: -1)
 
@@ -141,6 +159,26 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
     result = perform
 
     expect(result).to eq(ok: false, reason: 'Calendário inválido', falha_calendar: true)
+    lead.reload
+    expect(lead.agendamento_status).to eq('nao_iniciado')
+    expect(lead.calendar_event_id).to be_nil
+    expect(lead.conversao_em).to be_nil
+  end
+
+  it 'induz a falha só na criação para a certificação VAL-01, preservando a leitura real e o estado' do
+    stub_calendar_events
+
+    result = nil
+    with_test_create_failure { result = perform }
+
+    expect(result).to eq(
+      ok: false,
+      reason: 'falha de criação de Calendar induzida para certificação VAL-01',
+      falha_calendar: true
+    )
+    expect(a_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')
+      .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))).to have_been_made.once
+    expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')).not_to have_been_made
     lead.reload
     expect(lead.agendamento_status).to eq('nao_iniciado')
     expect(lead.calendar_event_id).to be_nil
