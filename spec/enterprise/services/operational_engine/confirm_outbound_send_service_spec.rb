@@ -25,6 +25,22 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
       expect(lead.etapa_entrou_em).to be_present
     end
 
+    it 'arma a recuperação de nunca respondeu mesmo se o turno anterior não marcou aguardando_resposta' do
+      agent_bot = create(:agent_bot)
+      message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', sender: agent_bot,
+                                 source_id: 'wamid.abc')
+
+      expect(lead.aguardando_resposta).to be(false)
+      perform(message)
+
+      lead.reload
+      expect(lead.aguardando_resposta).to be(true)
+      expect(lead.recuperacao_status).to eq('inativa')
+      expect(lead.tentativa_recuperacao).to eq(0)
+      expect(lead.proxima_recuperacao_em).to be_present
+      expect(lead.upsales_conversation_atual_id).to eq(conversation.id)
+    end
+
     it 'grava o evento primeiro_contato_enviado' do
       message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
 

@@ -74,6 +74,11 @@ module OperationalEngine
       lead.update!(
         primeiro_contato_em: now,
         **(lead.entrada_operacao_em.nil? ? { entrada_operacao_em: now } : {}),
+        # SSOT §15.2 / cenário 28.4: a primeira abordagem outbound confirmada sempre espera
+        # uma resposta. Este fato pertence ao Engine, não à interpretação do modelo: sem ele,
+        # uma saída estruturada incompleta poderia impedir a cadência de "nunca respondeu" de
+        # nascer mesmo depois de o provedor ter confirmado o envio.
+        aguardando_resposta: true,
         # Só o caminho outbound/Backlog nasce em backlog (§10.5/§10.6) -- um lead inbound já nasce
         # em em_conversa (InboundProcessor), então esta transição nunca dispara indevida pra ele.
         **(from_backlog ? { etapa_prospect: 'contatado', etapa_entrou_em: now } : {})
