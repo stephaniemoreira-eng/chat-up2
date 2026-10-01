@@ -32,7 +32,6 @@ module OperationalEngine
       propensao_fechamento: 'nao_classificado',
       motivo_handoff: nil,
       motivo_encerramento: nil,
-      entrada_operacao_em: nil,
       primeiro_contato_em: nil,
       primeira_resposta_em: nil,
       ultima_interacao_em: nil,
