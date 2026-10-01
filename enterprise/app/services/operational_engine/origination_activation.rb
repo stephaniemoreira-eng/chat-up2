@@ -66,6 +66,7 @@ module OperationalEngine
     def lead_id = @data['lead_id']
     def status = @data['status']
     def authorized_at = Time.zone.parse(@data['authorized_at'].to_s)
+    def message_id = @data['message_id']
 
     def authorized? = status == 'authorized'
     def status_at = @data['status_at'].presence && Time.zone.parse(@data['status_at'])

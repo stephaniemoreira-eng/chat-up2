@@ -9,6 +9,11 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     described_class.call(message: message)
   end
 
+  def consume_opening(message, lead)
+    conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+    OperationalEngine::OriginationActivation.for(conversation).transition!('consumed', message_id: message.id)
+  end
+
   context 'lead nasceu no Backlog (outbound, §10.5)' do
     let!(:lead) do
       OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'outbound', etapa_prospect: 'backlog')
@@ -16,6 +21,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
 
     it 'confirma o primeiro contato e move pra contatado' do
       message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      consume_opening(message, lead)
 
       perform(message)
 
@@ -29,6 +35,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
       agent_bot = create(:agent_bot)
       message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', sender: agent_bot,
                                  source_id: 'wamid.abc')
+      consume_opening(message, lead)
 
       expect(lead.aguardando_resposta).to be(false)
       perform(message)
@@ -43,6 +50,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
 
     it 'grava o evento primeiro_contato_enviado' do
       message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      consume_opening(message, lead)
 
       perform(message)
 
@@ -53,6 +61,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
 
     it 'é idempotente -- não regride etapa_prospect nem duplica evento numa segunda confirmação' do
       message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      consume_opening(message, lead)
 
       perform(message)
       lead.update!(etapa_prospect: 'em_conversa') # avançou depois -- confirmação repetida não pode voltar
@@ -81,6 +90,19 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     end
   end
 
+  it 'não confirma uma mensagem histórica de outra abertura como o primeiro contato atual' do
+    lead = OperationalEngine::Lead.create!(conta_id: account.id, telefone: contact.phone_number, modo_entrada: 'outbound', etapa_prospect: 'backlog')
+    message = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.legacy')
+    conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+    OperationalEngine::OriginationActivation.for(conversation).transition!('consumed', message_id: message.id + 1)
+
+    perform(message)
+
+    expect(lead.reload.primeiro_contato_em).to be_nil
+    expect(lead.etapa_prospect).to eq('backlog')
+    expect(OperationalEngine::LeadEvent.where(lead: lead, event_type: 'primeiro_contato_enviado')).to be_empty
+  end
+
   it 'não faz nada quando não existe lead pra este telefone' do
     outro_contact = create(:contact, account: account, phone_number: '+5513999999999')
     outra_conversa = create(:conversation, account: account, contact: outro_contact)
@@ -106,6 +128,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     let(:message) { create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc') }
 
     it 'outbound confirmado grava entrada_operacao_em, primeiro_contato_em e etapa_entrou_em no mesmo instante (§28.1)' do
+      consume_opening(message, lead)
       perform(message)
 
       lead.reload
@@ -115,6 +138,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     end
 
     it 'Backlog -> Contatado grava exatamente um etapa_alterada com de/para/motivo' do
+      consume_opening(message, lead)
       2.times { perform(message) }
 
       events = OperationalEngine::LeadEvent.where(lead: lead, event_type: 'etapa_alterada')
@@ -124,6 +148,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     end
 
     it 'reprocessamento não altera entrada_operacao_em' do
+      consume_opening(message, lead)
       perform(message)
       original = lead.reload.entrada_operacao_em
 
@@ -133,6 +158,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     end
 
     it 'falha transitória antes da persistência: nova tentativa recupera o fato sem nova transição de source_id' do
+      consume_opening(message, lead)
       allow(OperationalEngine::LeadRepository).to receive(:find_by_telefone).and_raise(ActiveRecord::ConnectionNotEstablished)
       expect { perform(message) }.to raise_error(ActiveRecord::ConnectionNotEstablished)
       expect(lead.reload.primeiro_contato_em).to be_nil
@@ -145,6 +171,7 @@ RSpec.describe OperationalEngine::ConfirmOutboundSendService do
     end
 
     it 'falha só na projeção: o retry repara o CRM sem recriar o evento de negócio' do
+      consume_opening(message, lead)
       # CP-08: a projeção agora é durável (ProjectionReconciler) -- a falha não sobe para o listener.
       allow(OperationalEngine::SalesProjectionSync).to receive(:call).and_raise('CRM fora')
       expect { perform(message) }.not_to raise_error

@@ -45,8 +45,11 @@ RSpec.describe OperationalEngine::RecoveryDispatcher do
   def lavinia_says!(lead, conversation, at:, aguardando: true, ultimo_ponto: nil)
     travel_to(at) do
       lead.reload.update!(aguardando_resposta: aguardando, **(ultimo_ponto ? { ultimo_ponto: ultimo_ponto } : {}))
-      confirm!(create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
-                                sender: agent_bot, content: 'Hoje vocês lavam o enxoval internamente?'))
+      conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+      message = create(:message, account: account, inbox: inbox, conversation: conversation, message_type: 'outgoing',
+                                 sender: agent_bot, content: 'Hoje vocês lavam o enxoval internamente?')
+      OperationalEngine::OriginationActivation.for(conversation).transition!('consumed', message_id: message.id)
+      confirm!(message)
     end
   end
 
