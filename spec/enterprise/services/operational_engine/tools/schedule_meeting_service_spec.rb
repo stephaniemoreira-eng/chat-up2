@@ -176,7 +176,8 @@ RSpec.describe OperationalEngine::Tools::ScheduleMeetingService do
       reason: 'falha de criação de Calendar induzida para certificação VAL-01',
       falha_calendar: true
     )
-    expect(a_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')).to have_been_made.once
+    expect(a_request(:get, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')
+      .with(query: hash_including('timeMin' => '2026-09-22T14:00:00-03:00', 'timeMax' => '2026-09-22T14:30:00-03:00'))).to have_been_made.once
     expect(a_request(:post, 'https://agents.up2aceleradora.com.br/api/v1/integrations/instances/instance-1/calendar/events')).not_to have_been_made
     lead.reload
     expect(lead.agendamento_status).to eq('nao_iniciado')
