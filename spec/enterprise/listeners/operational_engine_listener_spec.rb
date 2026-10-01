@@ -89,6 +89,8 @@ describe OperationalEngineListener do
 
     it 'source_id saindo de nulo pra presente numa mensagem outgoing aciona a confirmação' do
       outgoing = create(:message, conversation: conversation, account: account, message_type: 'outgoing', source_id: 'wamid.abc')
+      conversation.update!(additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
+      OperationalEngine::OriginationActivation.for(conversation).transition!('consumed', message_id: outgoing.id)
       event = Events::Base.new(:message_updated, Time.zone.now, message: outgoing, previous_changes: { 'source_id' => [nil, 'wamid.abc'] })
 
       listener.message_updated(event)
