@@ -3,6 +3,7 @@ require 'rails_helper'
 RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
   let(:account) { create(:account) }
   let(:contact) { create(:contact, account: account, phone_number: '+5513991234567') }
+  let(:entrada_operacao_em) { 1.day.ago.change(usec: 0) }
   let(:lead) do
     OperationalEngine::Lead.create!(
       conta_id: account.id,
@@ -25,6 +26,7 @@ RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
       nao_contatar: true,
       propensao_fechamento: 'quente',
       motivo_handoff: 'excecao',
+      entrada_operacao_em: entrada_operacao_em,
       primeiro_contato_em: 1.hour.ago,
       qualificado_em: 1.hour.ago,
       upsales_conversation_atual_id: 99
@@ -74,6 +76,7 @@ RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
         'modo_atendimento' => 'lavinia', 'frente_operacional' => 'prospeccao', 'nao_contatar' => false
       )
       expect(lead.etapa_entrou_em).to be_present
+      expect(lead.entrada_operacao_em).to eq(entrada_operacao_em)
 
       event = OperationalEngine::LeadEvent.where(lead: lead, event_type: 'massa_teste_resetada').last
       expect(event.metadata).to include(
