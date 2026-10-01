@@ -9,14 +9,14 @@ RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
       telefone: contact.phone_number,
       upsales_contact_id: contact.id,
       modo_entrada: 'inbound',
-      etapa_prospect: 'agendado',
-      lead_status: 'encerrado',
+      etapa_prospect: 'qualificado',
+      lead_status: 'ativo',
       qualificacao_status: 'qualificado',
       recuperacao_status: 'ativa',
       tentativa_recuperacao: 2,
       proxima_recuperacao_em: 1.day.from_now,
       aguardando_resposta: true,
-      agendamento_status: 'confirmado',
+      agendamento_status: 'em_andamento',
       orcamento_status: 'personalizado',
       resultado_comercial: 'ganho',
       modo_atendimento: 'humano',
@@ -26,6 +26,7 @@ RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
       propensao_fechamento: 'quente',
       motivo_handoff: 'excecao',
       primeiro_contato_em: 1.hour.ago,
+      qualificado_em: 1.hour.ago,
       upsales_conversation_atual_id: 99
     )
   end
@@ -46,7 +47,7 @@ RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
       end.to raise_error(ArgumentError, /UP_SALES_TEST_RESET_ENABLED/)
 
       expect(OperationalEngine::OriginationActivation.for(old_conversation.reload)).to be_present
-      expect(lead.reload.etapa_prospect).to eq('agendado')
+      expect(lead.reload.etapa_prospect).to eq('qualificado')
     end
 
     it 'remove ativações históricas do contato, preserva mensagens e audita o novo baseline' do
