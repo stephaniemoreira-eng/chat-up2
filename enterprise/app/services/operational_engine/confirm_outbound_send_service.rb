@@ -65,7 +65,16 @@ module OperationalEngine
     private
 
     def first_outbound_contact?(lead)
-      lead.primeiro_contato_em.nil? && lead.modo_entrada == 'outbound' && lead.etapa_prospect_backlog?
+      lead.primeiro_contato_em.nil? && lead.modo_entrada == 'outbound' && lead.etapa_prospect_backlog? && opening_confirmation_for?(lead)
+    end
+
+    # Só a Message que consumiu a autorização de abertura pode transformar Backlog em Contatado.
+    # Uma mensagem antiga do mesmo contato pode ganhar/reter source_id e ser reencontrada pelo
+    # reconciliador, mas não pode se tornar a primeira abordagem de um novo ciclo (SSOT §10.6,
+    # §23.2). A ativação liga a confirmação do provedor à decisão atual do Dispatcher.
+    def opening_confirmation_for?(lead)
+      activation = OperationalEngine::OriginationActivation.for(@message.conversation)
+      activation&.status == 'consumed' && activation.lead_id == lead.lead_id && activation.message_id.to_i == @message.id
     end
 
     def record_first_contact(lead)
