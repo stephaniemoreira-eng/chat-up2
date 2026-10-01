@@ -590,6 +590,19 @@ describe Whatsapp::IncomingMessageBaileysService do
           expect(inbox.channel).to have_received(:received_messages).with([message], conversation)
         end
 
+        it 'keeps processing an inbound message when the receipt acknowledgement is unavailable' do
+          allow(inbox.channel).to receive(:received_messages)
+            .and_raise(Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError, 'connector unavailable')
+
+          expect do
+            described_class.new(inbox: inbox, params: params).perform
+          end.not_to raise_error
+
+          message = inbox.messages.last
+          expect(message).to be_present
+          expect(message.content).to eq('Hello from Baileys')
+        end
+
         it 'does not call channel received_messages method if message is outgoing' do
           raw_message[:key][:fromMe] = true
           create(:account_user, account: inbox.account)
