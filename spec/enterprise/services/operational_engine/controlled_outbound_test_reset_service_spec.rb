@@ -54,6 +54,7 @@ RSpec.describe OperationalEngine::ControlledOutboundTestResetService do
 
     it 'remove ativações históricas do contato, preserva mensagens e audita o novo baseline' do
       old_message = create(:message, account: account, inbox: inbox, conversation: old_conversation, message_type: 'outgoing')
+      recovery_conversation
       other_contact = create(:contact, account: account, phone_number: '+5513999999999')
       unrelated = create(:conversation, account: account, inbox: inbox, contact: other_contact,
                                         additional_attributes: OperationalEngine::OriginationActivation.build_attributes(lead))
