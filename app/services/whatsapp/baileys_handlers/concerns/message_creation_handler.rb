@@ -13,7 +13,7 @@ module Whatsapp::BaileysHandlers::Concerns::MessageCreationHandler # rubocop:dis
 
     @message.save!
 
-    inbox.channel.received_messages([@message], conversation) if incoming?
+    acknowledge_received_message([@message], conversation) if incoming?
 
     @message
   end
@@ -81,8 +81,17 @@ module Whatsapp::BaileysHandlers::Concerns::MessageCreationHandler # rubocop:dis
   # in the contact bubble instead of as plain text.
   def build_and_save_contact_messages(conversation:, sender:)
     messages = baileys_contacts.filter_map { |contact| build_contact_message(conversation, sender, contact) }
-    inbox.channel.received_messages(messages, conversation) if incoming? && messages.any?
+    acknowledge_received_message(messages, conversation) if incoming? && messages.any?
     @message = messages.last
+  end
+
+  # A receipt only updates the sender's delivery/read state. The inbound row has already
+  # been persisted by this point, so an unavailable connector must not discard the rest
+  # of the inbound pipeline (automation, routing and the operator's transcript).
+  def acknowledge_received_message(messages, conversation)
+    inbox.channel.received_messages(messages, conversation)
+  rescue Whatsapp::Session::Errors::ProviderUnavailable => e
+    Rails.logger.warn("[WHATSAPP][BAILEYS] receipt acknowledgement skipped for #{raw_message_id}: #{e.message}")
   end
 
   def build_contact_message(conversation, sender, contact)
