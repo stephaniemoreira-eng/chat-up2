@@ -3,7 +3,27 @@ require Rails.root.join('lib/captain_response_dequeued_logger')
 require Rails.root.join('lib/current_reset_middleware')
 require Rails.root.join('lib/sidekiq_death_handler')
 
-schedule_file = 'config/schedule.yml'
+schedule_file = Rails.root.join('config/schedule.yml')
+
+# Sidekiq starts outside the Rails request/reloader lifecycle.  Registering the
+# schedule on Sidekiq's own startup event guarantees that a freshly deployed
+# worker receives the operational jobs before it begins polling Redis.
+module SidekiqScheduleLoader
+  LEGACY_DYNAMIC_JOBS = %w[bulk_auto_assignment_job].freeze
+
+  def self.load!(schedule_file)
+    return unless File.exist?(schedule_file)
+
+    schedule = YAML.load_file(schedule_file)
+
+    # Entries created before the schedule source tag remain dynamic and are not
+    # removed by load_from_hash!; remove the known legacy entry explicitly.
+    LEGACY_DYNAMIC_JOBS.each { |name| Sidekiq::Cron::Job.destroy(name) }
+    Sidekiq::Cron::Job.load_from_hash!(schedule, source: 'schedule')
+
+    Sidekiq.logger.info("Loaded #{schedule.size} scheduled jobs from #{schedule_file}")
+  end
+end
 
 Sidekiq.configure_client do |config|
   config.redis = Redis::Config.app
@@ -20,6 +40,8 @@ end
 
 Sidekiq.configure_server do |config|
   config.redis = Redis::Config.app
+
+  config.on(:startup) { SidekiqScheduleLoader.load!(schedule_file) }
 
   # A job that exhausts its retries is otherwise silent: it lands in the dead set and
   # nobody is told. For a reply that means the agent keeps seeing "sent" on a message
@@ -85,18 +107,7 @@ end
 Sidekiq::Options[:cron_poll_interval] = 10
 
 Rails.application.reloader.to_prepare do
-  # load_from_hash! upserts jobs from the YAML and removes any Redis-persisted
-  # jobs that share the same source tag but are no longer in the file.
-  # This ensures deleted schedule entries are cleaned up on deploy.
-  if File.exist?(schedule_file) && Sidekiq.server?
-    schedule = YAML.load_file(schedule_file)
-
-    # Cron entries removed from schedule.yml but possibly still in Redis
-    # with source:'dynamic' (predating the source tag). load_from_hash!
-    # only cleans up source:'schedule' entries, so these need explicit removal.
-    # Remove names from this list once they've been through a deploy cycle.
-    %w[bulk_auto_assignment_job].each { |name| Sidekiq::Cron::Job.destroy(name) }
-
-    Sidekiq::Cron::Job.load_from_hash!(schedule, source: 'schedule')
-  end
+  # Keep the local-development reloader behavior; production's authoritative
+  # registration point is the Sidekiq startup hook above.
+  SidekiqScheduleLoader.load!(schedule_file) if Sidekiq.server?
 end
