@@ -9,9 +9,11 @@ class Sales::Leads::CreateService
     pipeline = @account.sales_pipelines.find(@params[:pipeline_id])
     stage = @params[:sales_stage_id].present? ? pipeline.stages.find(@params[:sales_stage_id]) : pipeline.stages.ordered.first
 
-    @account.sales_leads.create!(
+    lead = @account.sales_leads.create!(
       lead_attributes.merge(contact: contact, pipeline: pipeline, stage: stage)
     )
+    OperationalEngine::BacklogIntake.call(sales_lead: lead)
+    lead
   end
 
   private

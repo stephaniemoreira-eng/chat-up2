@@ -45,5 +45,26 @@ RSpec.describe Sales::Pipelines::SeedProspectPipelineService do
       expect(prospect_pipeline).not_to eq(default_pipeline)
       expect(account.sales_pipelines.count).to eq(2)
     end
+
+    it 'adopts the complete legacy Prospect pipeline by adding only technical keys' do
+      legacy = create(:sales_pipeline, account: account, name: 'Prospecção')
+      %w[Backlog Contatado Em\ Conversa Qualificado Agendado].each { |name| create(:sales_stage, pipeline: legacy, name: name) }
+
+      pipeline = described_class.new(account: account).perform
+
+      expect(pipeline).to eq(legacy)
+      expect(pipeline.reload.engine_kind).to eq('prospect')
+      expect(pipeline.stages.ordered.pluck(:engine_stage_key)).to eq(%w[backlog contatado em_conversa qualificado agendado])
+    end
+
+    it 'does not adopt a same-named pipeline with a different structure' do
+      legacy = create(:sales_pipeline, account: account, name: 'Prospecção')
+      create(:sales_stage, pipeline: legacy, name: 'Outra etapa')
+
+      pipeline = described_class.new(account: account).perform
+
+      expect(pipeline).not_to eq(legacy)
+      expect(legacy.reload.engine_kind).to be_nil
+    end
   end
 end

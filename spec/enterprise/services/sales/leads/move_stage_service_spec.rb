@@ -100,6 +100,20 @@ RSpec.describe Sales::Leads::MoveStageService do
     end
   end
 
+  describe 'entrada operacional pelo Backlog' do
+    it 'operacionaliza card nativo movido para o Backlog da Prospecção' do
+      prospect_pipeline = Sales::Pipelines::SeedProspectPipelineService.new(account: account).perform
+      origin = prospect_pipeline.stages.find_by!(engine_stage_key: 'contatado')
+      backlog = prospect_pipeline.stages.find_by!(engine_stage_key: 'backlog')
+      contact.update!(phone_number: '+5511991234567')
+      lead.update!(pipeline: prospect_pipeline, stage: origin)
+
+      described_class.new(lead: lead, stage: backlog, user: user).perform
+
+      expect(lead.reload.operational_lead_id).to be_present
+    end
+  end
+
   describe 'proteção do Agendado (SSOT §21.2)' do
     let(:agendado_stage) { create(:sales_stage, pipeline: pipeline, engine_stage_key: 'agendado') }
 

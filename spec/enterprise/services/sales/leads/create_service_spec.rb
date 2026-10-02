@@ -34,6 +34,19 @@ RSpec.describe Sales::Leads::CreateService do
       expect(lead.stage).to eq(target_stage)
     end
 
+    it 'operacionaliza um card criado diretamente no Backlog da Prospecção' do
+      prospect_pipeline = Sales::Pipelines::SeedProspectPipelineService.new(account: account).perform
+      backlog = prospect_pipeline.stages.find_by!(engine_stage_key: 'backlog')
+      contact.update!(phone_number: '+5511991234567')
+
+      lead = described_class.new(
+        account: account,
+        params: { contact_id: contact.id, pipeline_id: prospect_pipeline.id, sales_stage_id: backlog.id, title: 'Novo lead' }
+      ).perform
+
+      expect(lead.reload.operational_lead_id).to be_present
+    end
+
     it 'raises when the contact does not belong to the account' do
       other_contact = create(:contact, account: create(:account))
 
