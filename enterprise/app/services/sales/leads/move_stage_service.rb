@@ -59,6 +59,7 @@ class Sales::Leads::MoveStageService
     end
 
     dispatch_events(from_stage)
+    OperationalEngine::BacklogIntake.call(sales_lead: @lead)
     @lead
   end
 

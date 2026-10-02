@@ -15,6 +15,8 @@ class Sales::Pipelines::SeedProspectPipelineService
     { name: 'Agendado', engine_stage_key: 'agendado', category: :open, color: '#10B981' }
   ].freeze
 
+  LEGACY_STAGE_NAMES = %w[Backlog Contatado Em\ Conversa Qualificado Agendado].freeze
+
   def initialize(account:)
     @account = account
   end
@@ -23,6 +25,29 @@ class Sales::Pipelines::SeedProspectPipelineService
     existing = @account.sales_pipelines.find_by(engine_kind: ENGINE_KIND)
     return existing if existing
 
+    adopt_legacy_pipeline || create_pipeline
+  end
+
+  private
+
+  # A primeira versão do Kanban foi criada antes das chaves técnicas. A adoção só ocorre quando
+  # a estrutura legada é exatamente a do funil Prospect; não se infere pelo nome livremente
+  # editável em instalações desconhecidas.
+  def adopt_legacy_pipeline
+    pipeline = @account.sales_pipelines.find_by(name: 'Prospecção', engine_kind: nil)
+    return unless pipeline
+
+    stages = pipeline.stages.ordered.to_a
+    return unless stages.map(&:name) == LEGACY_STAGE_NAMES
+
+    ActiveRecord::Base.transaction do
+      pipeline.update!(engine_kind: ENGINE_KIND)
+      stages.zip(PROSPECT_STAGES).each { |stage, attributes| stage.update!(engine_stage_key: attributes[:engine_stage_key]) }
+    end
+    pipeline
+  end
+
+  def create_pipeline
     ActiveRecord::Base.transaction do
       pipeline = @account.sales_pipelines.create!(name: 'Prospecção', engine_kind: ENGINE_KIND)
       PROSPECT_STAGES.each { |stage_attrs| pipeline.stages.create!(stage_attrs) }
