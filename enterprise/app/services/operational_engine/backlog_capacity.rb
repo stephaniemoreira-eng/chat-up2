@@ -12,7 +12,7 @@ module OperationalEngine
     LIMITE_DIA = 20
     JANELAS = [
       { inicio_min: 9 * 60, fim_min: 11 * 60, limite: 10 },  # 09:00-11:00
-      { inicio_min: 14 * 60, fim_min: 16 * 60, limite: 10 }  # 14:00-16:00
+      { inicio_min: 14 * 60, fim_min: 17 * 60, limite: 10 }  # 14:00-17:00
     ].freeze
     DIAS_OPERACIONAIS = (1..5) # Date#wday: 0=domingo..6=sábado
 

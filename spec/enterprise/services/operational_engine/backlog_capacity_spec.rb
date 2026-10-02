@@ -43,8 +43,13 @@ RSpec.describe OperationalEngine::BacklogCapacity do
       expect(disponivel('2026-09-21 12:30')).to eq(0)
     end
 
-    it 'e zero depois das 16h' do
-      expect(disponivel('2026-09-21 16:01')).to eq(0)
+    it 'permanece disponível até o fim da segunda janela, às 17h' do
+      expect(disponivel('2026-09-21 16:01')).to eq(10)
+      expect(disponivel('2026-09-21 17:00')).to eq(10)
+    end
+
+    it 'e zero depois das 17h' do
+      expect(disponivel('2026-09-21 17:01')).to eq(0)
     end
   end
 
